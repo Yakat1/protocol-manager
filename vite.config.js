@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
           theme_color: '#0f0f1a',
           background_color: '#0f0f1a',
           display: 'standalone',
-          orientation: 'landscape',
+          orientation: 'any',
           scope: '/protocol-manager/',
           start_url: '/protocol-manager/',
           icons: [
