@@ -1,0 +1,294 @@
+.wb-report-container {
+  padding: 24px;
+}
+
+/* Band strip card */
+.wb-strip-card {
+  padding: 16px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  position: relative;
+  /* Add top padding to the card to give space for floating lanes */
+  padding-top: 52px;
+}
+
+.wb-strip-protein-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 0 8px;
+  text-align: center;
+  min-width: 40px;
+  color: var(--text-primary);
+  cursor: text;
+}
+
+.wb-strip-image-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.wb-strip-image-container {
+  position: relative;
+  width: 100%;
+}
+
+.wb-lane-draggable {
+  position: absolute;
+  top: -42px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: ew-resize; /* horizontal drag cursor */
+  z-index: 10;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.wb-lane-draggable:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.wb-lane-header-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed var(--text-secondary);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  padding: 2px 4px;
+  width: 80px;
+  outline: none;
+  font-style: italic;
+  cursor: text;
+}
+
+.wb-lane-header-input:focus {
+  border-bottom-color: var(--accent);
+}
+
+.wb-strip-image {
+  width: 100%;
+  display: block;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+}
+
+/* kDa container */
+.wb-kda-container {
+  position: relative;
+  height: 100%;
+  width: 80px;
+  margin-left: 8px;
+}
+
+.wb-kda-draggable {
+  position: absolute;
+  left: 0;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  cursor: ns-resize; /* vertical drag cursor */
+  z-index: 10;
+}
+
+.wb-kda-input {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 2px 0;
+  width: 70px;
+  outline: none;
+  text-align: left;
+  cursor: text;
+}
+
+.wb-kda-input::before {
+  content: '—';
+  margin-right: 4px;
+}
+
+.wb-kda-dash {
+  width: 10px;
+  height: 2px;
+  background: var(--text-primary);
+  flex-shrink: 0;
+}
+
+/* Crop selection overlay */
+.wb-crop-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.wb-crop-box {
+  position: absolute;
+  border: 2px dashed #10b981;
+  background: rgba(16, 185, 67, 0.1);
+}
+
+/* Figure preview panel */
+.wb-figure-preview {
+  padding: 24px;
+  background: #fff;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+.wb-figure-strip {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.wb-figure-strip:last-child {
+  margin-bottom: 0;
+}
+
+/* Actions bar */
+.wb-report-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+/* Strip remove button */
+.wb-strip-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+/* Editable fields shared */
+.wb-editable-field {
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed transparent;
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.wb-editable-field:hover,
+.wb-editable-field:focus {
+  border-bottom-color: var(--accent);
+}
+
+/* Download preview */
+.wb-preview-container {
+  background: #ffffff;
+  padding: 12px 28px 20px 28px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.wb-preview-strip {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  position: relative;
+}
+
+.wb-preview-protein {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-weight: 700;
+  font-size: 13px;
+  color: #000;
+  padding-right: 8px;
+  font-family: Arial, sans-serif;
+}
+
+/* Preview lanes absolute positioning */
+.wb-preview-lanes-container {
+  position: relative;
+  height: 14px;
+  width: 100%;
+  margin-bottom: 2px;
+}
+
+.wb-preview-lane-item {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  font-style: italic;
+  color: #000;
+  font-family: Arial, sans-serif;
+  white-space: nowrap;
+}
+
+/* Preview kDa absolute positioning */
+.wb-preview-img-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.wb-preview-img {
+  width: 100%;
+  display: block;
+  border: 1px solid #ddd;
+}
+
+.wb-preview-kda-container {
+  position: relative;
+  width: 60px;
+  margin-left: 6px;
+}
+
+.wb-preview-kda-item-abs {
+  position: absolute;
+  left: 0;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #000;
+  font-family: Arial, sans-serif;
+  white-space: nowrap;
+}
+
+.wb-preview-kda-dash {
+  width: 8px;
+  height: 1.5px;
+  background: #000;
+}
+
+.add-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px dashed var(--panel-border);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  transition: 0.2s;
+}
+.add-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: var(--text-primary);
+}

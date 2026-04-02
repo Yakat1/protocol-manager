@@ -1,0 +1,188 @@
+.protocols-container {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.protocols-header {
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.protocols-split-view {
+  display: flex;
+  gap: 24px;
+  flex: 1;
+  min-height: 0;
+  align-items: flex-start;
+}
+
+/* Sidebar */
+.protocols-sidebar {
+  width: 250px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border-radius: 12px;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.protocols-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.protocol-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.2s;
+  color: var(--text-secondary);
+}
+
+.protocol-list-item:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-primary);
+}
+
+.protocol-list-item.active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: var(--accent);
+}
+
+.proto-name {
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Editor Main Area */
+.protocol-editor-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  padding: 0; /* padding inner handled */
+  overflow: hidden;
+  height: 100%;
+}
+
+.editor-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.editor-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--panel-border);
+  background: rgba(0,0,0,0.2);
+}
+
+.proto-title-input {
+  background: transparent;
+  border: none;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  outline: none;
+  width: 100%;
+}
+
+.editor-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  padding: 24px;
+  gap: 24px;
+}
+
+.quill-container {
+  flex: 3;
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* flex wrap fix */
+}
+
+.proto-materials-panel {
+  flex: 1;
+  min-width: 250px;
+  border-left: 1px solid var(--panel-border);
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.proto-inventory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.proto-inv-item {
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+  border: 1px dashed var(--panel-border);
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.proto-inv-item:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.proto-inv-item.selected {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+/* React Quill Dark Mode Overrides */
+.custom-quill {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: #fff; /* Native white inside to allow reading text normally and prints well */
+  color: #000;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  margin-top: 8px;
+}
+
+.ql-toolbar.ql-snow {
+  background: #f1f5f9;
+  border: none;
+  border-bottom: 1px solid #ccc;
+  font-family: var(--font-family);
+}
+
+.ql-container.ql-snow {
+  flex: 1;
+  border: none;
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+.ql-editor {
+  padding: 16px;
+  /* min-height is managed by flex */
+}

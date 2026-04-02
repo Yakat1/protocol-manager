@@ -1,0 +1,94 @@
+.inventory-container {
+  padding: 24px;
+}
+
+.inventory-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  border-radius: 12px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 0 12px;
+  color: var(--text-secondary);
+}
+
+.search-box input {
+  background: transparent;
+  border: none;
+  padding: 10px;
+  color: var(--text-primary);
+  outline: none;
+  min-width: 200px;
+}
+
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.inventory-card {
+  background: rgba(22, 27, 34, 0.5);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.inv-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.inv-name-input {
+  font-weight: 600;
+  font-size: 1.1rem;
+  background: transparent !important;
+  border: none !important;
+  padding: 4px 8px !important;
+  color: var(--text-primary);
+}
+
+.inv-name-input:focus {
+  background: rgba(0,0,0,0.2) !important;
+  border-bottom: 1px solid var(--accent) !important;
+}
+
+.inv-card-body {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.inv-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inv-field-group label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* Custom styles for select options to ensure contrast inside inventory card */
+.inv-field-group select option {
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+}

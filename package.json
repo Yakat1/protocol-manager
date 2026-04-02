@@ -1,0 +1,57 @@
+{
+  "name": "protocol-manager",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:electron": "cross-env ELECTRON=true vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "electron:build": "npm run build:electron && electron-builder",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
+  },
+  "build": {
+    "appId": "com.tony.protocolmanager",
+    "productName": "LIMS: Protocol Manager",
+    "directories": {
+      "output": "release/"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "dependencies": {
+    "firebase": "^12.11.0",
+    "gh-pages": "^6.3.0",
+    "html-to-image": "^1.11.13",
+    "lucide-react": "^1.7.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-is": "^19.2.4",
+    "react-quill-new": "^3.8.3",
+    "recharts": "^3.8.1",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^41.1.1",
+    "electron-builder": "^26.8.1",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
+    "vite": "^8.0.1",
+    "vite-plugin-pwa": "^1.2.0",
+    "wait-on": "^9.0.4"
+  }
+}

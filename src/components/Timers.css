@@ -1,0 +1,92 @@
+.timers-container {
+  padding: 24px;
+}
+
+.timers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.timer-card {
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.timer-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), #8b5cf6);
+}
+
+.timer-card.running::before {
+  animation: pulse-bar 2s ease-in-out infinite;
+}
+
+@keyframes pulse-bar {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.timer-elapsed {
+  font-size: 2.2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  margin: 12px 0;
+}
+
+.timer-label {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.timer-started {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.timepoint-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.timepoint-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: rgba(0,0,0,0.2);
+}
+
+.timepoint-item.reached {
+  background: rgba(46, 160, 67, 0.15);
+  color: var(--success);
+}
+
+.timepoint-item.next {
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--accent);
+  border: 1px solid rgba(88,166,255,0.3);
+}
+
+.timepoint-countdown {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.add-timer-form {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}

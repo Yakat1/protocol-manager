@@ -1,0 +1,88 @@
+.charts-container {
+  padding: 24px;
+}
+
+.chart-config {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.chart-wrapper {
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.chart-wrapper h4 {
+  margin-bottom: 16px;
+  font-size: 1rem;
+}
+
+.chart-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+  text-align: center;
+  gap: 12px;
+}
+
+.chart-type-selector {
+  display: flex;
+  gap: 4px;
+  background: rgba(0,0,0,0.2);
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.chart-type-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--font-family);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: 0.2s;
+}
+
+.chart-type-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.chart-type-btn:hover:not(.active) {
+  background: var(--panel-border);
+  color: var(--text-primary);
+}
+
+.data-entry-section {
+  margin-bottom: 24px;
+}
+
+.data-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.group-data-card {
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid var(--panel-border);
+}
+
+.group-data-card h5 {
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
