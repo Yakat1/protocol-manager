@@ -549,3 +549,29 @@ select.input-field option {
   from { transform: translateY(100px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+/* Gestor de variables responsivo */
+.variable-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.variable-row .input-field {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .variable-row {
+    flex-wrap: wrap;
+  }
+  .variable-row .input-field {
+    flex: 1 1 calc(50% - 8px);
+  }
+  .variable-row select.input-field {
+    flex: 1 1 100%;
+  }
+}
+
