@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Settings, Plus, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -39,7 +39,7 @@ export default function VariablesManager({ state, updateState }) {
         <div key={v.id} className="variable-row">
           <input className="input-field" value={v.name} disabled />
           <input className="input-field" value={v.unit} disabled placeholder="Sin unidad" />
-          <input className="input-field" value={v.type === 'number' ? 'NumÃ©rico' : 'Texto'} disabled />
+          <input className="input-field" value={v.type === 'number' ? 'Numérico' : 'Texto'} disabled />
           <button className="btn-icon" style={{color: 'var(--danger)'}} onClick={() => removeVariable(v.id)}>
             <X size={16}/>
           </button>
@@ -64,11 +64,11 @@ export default function VariablesManager({ state, updateState }) {
           value={newVar.type}
           onChange={e => setNewVar({...newVar, type: e.target.value})}
         >
-          <option value="number">NumÃ©rico</option>
+          <option value="number">Numérico</option>
           <option value="text">Texto</option>
         </select>
         <button className="btn btn-primary" onClick={addVariable}>
-          <Plus size={16}/> AÃ±adir
+          <Plus size={16}/> Añadir
         </button>
       </div>
     </div>
