@@ -82,11 +82,11 @@ export default function Calculator({ inventory: inventoryProp, setInventory }) {
             <div className="calc-result">
               <div className="calc-result-value">{dRes.toFixed(2)} c.u.</div>
               <div className="calc-result-label">Volumen de Stock necesario (V₁). Agregar {(parseFloat(dilution.vf) - dRes).toFixed(2)} c.u. de solvente.</div>
-              {state?.inventory && (
+              {inventory.length > 0 && (
                 <div style={{marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center'}}>
                   <select className="input-field" style={{padding: '4px', fontSize: '0.8rem'}} value={selectedInventoryId} onChange={e => setSelectedInventoryId(e.target.value)}>
                     <option value="">Seleccionar Reactivo...</option>
-                    {state.inventory.map(i => <option key={i.id} value={i.id}>{i.name} ({i.quantity} {i.unit})</option>)}
+                    {inventory.map(i => <option key={i.id} value={i.id}>{i.name} ({i.quantity} {i.unit})</option>)}
                   </select>
                   <button className="btn" style={{padding: '4px 8px', fontSize: '0.8rem'}} onClick={() => handleDiscount(dRes)}>
                     <MinusCircle size={14} style={{marginRight: '4px'}}/> Descontar Stock
@@ -157,11 +157,11 @@ export default function Calculator({ inventory: inventoryProp, setInventory }) {
               <div className="calc-result-label">
                 Stock concentrado ≈ {mRes.stockM} mM. Agregar {mRes.neededUl} µL a {molarity.targetVol} mL de medio.
               </div>
-              {state?.inventory && (
+              {inventory.length > 0 && (
                 <div style={{marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center'}}>
                   <select className="input-field" style={{padding: '4px', fontSize: '0.8rem'}} value={selectedInventoryId} onChange={e => setSelectedInventoryId(e.target.value)}>
                     <option value="">Seleccionar Reactivo...</option>
-                    {state.inventory.map(i => <option key={i.id} value={i.id}>{i.name} ({i.quantity} {i.unit})</option>)}
+                    {inventory.map(i => <option key={i.id} value={i.id}>{i.name} ({i.quantity} {i.unit})</option>)}
                   </select>
                   <button className="btn" style={{padding: '4px 8px', fontSize: '0.8rem'}} onClick={() => handleDiscount(parseFloat(mRes.neededUl))}>
                     <MinusCircle size={14} style={{marginRight: '4px'}}/> Descontar
