@@ -16,9 +16,9 @@ const QUILL_MODULES = {
   ],
 };
 
-export default function ProtocolsManager({ state, setState }) {
-  const protocols = state?.cultureProtocols || [];
-  const inventory = state?.inventory || [];
+export default function ProtocolsManager({ protocols: protocolsProp, inventory: inventoryProp, setCultureProtocols }) {
+  const protocols = protocolsProp || [];
+  const inventory = inventoryProp || [];
   const [activeProtoId, setActiveProtoId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -36,27 +36,24 @@ export default function ProtocolsManager({ state, setState }) {
       description: '<h3>Objetivo</h3><p><br></p><h3>Materiales Adicionales</h3><p><br></p><h3>Metodología</h3><ol><li>Escribe el primer paso...</li></ol>',
       materialsIds: []
     };
-    setState({ ...state, cultureProtocols: [...protocols, newP] });
+    setCultureProtocols([...protocols, newP]);
     setActiveProtoId(newP.id);
   };
 
   const removeProtocol = (id) => {
     if (confirm('¿Eliminar protocolo? Esta acción no se puede deshacer.')) {
-      setState({ ...state, cultureProtocols: protocols.filter(p => p.id !== id) });
+      setCultureProtocols(protocols.filter(p => p.id !== id));
       if (activeProtoId === id) setActiveProtoId(null);
     }
   };
 
   const duplicateProtocol = (p) => {
     const copy = { ...p, id: uuidv4(), name: p.name + ' (Copia)' };
-    setState({ ...state, cultureProtocols: [...protocols, copy] });
+    setCultureProtocols([...protocols, copy]);
   };
 
   const updateProtocol = (id, field, value) => {
-    setState({
-      ...state,
-      cultureProtocols: protocols.map(p => p.id === id ? { ...p, [field]: value } : p)
-    });
+    setCultureProtocols(protocols.map(p => p.id === id ? { ...p, [field]: value } : p));
   };
 
   const toggleMaterial = (protoId, materialId) => {

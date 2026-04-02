@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Settings, Plus, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
-export default function VariablesManager({ state, setState }) {
+export default function VariablesManager({ state, updateState }) {
   const [isOpen, setIsOpen] = useState(false);
   const [newVar, setNewVar] = useState({ name: '', unit: '', type: 'number' });
 
   const addVariable = () => {
     if (!newVar.name.trim()) return;
     const variable = { id: uuidv4(), name: newVar.name, unit: newVar.unit, type: newVar.type };
-    setState({ ...state, variables: [...state.variables, variable] });
+    updateState({ variables: [...state.variables, variable] });
     setNewVar({ name: '', unit: '', type: 'number' });
   };
 
@@ -39,7 +39,7 @@ export default function VariablesManager({ state, setState }) {
         <div key={v.id} className="variable-row">
           <input className="input-field" value={v.name} disabled />
           <input className="input-field" value={v.unit} disabled placeholder="Sin unidad" />
-          <input className="input-field" value={v.type === 'number' ? 'Numérico' : 'Texto'} disabled />
+          <input className="input-field" value={v.type === 'number' ? 'NumÃ©rico' : 'Texto'} disabled />
           <button className="btn-icon" style={{color: 'var(--danger)'}} onClick={() => removeVariable(v.id)}>
             <X size={16}/>
           </button>
@@ -64,11 +64,11 @@ export default function VariablesManager({ state, setState }) {
           value={newVar.type}
           onChange={e => setNewVar({...newVar, type: e.target.value})}
         >
-          <option value="number">Numérico</option>
+          <option value="number">NumÃ©rico</option>
           <option value="text">Texto</option>
         </select>
         <button className="btn btn-primary" onClick={addVariable}>
-          <Plus size={16}/> Añadir
+          <Plus size={16}/> AÃ±adir
         </button>
       </div>
     </div>

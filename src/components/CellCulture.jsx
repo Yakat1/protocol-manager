@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, Microscope, Image as ImageIcon, Archive, Clock, Search, Box, ExternalLink } from 'lucide-react';
 import { compressImage } from '../utils/imageCompressor';
 import './CellCulture.css';
 
-const DEFAULT_ACTIONS = ['Descongelar', 'Pasaje / Split', 'Congelar', 'Cambio de Medio', 'Adición de Tratamiento', 'Observación'];
+const DEFAULT_ACTIONS = ['Descongelar', 'Pasaje / Split', 'Congelar', 'Cambio de Medio', 'AdiciÃ³n de Tratamiento', 'ObservaciÃ³n'];
 
-export default function CellCulture({ state, setState }) {
+export default function CellCulture({ state, updateState }) {
   const [showConfig, setShowConfig] = useState(false);
   const [activeCultureId, setActiveCultureId] = useState(null);
   const [printMode, setPrintMode] = useState(null); // 'single' | 'all'
@@ -26,7 +26,7 @@ export default function CellCulture({ state, setState }) {
     return p;
   });
 
-  // Migración automática de logs viejos y auto-selección
+  // MigraciÃ³n automÃ¡tica de logs viejos y auto-selecciÃ³n
   useEffect(() => {
     if (state && cultures.length === 0 && logs.length > 0) {
       if (!logs[0].cultureId) {
@@ -38,7 +38,7 @@ export default function CellCulture({ state, setState }) {
           newCultures.push({ id: cId, cellLine: lineName, dateStarted: new Date().toISOString().split('T')[0], status: 'Activo' });
           updatedLogs.forEach(l => { if ((l.cellLine || 'Desconocido') === lineName) l.cultureId = cId; });
         });
-        setState({ ...state, cultures: newCultures, cultureLogs: updatedLogs });
+        updateState({ cultures: newCultures, cultureLogs: updatedLogs });
         setActiveCultureId(newCultures[0]?.id);
       }
     } else if (!activeCultureId && cultures.length > 0) {
@@ -56,22 +56,22 @@ export default function CellCulture({ state, setState }) {
     }
   }, [printMode]);
 
-  // == Lógica de Cultivos ==
+  // == LÃ³gica de Cultivos ==
   const addCulture = () => {
-    askUser('Nombre de la Placa o Línea (Ej. HUVEC P3)', '', (name) => {
+    askUser('Nombre de la Placa o LÃ­nea (Ej. HUVEC P3)', '', (name) => {
       if (name) {
         const newC = { id: uuidv4(), cellLine: name, dateStarted: new Date().toISOString().split('T')[0], status: 'Activo' };
-        setState({ ...state, cultures: [newC, ...cultures] });
+        updateState({ cultures: [newC, ...cultures] });
         setActiveCultureId(newC.id);
       }
     });
   };
   const toggleCultureStatus = (id) => {
-    setState({ ...state, cultures: cultures.map(c => c.id === id ? { ...c, status: c.status === 'Activo' ? 'Archivado' : 'Activo' } : c) });
+    updateState({ cultures: cultures.map(c => c.id === id ? { ...c, status: c.status === 'Activo' ? 'Archivado' : 'Activo' } : c) });
   };
   const removeCulture = (id) => {
-    if (confirm('¿Eliminar cultivo y toda su cronología? Esta acción es irreversible.')) {
-      setState({ ...state, cultures: cultures.filter(c => c.id !== id), cultureLogs: logs.filter(l => l.cultureId !== id) });
+    if (confirm('Â¿Eliminar cultivo y toda su cronologÃ­a? Esta acciÃ³n es irreversible.')) {
+      updateState({ cultures: cultures.filter(c => c.id !== id), cultureLogs: logs.filter(l => l.cultureId !== id) });
       if (activeCultureId === id) setActiveCultureId(null);
     }
   };
@@ -83,21 +83,21 @@ export default function CellCulture({ state, setState }) {
       measurements: {},
       images: []
     };
-    setState({ ...state, subjects: [...(state.subjects || []), newSubject] });
-    alert(`La muestra "${newSubject.name}" ha sido creada exitosamente en la sección "Sujetos".`);
+    updateState({ subjects: [...(state.subjects || []), newSubject] });
+    alert(`La muestra "${newSubject.name}" ha sido creada exitosamente en la secciÃ³n "Sujetos".`);
   };
 
-  // == Lógica de Timeline (Logs) ==
+  // == LÃ³gica de Timeline (Logs) ==
   const addLogToActive = () => {
     if (!activeCultureId) return alert('Selecciona o crea un cultivo activo.');
     const newLog = {
       id: uuidv4(), cultureId: activeCultureId, date: new Date().toISOString().split('T')[0],
-      passage: 1, action: 'Observación', protocolUsed: '', confluence: 50, observations: '', checkedMaterials: [], images: []
+      passage: 1, action: 'ObservaciÃ³n', protocolUsed: '', confluence: 50, observations: '', checkedMaterials: [], images: []
     };
-    setState({ ...state, cultureLogs: [newLog, ...logs] });
+    updateState({ cultureLogs: [newLog, ...logs] });
   };
   const updateLog = (id, field, value) => {
-    setState({ ...state, cultureLogs: logs.map(l => l.id === id ? { ...l, [field]: value } : l) });
+    updateState({ cultureLogs: logs.map(l => l.id === id ? { ...l, [field]: value } : l) });
   };
   const toggleLogMaterial = (logId, materialId) => {
     setState({
@@ -112,9 +112,9 @@ export default function CellCulture({ state, setState }) {
   };
   const handleActionChange = (logId, value) => {
     if (value === 'ADD_NEW') {
-      askUser('Nueva acción para el menú desplegable:', '', (newAct) => {
+      askUser('Nueva acciÃ³n para el menÃº desplegable:', '', (newAct) => {
         if (newAct) {
-          if (!actionsList.includes(newAct)) setState({ ...state, cultureActions: [...actionsList, newAct] });
+          if (!actionsList.includes(newAct)) updateState({ cultureActions: [...actionsList, newAct] });
           updateLog(logId, 'action', newAct);
         }
       });
@@ -123,7 +123,7 @@ export default function CellCulture({ state, setState }) {
     }
   };
   const removeLog = (id) => {
-    if (confirm('¿Eliminar este evento de la línea de tiempo?')) setState({ ...state, cultureLogs: logs.filter(l => l.id !== id) });
+    if (confirm('Â¿Eliminar este evento de la lÃ­nea de tiempo?')) updateState({ cultureLogs: logs.filter(l => l.id !== id) });
   };
   const handleImageUpload = async (e, logId) => {
     const files = Array.from(e.target.files);
@@ -142,13 +142,13 @@ export default function CellCulture({ state, setState }) {
       }));
     } catch (err) {
       console.error("Error comprimiendo imagen:", err);
-      alert("Ocurrió un error al intentar optimizar la foto. Revisa que sea el formato correcto.");
+      alert("OcurriÃ³ un error al intentar optimizar la foto. Revisa que sea el formato correcto.");
     }
     
     e.target.value = '';
   };
   const removeImage = (logId, imgIndex) => {
-    setState({ ...state, cultureLogs: logs.map(l => {
+    updateState({ cultureLogs: logs.map(l => {
       if (l.id === logId) {
         const newImgs = [...l.images]; newImgs.splice(imgIndex, 1);
         return { ...l, images: newImgs };
@@ -166,7 +166,7 @@ export default function CellCulture({ state, setState }) {
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px'}}>
           <div>
             <h2 style={{color: 'var(--text-primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px'}}>
-              <Microscope size={24} color="var(--success)"/> Bitácora de Cultivos
+              <Microscope size={24} color="var(--success)"/> BitÃ¡cora de Cultivos
             </h2>
             <p className="no-print" style={{color: 'var(--text-secondary)', fontSize: '0.9rem'}}>Registro de pasajes, confluencia y stock celular.</p>
           </div>
@@ -200,7 +200,7 @@ export default function CellCulture({ state, setState }) {
                 <div style={{fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px'}}>Inicio: {c.dateStarted}</div>
               </div>
             ))}
-            {cultures.length === 0 && <div className="empty-mini">No hay cultivos. Añade uno con el botón +.</div>}
+            {cultures.length === 0 && <div className="empty-mini">No hay cultivos. AÃ±ade uno con el botÃ³n +.</div>}
           </div>
         </div>
 
@@ -212,7 +212,7 @@ export default function CellCulture({ state, setState }) {
             <div key={activeCulture.id} className="culture-print-section">
               <div className="timeline-header">
                 <div>
-                  <h3>Línea de Tiempo: <span style={{color:'var(--accent)'}}>{activeCulture.cellLine}</span></h3>
+                  <h3>LÃ­nea de Tiempo: <span style={{color:'var(--accent)'}}>{activeCulture.cellLine}</span></h3>
                   <div className="no-print" style={{display:'flex', gap:'12px', marginTop:'8px', fontSize: '0.85rem'}}>
                     <button className="btn-text" onClick={() => toggleCultureStatus(activeCulture.id)}>
                       {activeCulture.status === 'Activo' ? <><Archive size={14}/> Archivar Cultivo</> : <><Clock size={14}/> Reactivar</>}
@@ -226,7 +226,7 @@ export default function CellCulture({ state, setState }) {
                   </div>
                 </div>
                 <button className="btn btn-primary no-print" onClick={addLogToActive} style={{background: 'var(--success)', border: 'none', color: '#fff'}}>
-                  <Plus size={16} /> Añadir Evento
+                  <Plus size={16} /> AÃ±adir Evento
                 </button>
               </div>
 
@@ -239,7 +239,7 @@ export default function CellCulture({ state, setState }) {
                         <div style={{ display: 'flex', width: '100%', alignItems: 'center' }}>
                           <div className="print-compact-info" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', padding: '12px', borderRight: log.images.length > 0 ? '1px solid #ccc' : 'none' }}>
                             <div style={{ fontWeight: 600, fontSize: '0.95rem', borderBottom: '1px solid #ccc', paddingBottom: '4px', marginBottom: '4px' }}>
-                              🗓️ {log.date} &nbsp;|&nbsp; Pasaje {log.passage} &nbsp;|&nbsp; Acción: {log.action}
+                              ðŸ—“ï¸ {log.date} &nbsp;|&nbsp; Pasaje {log.passage} &nbsp;|&nbsp; AcciÃ³n: {log.action}
                             </div>
                             <div style={{ fontSize: '0.85rem' }}>
                               <strong>Confluencia:</strong> {log.confluence}% 
@@ -267,14 +267,14 @@ export default function CellCulture({ state, setState }) {
                               <input type="date" className="input-field" value={log.date} onChange={e => updateLog(log.id, 'date', e.target.value)} />
                             </div>
                             <div className="log-field-group">
-                              <label>Pasaje N°</label>
+                              <label>Pasaje NÂ°</label>
                               <input type="number" className="input-field" value={log.passage} onChange={e => updateLog(log.id, 'passage', e.target.value)} />
                             </div>
                             <div className="log-field-group">
-                              <label>Acción</label>
+                              <label>AcciÃ³n</label>
                               <select className="input-field" value={log.action} onChange={e => handleActionChange(log.id, e.target.value)}>
                                 {actionsList.map(a => <option key={a} value={a}>{a}</option>)}
-                                <option value="ADD_NEW" style={{color: 'var(--success)'}}>➕ Añadir nueva acción...</option>
+                                <option value="ADD_NEW" style={{color: 'var(--success)'}}>âž• AÃ±adir nueva acciÃ³n...</option>
                               </select>
                             </div>
                             <div className="log-field-group">
@@ -285,7 +285,7 @@ export default function CellCulture({ state, setState }) {
                               </select>
                             </div>
 
-                            {/* Checklist y Descripción Específicas del Protocolo si está seleccionado */}
+                            {/* Checklist y DescripciÃ³n EspecÃ­ficas del Protocolo si estÃ¡ seleccionado */}
                             {log.protocolUsed && protocols.find(p => p.id === log.protocolUsed) && (
                               <div style={{gridColumn: '1 / -1', background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)', padding: '16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '12px'}}>
                                 {protocols.find(p => p.id === log.protocolUsed).description && (
@@ -332,8 +332,8 @@ export default function CellCulture({ state, setState }) {
 
                           <div className="culture-log-sidebar">
                             <div className="culture-log-images-header">
-                              <span style={{fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)'}}>Microscopía</span>
-                              <label className="btn-icon" style={{cursor: 'pointer'}} title="Añadir fotos">
+                              <span style={{fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)'}}>MicroscopÃ­a</span>
+                              <label className="btn-icon" style={{cursor: 'pointer'}} title="AÃ±adir fotos">
                                 <Plus size={16} />
                                 <input type="file" multiple accept="image/*" onChange={(e) => handleImageUpload(e, log.id)} style={{display: 'none'}} />
                               </label>
@@ -359,7 +359,7 @@ export default function CellCulture({ state, setState }) {
                   <div className="timeline-empty no-print">
                     <Clock size={40} style={{opacity: 0.2, marginBottom: '16px'}} />
                     <p>No hay eventos registrados para este cultivo.</p>
-                    <span>Crea uno con el botón "Añadir Evento".</span>
+                    <span>Crea uno con el botÃ³n "AÃ±adir Evento".</span>
                   </div>
                 )}
               </div>
@@ -371,7 +371,7 @@ export default function CellCulture({ state, setState }) {
             <div className="empty-state no-print" style={{flex: 1, padding: '40px', textAlign: 'center'}}>
               <Microscope size={64} style={{color: 'var(--text-secondary)', opacity: 0.2, marginBottom: '24px'}} />
               <h3>Selecciona o Crea un Cultivo</h3>
-              <p>Escoge un proyecto en el menú lateral para ver su línea de tiempo cronológica.</p>
+              <p>Escoge un proyecto en el menÃº lateral para ver su lÃ­nea de tiempo cronolÃ³gica.</p>
             </div>
           )}
         </div>

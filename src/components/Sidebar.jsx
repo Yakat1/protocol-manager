@@ -2,7 +2,7 @@ import { Plus, Trash2, Download, Upload, Save } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { exportCSV, exportBackup } from '../utils/export';
 
-export default function Sidebar({ state, setState, activeSubjectId, setActiveSubjectId, activeTab, setActiveTab, tabs, user, onLogout, isOpen, onClose, deferredPrompt, onInstallPWA }) {
+export default function Sidebar({ state, updateState, activeSubjectId, setActiveSubjectId, activeTab, setActiveTab, tabs, user, onLogout, isOpen, onClose, deferredPrompt, onInstallPWA }) {
   const addSubject = () => {
     const newSubject = {
       id: uuidv4(),
@@ -11,7 +11,7 @@ export default function Sidebar({ state, setState, activeSubjectId, setActiveSub
       measurements: {},
       images: []
     };
-    setState({ ...state, subjects: [...state.subjects, newSubject] });
+    updateState({ subjects: [...state.subjects, newSubject] });
     setActiveSubjectId(newSubject.id);
   };
 
@@ -19,13 +19,13 @@ export default function Sidebar({ state, setState, activeSubjectId, setActiveSub
     e.stopPropagation();
     if(confirm('¿Seguro que deseas eliminar este sujeto? Sus datos e imágenes serán borrados de este protocolo.')) {
       const newSubjects = state.subjects.filter(s => s.id !== id);
-      setState({ ...state, subjects: newSubjects });
+      updateState({ subjects: newSubjects });
       if(activeSubjectId === id) setActiveSubjectId(null);
     }
   };
 
   const updateProtocolName = (e) => {
-    setState({ ...state, protocolName: e.target.value });
+    updateState({ protocolName: e.target.value });
   };
 
   return (

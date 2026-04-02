@@ -154,11 +154,11 @@ const renderDynamicFields = (item, updateItem, isExpired, isLowStock) => {
   );
 };
 
-export default function Inventory({ state, setState }) {
+export default function Inventory({ inventory: inventoryProp, setInventory }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   
-  const inventory = state?.inventory || [];
+  const inventory = inventoryProp || [];
 
   const addItem = () => {
     const newItem = {
@@ -172,17 +172,16 @@ export default function Inventory({ state, setState }) {
       expDate: '',
       notes: ''
     };
-    setState({ ...state, inventory: [newItem, ...inventory] });
+    setInventory([newItem, ...inventory]);
   };
 
   const updateItem = (id, field, value) => {
-    const newInv = inventory.map(item => item.id === id ? { ...item, [field]: value } : item);
-    setState({ ...state, inventory: newInv });
+    setInventory(inventory.map(item => item.id === id ? { ...item, [field]: value } : item));
   };
 
   const removeItem = (id) => {
     if (confirm('¿Seguro que deseas eliminar este ítem del inventario?')) {
-      setState({ ...state, inventory: inventory.filter(item => item.id !== id) });
+      setInventory(inventory.filter(item => item.id !== id));
     }
   };
 

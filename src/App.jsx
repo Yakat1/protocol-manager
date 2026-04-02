@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react';
 import { loadState, saveState } from './utils/storage';
 import { exportCSV, exportBackup } from './utils/export';
 import { onUserChange, logoutUser, subscribeToState } from './utils/firebase';
@@ -6,7 +6,7 @@ import AuthGate from './components/AuthGate';
 import Sidebar from './components/Sidebar';
 import './index.css';
 
-// ── Lazy-loaded modules (cada uno se descarga solo cuando el usuario navega a esa pestaña) ──
+// ── Lazy-loaded modules ──
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const Workspace = lazy(() => import('./components/Workspace'));
 const PlateMapper = lazy(() => import('./components/PlateMapper'));
@@ -36,7 +36,7 @@ const TABS = [
 ];
 
 export default function App() {
-  const [user, setUser] = useState(undefined); // undefined = cargando, null = sin sesión
+  const [user, setUser] = useState(undefined);
   const [state, setState] = useState(null);
   const [activeSubjectId, setActiveSubjectId] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
@@ -46,12 +46,23 @@ export default function App() {
   const firestoreUnsubRef = useRef(null);
   const saveTimerRef = useRef(null);
 
-  // 0) Escuchar evento de instalación de la PWA
+  // ── Slice updaters (estables vía useCallback + functional setState) ────────
+  const setInventory = useCallback((inventory) => {
+    setState(prev => ({ ...prev, inventory }));
+  }, []);
+
+  const setCultureProtocols = useCallback((cultureProtocols) => {
+    setState(prev => ({ ...prev, cultureProtocols }));
+  }, []);
+
+  // Updater genérico para componentes que modifican múltiples slices
+  const updateState = useCallback((partial) => {
+    setState(prev => ({ ...prev, ...partial }));
+  }, []);
+
+  // 0) PWA install prompt
   useEffect(() => {
-    const handler = (e) => {
-      e.preventDefault(); // Evitar que Chrome muestre el mini-infobar automático
-      setDeferredPrompt(e);
-    };
+    const handler = (e) => { e.preventDefault(); setDeferredPrompt(e); };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
@@ -60,30 +71,25 @@ export default function App() {
     if (deferredPrompt) {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setDeferredPrompt(null);
-      }
+      if (outcome === 'accepted') setDeferredPrompt(null);
     }
   };
 
-  // ── 1) Escuchar cambios de autenticación ──────────────────────────────────
+  // ── 1) Auth listener ──────────────────────────────────────────────────────
   useEffect(() => {
     const unsubAuth = onUserChange(async (firebaseUser) => {
       setUser((current) => {
         if (current?.isGuest) return current;
         return firebaseUser ?? null;
       });
-      
+
       if (firebaseUser) {
-        // Cargar estado de Firestore (con fallback a IndexedDB)
         const loaded = await loadState(firebaseUser.uid);
         setState(loaded);
 
-        // Suscripción en tiempo real: si otro dispositivo guarda, actualizo aquí
         if (firestoreUnsubRef.current) firestoreUnsubRef.current();
         firestoreUnsubRef.current = subscribeToState(firebaseUser.uid, (remoteState) => {
           setState(prev => {
-            // Preservar imágenes locales al recibir actualización remota
             const mergedSubjects = (remoteState.subjects || []).map(rs => {
               const local = (prev?.subjects || []).find(s => s.id === rs.id);
               return local ? { ...rs, images: local.images || [] } : rs;
@@ -96,57 +102,34 @@ export default function App() {
           });
         });
       } else {
-        // Sin sesión: cargar solo desde IndexedDB (modo offline / Electron sin login)
-        if (firestoreUnsubRef.current) {
-          firestoreUnsubRef.current();
-          firestoreUnsubRef.current = null;
-        }
+        if (firestoreUnsubRef.current) { firestoreUnsubRef.current(); firestoreUnsubRef.current = null; }
         const loaded = await loadState();
         setState(loaded);
       }
     });
 
-    return () => {
-      unsubAuth();
-      if (firestoreUnsubRef.current) firestoreUnsubRef.current();
-    };
+    return () => { unsubAuth(); if (firestoreUnsubRef.current) firestoreUnsubRef.current(); };
   }, []);
 
-  // ── 2) Auto-guardar con debounce (1s) cuando cambia el estado ─────────────
+  // ── 2) Auto-save debounce (5s) ────────────────────────────────────────────
   useEffect(() => {
     if (!state) return;
-
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       saveState(state, user?.uid ?? null).catch(console.error);
     }, 5000);
-
     return () => clearTimeout(saveTimerRef.current);
   }, [state, user]);
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(''), 3500);
-  };
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
   const handleLogout = async () => {
-    if (user?.isGuest) {
-      setUser(null);
-    } else {
-      await logoutUser();
-    }
-    showToast('Sesión iniciada/cerrada.');
+    if (user?.isGuest) { setUser(null); } else { await logoutUser(); }
+    showToast('Sesión cerrada.');
   };
 
-  const handleExportCSV = () => {
-    exportCSV(state);
-    showToast('Archivo CSV exportado con éxito');
-  };
-
-  const handleExportBackup = () => {
-    exportBackup(state);
-    showToast('Respaldo JSON exportado con éxito');
-  };
+  const handleExportCSV = () => { exportCSV(state); showToast('CSV exportado'); };
+  const handleExportBackup = () => { exportBackup(state); showToast('Respaldo JSON exportado'); };
 
   const handleImportBackup = (e) => {
     const file = e.target.files[0];
@@ -156,19 +139,15 @@ export default function App() {
       try {
         const json = JSON.parse(event.target.result);
         if (json.protocolName && json.subjects) {
-          setState(json);
-          setActiveSubjectId(null);
-          showToast('Respaldo cargado correctamente');
+          setState(json); setActiveSubjectId(null); showToast('Respaldo cargado');
         } else throw new Error("Format invalid");
-      } catch {
-        alert('El archivo no es un respaldo válido.');
-      }
+      } catch { alert('El archivo no es un respaldo válido.'); }
     };
     reader.readAsText(file);
     e.target.value = '';
   };
 
-  // ── Pantallas de carga ────────────────────────────────────────────────────
+  // ── Loading / Auth gates ──────────────────────────────────────────────────
   if (user === undefined) {
     return (
       <div className="app-container">
@@ -180,8 +159,6 @@ export default function App() {
     );
   }
 
-  // ── AuthGate: requerido en TODOS los modos (Web y Electron) ────────────────
-  // En Electron ocultamos el botón de Google (los popups OAuth requieren config extra).
   const isElectron = !!window.electronAPI;
   if (!user && state) {
     return <AuthGate onAuthenticated={(u) => setUser(u)} isElectron={isElectron} />;
@@ -195,35 +172,36 @@ export default function App() {
     );
   }
 
+  // ── Render por pestaña (cada componente recibe solo las slices que necesita) ─
   const renderMainContent = () => {
     switch (activeTab) {
       case 'home':
-        return <Dashboard state={state} setActiveTab={setActiveTab} setState={setState} showToast={showToast} />;
+        return <Dashboard state={state} setActiveTab={setActiveTab} updateState={updateState} showToast={showToast} />;
       case 'plate':
-        return <PlateMapper state={state} setState={setState} />;
+        return <PlateMapper state={state} updateState={updateState} />;
       case 'calculator':
-        return <Calculator state={state} setState={setState} />;
+        return <Calculator inventory={state.inventory} setInventory={setInventory} />;
       case 'timers':
         return <Timers />;
       case 'counter':
         return <CellCounter />;
       case 'charts':
-        return <Charts state={state} />;
+        return <Charts subjects={state.subjects} variables={state.variables} />;
       case 'western':
-        return <WesternBlot state={state} setState={setState} />;
+        return <WesternBlot subjects={state.subjects} variables={state.variables} updateState={updateState} />;
       case 'wbreport':
         return <WBReport />;
       case 'inventory':
-        return <Inventory state={state} setState={setState} />;
+        return <Inventory inventory={state.inventory} setInventory={setInventory} />;
       case 'protocols':
-        return <ProtocolsManager state={state} setState={setState} />;
+        return <ProtocolsManager protocols={state.cultureProtocols} inventory={state.inventory} setCultureProtocols={setCultureProtocols} />;
       case 'culture':
-        return <CellCulture state={state} setState={setState} />;
+        return <CellCulture state={state} updateState={updateState} />;
       default:
         return (
           <Workspace
             state={state}
-            setState={setState}
+            updateState={updateState}
             activeSubjectId={activeSubjectId}
             setActiveSubjectId={setActiveSubjectId}
             onExportCSV={handleExportCSV}
@@ -236,25 +214,16 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Barra superior móvil con hamburguesa */}
       <div className="mobile-topbar">
-        <div className="mobile-topbar-title">
-          🔬 {state?.protocolName || 'LIMS'}
-        </div>
-        <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} aria-label="Abrir menú">
-          ☰
-        </button>
+        <div className="mobile-topbar-title">🔬 {state?.protocolName || 'LIMS'}</div>
+        <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} aria-label="Abrir menú">☰</button>
       </div>
 
-      {/* Overlay oscuro (solo móvil) */}
-      <div
-        className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`}
-        onClick={() => setSidebarOpen(false)}
-      />
+      <div className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`} onClick={() => setSidebarOpen(false)} />
 
       <Sidebar
         state={state}
-        setState={setState}
+        updateState={updateState}
         activeSubjectId={activeSubjectId}
         setActiveSubjectId={(id) => { setActiveSubjectId(id); setActiveTab('subjects'); setSidebarOpen(false); }}
         activeTab={activeTab}

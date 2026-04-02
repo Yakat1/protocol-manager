@@ -78,7 +78,7 @@ const BoxPlotShape = (props) => {
   );
 };
 
-export default function Charts({ state }) {
+export default function Charts({ subjects, variables }) {
   const [groups, setGroups] = useState(DEFAULT_GROUPS);
   const [values, setValues] = useState({}); // { groupId: ['val1','val2',...] }
   const [chartTitle, setChartTitle] = useState('Viabilidad Celular (% vs Control)');
@@ -114,11 +114,11 @@ export default function Charts({ state }) {
   };
 
   const importFromSubjects = (varId, varName, unit) => {
-    if (!state || !state.subjects) return;
+    if (!subjects) return;
     
     // Agrupar sujetos por "Grupo Experimental"
     const groupsMap = {}; 
-    state.subjects.forEach(sub => {
+    subjects.forEach(sub => {
       const gName = sub.group || 'Sin Grupo';
       const val = sub.measurements?.[varId];
       if (val !== undefined && val !== '') {
@@ -181,7 +181,7 @@ export default function Charts({ state }) {
           </select>
         </div>
         
-        {state && state.variables && state.variables.filter(v => v.type === 'number').length > 0 && (
+        {variables && variables.filter(v => v.type === 'number').length > 0 && (
           <div className="input-group" style={{marginBottom: 0, flex: '1 1 200px'}}>
             <label className="input-label" style={{color: 'var(--accent)'}}>⚡ Auto-Importar de Sujetos</label>
             <select 
@@ -189,7 +189,7 @@ export default function Charts({ state }) {
               onChange={e => {
                 const vId = e.target.value;
                 if (!vId) return;
-                const vDef = state.variables.find(v => v.id === vId);
+                const vDef = variables.find(v => v.id === vId);
                 if (vDef) importFromSubjects(vDef.id, vDef.name, vDef.unit);
                 e.target.value = '';
               }}
@@ -197,7 +197,7 @@ export default function Charts({ state }) {
               style={{cursor: 'pointer'}}
             >
               <option value="" disabled>🟢 Selecciona Variable a Graficar...</option>
-              {state.variables.filter(v => v.type === 'number').map(v => (
+              {variables.filter(v => v.type === 'number').map(v => (
                 <option key={v.id} value={v.id}>{v.name} {v.unit ? `(${v.unit})` : ''}</option>
               ))}
             </select>

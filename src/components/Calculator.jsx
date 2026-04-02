@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Beaker, FlaskConical, MinusCircle } from 'lucide-react';
 import './Calculator.css';
 
-export default function Calculator({ state, setState }) {
+export default function Calculator({ inventory: inventoryProp, setInventory }) {
+  const inventory = inventoryProp || [];
   // Dilution Calculator: C1V1 = C2V2
   const [dilution, setDilution] = useState({ c1: '', v1: '', c2: '', vf: '' });
   // Fenton Calculator
@@ -11,17 +12,14 @@ export default function Calculator({ state, setState }) {
   const [selectedInventoryId, setSelectedInventoryId] = useState('');
 
   const handleDiscount = (amount) => {
-    if (!state || !state.inventory) return alert("Inventario no disponible o componente no guardado.");
+    if (!inventory || inventory.length === 0) return alert("Inventario no disponible o componente no guardado.");
     if (!selectedInventoryId) return alert("Por favor, selecciona un elemento del inventario.");
-    const inv = state.inventory.find(i => i.id === selectedInventoryId);
+    const inv = inventory.find(i => i.id === selectedInventoryId);
     if (!inv) return;
 
     if (confirm(`Voy a descontar ${amount.toFixed(2)} unds del inventario "${inv.name}". \nStock Actual: ${inv.quantity} ${inv.unit}\n¿Estás de acuerdo?`)) {
       const newQuantity = Math.max(0, inv.quantity - amount);
-      setState({
-        ...state,
-        inventory: state.inventory.map(i => i.id === selectedInventoryId ? { ...i, quantity: newQuantity } : i)
-      });
+      setInventory(inventory.map(i => i.id === selectedInventoryId ? { ...i, quantity: newQuantity } : i));
       alert(`Descuento exitoso. Nuevo saldo: ${newQuantity.toFixed(2)} ${inv.unit}`);
     }
   };

@@ -3,7 +3,8 @@ import { UploadCloud, Plus, Trash2, Download, Move } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import './WesternBlot.css';
 
-export default function WesternBlot({ state, setState }) {
+export default function WesternBlot({ subjects = [], variables = [], updateState }) {
+  const state = { subjects, variables }; // Compatibility shim for internal state.subjects/state.variables reads
   const [image, setImage] = useState(null);
   const [lanes, setLanes] = useState([]);
   const [selectedLaneId, setSelectedLaneId] = useState(null);
@@ -107,7 +108,7 @@ export default function WesternBlot({ state, setState }) {
     if (!state || !setState) return;
     const subId = selectedSubjects[laneId];
     if (!subId) {
-      alert('Selecciona un sujeto en el menú desplegable primero.');
+      alert('Selecciona un sujeto en el menÃº desplegable primero.');
       return;
     }
     const lane = lanes.find(l => l.id === laneId);
@@ -136,8 +137,8 @@ export default function WesternBlot({ state, setState }) {
       };
     });
 
-    setState({ ...state, variables: newVars, subjects: newSubjects });
-    alert(`Banda guardada en ${state.subjects.find(s=>s.id === subId)?.name} con éxito.\nRatio = ${ratio}`);
+    updateState({ variables: newVars, subjects: newSubjects });
+    alert(`Banda guardada en ${state.subjects.find(s=>s.id === subId)?.name} con Ã©xito.\nRatio = ${ratio}`);
     setSelectedSubjects(prev => { const n = {...prev}; delete n[laneId]; return n; });
   };
 
@@ -276,7 +277,7 @@ export default function WesternBlot({ state, setState }) {
   };
 
   const handleExportSubjects = () => {
-    if (!state || !setState) return alert("Estado general no encontrado. Asegúrese de guardar o cargar protocolo.");
+    if (!state || !setState) return alert("Estado general no encontrado. AsegÃºrese de guardar o cargar protocolo.");
     
     let finalVars = [...state.variables];
     if (!finalVars.find(v => v.id === 'var_wb_density')) finalVars.push({ id: 'var_wb_density', name: 'WB Int. Cruda', unit: 'UD', type: 'number' });
@@ -309,9 +310,9 @@ export default function WesternBlot({ state, setState }) {
 
     if (linkedCount > 0) {
       setState({...state, variables: finalVars, subjects: updatedSubjects});
-      alert(`Exportación cruzada exitosa. ${linkedCount} tubos experimentales y muestras actualizadas.`);
+      alert(`ExportaciÃ³n cruzada exitosa. ${linkedCount} tubos experimentales y muestras actualizadas.`);
     } else {
-      alert("Selecciona al menos una 'Muestra' en los menús desplegables debajo de cada banda.");
+      alert("Selecciona al menos una 'Muestra' en los menÃºs desplegables debajo de cada banda.");
     }
   };
 
@@ -319,7 +320,7 @@ export default function WesternBlot({ state, setState }) {
     return (
       <div className="wb-container">
         <div className="wb-instructions">
-          <strong>Analizador de Western Blot:</strong> Sube una imagen de tu membrana y dibuja cajas sobre cada banda para medir la intensidad relativa (densitometría). Ideal para calcular ratios como p-p38/p38 total o CK-18/β-actina.
+          <strong>Analizador de Western Blot:</strong> Sube una imagen de tu membrana y dibuja cajas sobre cada banda para medir la intensidad relativa (densitometrÃ­a). Ideal para calcular ratios como p-p38/p38 total o CK-18/Î²-actina.
         </div>
         <div className="dropzone" onClick={() => fileRef.current?.click()} style={{maxWidth: '500px'}}>
           <UploadCloud size={32} style={{marginBottom: '12px'}} />
@@ -336,7 +337,7 @@ export default function WesternBlot({ state, setState }) {
     <div className="wb-container">
       <div className="wb-instructions">
         <Move size={14} style={{display: 'inline', verticalAlign: 'middle', marginRight: '4px'}} />
-        <strong>Haz clic y arrastra</strong> sobre la imagen para dibujar una caja en cada banda. Mueve las cajas arrastrándolas y redimensiona desde las esquinas.
+        <strong>Haz clic y arrastra</strong> sobre la imagen para dibujar una caja en cada banda. Mueve las cajas arrastrÃ¡ndolas y redimensiona desde las esquinas.
       </div>
 
       <div className="wb-toolbar">
@@ -417,14 +418,14 @@ export default function WesternBlot({ state, setState }) {
       {/* Density results */}
       {lanes.length > 0 && (
         <div className="glass-panel" style={{padding: '16px'}}>
-          <h4 style={{marginBottom: '12px'}}>Densitometría Relativa</h4>
+          <h4 style={{marginBottom: '12px'}}>DensitometrÃ­a Relativa</h4>
           <table className="wb-lanes-table">
             <thead>
               <tr>
                 <th>Banda</th>
                 <th>Nombre</th>
                 <th>Intensidad</th>
-                <th>Ratio vs 1ª</th>
+                <th>Ratio vs 1Âª</th>
                 <th style={{width: '120px'}}>Barra</th>
                 <th style={{textAlign: 'center'}}>Exportar a Sujeto</th>
                 <th></th>

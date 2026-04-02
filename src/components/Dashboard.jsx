@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Activity, AlertTriangle, Box, Clock, Microscope, TrendingUp, CloudUpload, HardDriveDownload } from 'lucide-react';
 import './Dashboard.css';
 
@@ -11,7 +11,7 @@ function formatDuration(ms) {
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
 
-export default function Dashboard({ state, setActiveTab, setState, showToast }) {
+export default function Dashboard({ state, setActiveTab, updateState, showToast }) {
   const [timers, setTimers] = useState([]);
   const [now, setNow] = useState(Date.now());
 
@@ -27,16 +27,16 @@ export default function Dashboard({ state, setActiveTab, setState, showToast }) 
     fetchTimers();
     const interval = setInterval(() => {
       setNow(Date.now());
-      fetchTimers(); // Refrescar si hubo cambios en otra pestaña
+      fetchTimers(); // Refrescar si hubo cambios en otra pestaÃ±a
     }, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // 1. Cálculos de Inventario Bajo
+  // 1. CÃ¡lculos de Inventario Bajo
   const inventory = state?.inventory || [];
   const lowInventory = inventory.filter(item => item.quantity <= 5).sort((a,b) => a.quantity - b.quantity);
 
-  // 2. Cálculos de Cultivos y Semáforo de Días
+  // 2. CÃ¡lculos de Cultivos y SemÃ¡foro de DÃ­as
   const activeCultures = (state?.cultures || []).filter(c => c.status === 'Activo');
   const allLogs = state?.cultureLogs || [];
 
@@ -45,7 +45,7 @@ export default function Dashboard({ state, setActiveTab, setState, showToast }) 
     const logs = allLogs.filter(l => l.cultureId === c.id).sort((a,b) => new Date(b.date) - new Date(a.date));
     const targetDateStr = logs.length > 0 ? logs[0].date : c.dateStarted;
     
-    // Calcular días trancurridos desde la última acción (a las 00:00hrs relativas para evitar desfase de zona local)
+    // Calcular dÃ­as trancurridos desde la Ãºltima acciÃ³n (a las 00:00hrs relativas para evitar desfase de zona local)
     const targetDate = new Date(targetDateStr + "T00:00:00");
     const today = new Date();
     today.setHours(0,0,0,0);
@@ -53,20 +53,20 @@ export default function Dashboard({ state, setActiveTab, setState, showToast }) 
     const diffTime = today - targetDate;
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     
-    let statusText = 'Hace 0-1 día';
+    let statusText = 'Hace 0-1 dÃ­a';
     let colorClass = 'status-green'; // Verde 0-1 dia
     
-    if (diffDays === 1) statusText = 'Hace 1 día';
+    if (diffDays === 1) statusText = 'Hace 1 dÃ­a';
     
     if (diffDays === 2) {
       colorClass = 'status-yellow';
-      statusText = 'Hace 2 días';
+      statusText = 'Hace 2 dÃ­as';
     } else if (diffDays === 3) {
       colorClass = 'status-orange';
-      statusText = 'Hace 3 días';
+      statusText = 'Hace 3 dÃ­as';
     } else if (diffDays > 3) {
       colorClass = 'status-red';
-      statusText = `¡Hace ${diffDays} días!`;
+      statusText = `Â¡Hace ${diffDays} dÃ­as!`;
     }
 
     return { 
@@ -80,10 +80,10 @@ export default function Dashboard({ state, setActiveTab, setState, showToast }) 
 
   const runningTimers = timers.filter(t => !t.isPaused);
 
-  // Módulo de Respaldo Híbrido OS
+  // MÃ³dulo de Respaldo HÃ­brido OS
   const [backupLoading, setBackupLoading] = useState(false);
   const handleSelectFolder = async () => {
-    if (!window.electronAPI) return alert("Esta función sólo está habilitada en la aplicación .exe de Windows.");
+    if (!window.electronAPI) return alert("Esta funciÃ³n sÃ³lo estÃ¡ habilitada en la aplicaciÃ³n .exe de Windows.");
     const path = await window.electronAPI.selectFolder();
     if (path) {
       setState({...state, backupPath: path});
@@ -112,7 +112,7 @@ export default function Dashboard({ state, setActiveTab, setState, showToast }) 
     <div className="dashboard-container">
       <div style={{marginBottom: '24px'}}>
         <h1 style={{color: 'var(--text-primary)', margin: '0 0 8px 0'}}>Panel de Control LIMS</h1>
-        <p style={{color: 'var(--text-secondary)', margin: 0}}>Resumen de operaciones y alertas biológicas del experimento <strong>{state?.protocolName || 'Actual'}</strong>.</p>
+        <p style={{color: 'var(--text-secondary)', margin: 0}}>Resumen de operaciones y alertas biolÃ³gicas del experimento <strong>{state?.protocolName || 'Actual'}</strong>.</p>
       </div>
 
       {/* Tarjetas de Resumen Global */}
@@ -129,7 +129,7 @@ export default function Dashboard({ state, setActiveTab, setState, showToast }) 
           <div className="kpi-icon" style={{background: lowInventory.length > 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)', color: lowInventory.length > 0 ? 'var(--danger)' : 'var(--success)'}}><Box size={24}/></div>
           <div className="kpi-info">
             <h3 style={{color: lowInventory.length > 0 ? 'var(--danger)' : 'inherit'}}>{lowInventory.length}</h3>
-            <p>Reactivos con Stock Crítico (≤ 5)</p>
+            <p>Reactivos con Stock CrÃ­tico (â‰¤ 5)</p>
           </div>
         </div>
         
@@ -144,7 +144,7 @@ export default function Dashboard({ state, setActiveTab, setState, showToast }) 
 
       {/* Grid Principal Modulos */}
       <div className="dash-modules-grid">
-        {/* Modulo 1: Estado de Cultivos (Semáforo) */}
+        {/* Modulo 1: Estado de Cultivos (SemÃ¡foro) */}
         <div className="dash-module glass-panel">
           <div className="module-header">
             <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><Activity size={18} color="var(--success)"/> Monitor de Cultivos</h3>
@@ -158,7 +158,7 @@ export default function Dashboard({ state, setActiveTab, setState, showToast }) 
                   <div key={c.id} className="dash-list-item" onClick={() => setActiveTab('culture')} title="Ir a Cultivos">
                     <div style={{display:'flex', flexDirection:'column'}}>
                       <span style={{fontWeight: 600, color: 'var(--text-primary)'}}>{c.cellLine}</span>
-                      <span style={{fontSize: '0.8rem', color: 'var(--text-secondary)'}}>Último: {c.lastAction}</span>
+                      <span style={{fontSize: '0.8rem', color: 'var(--text-secondary)'}}>Ãšltimo: {c.lastAction}</span>
                     </div>
                     <div className={`culture-badge ${c.colorClass}`}>
                       {c.statusText}
@@ -170,7 +170,7 @@ export default function Dashboard({ state, setActiveTab, setState, showToast }) 
           </div>
         </div>
 
-        {/* Modulo 2: Inventario Crítico */}
+        {/* Modulo 2: Inventario CrÃ­tico */}
         <div className="dash-module glass-panel">
           <div className="module-header">
             <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><AlertTriangle size={18} color="var(--danger)"/> Alertas de Inventario</h3>
@@ -199,11 +199,11 @@ export default function Dashboard({ state, setActiveTab, setState, showToast }) 
         {/* Modulo 3: Timers Activos en Vivo */}
         <div className="dash-module glass-panel module-full-center">
           <div className="module-header">
-            <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><TrendingUp size={18} color="#f59e0b"/> Estímulos Activos</h3>
+            <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><TrendingUp size={18} color="#f59e0b"/> EstÃ­mulos Activos</h3>
           </div>
           <div className="module-body">
             {runningTimers.length === 0 ? (
-              <div className="empty-mini">No hay cronómetros activos actualmente.</div>
+              <div className="empty-mini">No hay cronÃ³metros activos actualmente.</div>
             ) : (
               <div className="dash-list">
                 {runningTimers.map(t => {
@@ -224,7 +224,7 @@ export default function Dashboard({ state, setActiveTab, setState, showToast }) 
           </div>
         </div>
 
-        {/* Modulo 4: Sistema de Respaldo Híbrido C++ */}
+        {/* Modulo 4: Sistema de Respaldo HÃ­brido C++ */}
         <div className="dash-module glass-panel">
           <div className="module-header">
             <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><CloudUpload size={18} color="var(--accent)"/> Respaldo Nativo</h3>
@@ -236,7 +236,7 @@ export default function Dashboard({ state, setActiveTab, setState, showToast }) 
             
             <div style={{background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', justifyContent: 'space-between'}}>
               <div>
-                <strong style={{display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)'}}>Directorio de Sincronización Destino</strong>
+                <strong style={{display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)'}}>Directorio de SincronizaciÃ³n Destino</strong>
                 <span style={{fontSize: '0.9rem', color: state?.backupPath ? 'var(--success)' : 'var(--danger)', wordBreak: 'break-all'}}>{state?.backupPath || "Ninguna ruta asignada."}</span>
               </div>
               <button className="btn" onClick={handleSelectFolder} style={{padding: '4px 8px', fontSize: '0.8rem'}}>Cambiar Carpeta</button>

@@ -8,16 +8,16 @@ const COLS = Array.from({length: 12}, (_, i) => i + 1);
 
 const DEFAULT_GROUPS = [
   { id: 'g1', name: 'Control Negativo', color: '#6b7280' },
-  { id: 'g2', name: 'H₂O₂ 50µM', color: '#3b82f6' },
-  { id: 'g3', name: 'H₂O₂ 150µM', color: '#8b5cf6' },
-  { id: 'g4', name: 'H₂O₂ 300µM', color: '#ec4899' },
+  { id: 'g2', name: 'Hâ‚‚Oâ‚‚ 50ÂµM', color: '#3b82f6' },
+  { id: 'g3', name: 'Hâ‚‚Oâ‚‚ 150ÂµM', color: '#8b5cf6' },
+  { id: 'g4', name: 'Hâ‚‚Oâ‚‚ 300ÂµM', color: '#ec4899' },
   { id: 'g5', name: 'Fenton Baja', color: '#f59e0b' },
   { id: 'g6', name: 'Fenton Media', color: '#f97316' },
   { id: 'g7', name: 'Fenton Alta', color: '#ef4444' },
-  { id: 'g8', name: 'NAC + H₂O₂', color: '#10b981' },
+  { id: 'g8', name: 'NAC + Hâ‚‚Oâ‚‚', color: '#10b981' },
 ];
 
-export default function PlateMapper({ state, setState }) {
+export default function PlateMapper({ state, updateState }) {
   const [groups, setGroups] = useState(DEFAULT_GROUPS);
   const [activeGroupId, setActiveGroupId] = useState(groups[0].id);
   const [wells, setWells] = useState({}); // { "A1": { groupId, value } }
@@ -26,13 +26,13 @@ export default function PlateMapper({ state, setState }) {
   const [selectedExports, setSelectedExports] = useState({});
 
   const handleExportGroup = (statItem) => {
-    if (!state || !setState) return alert("Editor inactivo. Guarda el protocolo primero.");
+    if (!state || !updateState) return alert("Editor inactivo. Guarda el protocolo primero.");
     const targetSubjId = selectedExports[statItem.group.id] || 'NEW';
 
     const hasAbs = state.variables.find(v => v.id === 'var_plate_signal');
     let finalVars = state.variables;
     if (!hasAbs) {
-        finalVars = [...state.variables, { id: 'var_plate_signal', name: 'Señal Microplaca', unit: 'OD/RFU', type: 'number' }];
+        finalVars = [...state.variables, { id: 'var_plate_signal', name: 'SeÃ±al Microplaca', unit: 'OD/RFU', type: 'number' }];
     }
 
     if (targetSubjId === 'NEW') {
@@ -43,8 +43,8 @@ export default function PlateMapper({ state, setState }) {
           measurements: { var_plate_signal: statItem.mean.toFixed(4) },
           images: []
         };
-        setState({...state, variables: finalVars, subjects: [...state.subjects, newSubj]});
-        alert(`Muestra genérica "${newSubj.name}" creada exitosamente.`);
+        updateState({ variables: finalVars, subjects: [...state.subjects, newSubj]});
+        alert(`Muestra genÃ©rica "${newSubj.name}" creada exitosamente.`);
     } else {
         const tgt = state.subjects.find(s => s.id === targetSubjId);
         setState({
@@ -52,7 +52,7 @@ export default function PlateMapper({ state, setState }) {
           variables: finalVars, 
           subjects: state.subjects.map(s => s.id === targetSubjId ? { ...s, measurements: { ...s.measurements, var_plate_signal: statItem.mean.toFixed(4) } } : s)
         });
-        alert(`Señal estadística asignada exitosamente a la muestra: ${tgt?.name}`);
+        alert(`SeÃ±al estadÃ­stica asignada exitosamente a la muestra: ${tgt?.name}`);
     }
   };
 
@@ -177,7 +177,7 @@ export default function PlateMapper({ state, setState }) {
             </div>
           ))}
           <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
-            <button className="btn-icon" onClick={addGroup} title="Añadir grupo libre"><Plus size={16}/></button>
+            <button className="btn-icon" onClick={addGroup} title="AÃ±adir grupo libre"><Plus size={16}/></button>
             {state?.subjects && (
               <select 
                 className="input-field" 
@@ -236,7 +236,7 @@ export default function PlateMapper({ state, setState }) {
                     className={`plate-well ${w?.value != null ? 'has-value' : ''}`}
                     style={group ? { background: group.color, borderColor: group.color } : {}}
                     onClick={() => handleWellClick(r, c)}
-                    title={`${r}${c}${group ? ` — ${group.name}` : ''}${w?.value != null ? ` = ${w.value}` : ''}`}
+                    title={`${r}${c}${group ? ` â€” ${group.name}` : ''}${w?.value != null ? ` = ${w.value}` : ''}`}
                   >
                     {w?.value != null ? (typeof w.value === 'number' ? w.value.toFixed(1) : '') : ''}
                   </div>
@@ -265,7 +265,7 @@ export default function PlateMapper({ state, setState }) {
         <div className="glass-panel plate-data-import" style={{padding: '16px', marginBottom: '20px'}}>
           <h4 style={{marginBottom: '8px'}}>Pegar Matriz de Resultados</h4>
           <p style={{fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px'}}>
-            Copia las lecturas del lector de microplaca (8 filas × 12 columnas, separadas por tabulador o coma) y pégalas aquí. Se asignarán a las posiciones A1→H12.
+            Copia las lecturas del lector de microplaca (8 filas Ã— 12 columnas, separadas por tabulador o coma) y pÃ©galas aquÃ­. Se asignarÃ¡n a las posiciones A1â†’H12.
           </p>
           <textarea 
             className="input-field"
@@ -282,7 +282,7 @@ export default function PlateMapper({ state, setState }) {
       {/* Summary Statistics */}
       {stats.length > 0 && (
         <div className="glass-panel" style={{padding: '16px'}}>
-          <h4 style={{marginBottom: '12px'}}>Resumen Estadístico por Grupo</h4>
+          <h4 style={{marginBottom: '12px'}}>Resumen EstadÃ­stico por Grupo</h4>
           <table className="plate-results-table">
             <thead>
               <tr>
@@ -299,7 +299,7 @@ export default function PlateMapper({ state, setState }) {
                   <td><div className="legend-swatch" style={{background: s.group.color}}></div></td>
                   <td>{s.group.name}</td>
                   <td>{s.n}</td>
-                  <td>{isNaN(s.mean) ? '—' : s.mean.toFixed(4)}</td>
+                  <td>{isNaN(s.mean) ? 'â€”' : s.mean.toFixed(4)}</td>
                   <td>{s.sd.toFixed(4)}</td>
                   {state && (
                     <td style={{display: 'flex', gap: '8px'}}>
