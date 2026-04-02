@@ -5,7 +5,154 @@ import { exportInventoryCSV } from '../utils/export';
 import './Inventory.css';
 
 const ITEM_TYPES = ['Reactivo', 'Solución Stock', 'Anticuerpo 1°', 'Anticuerpo 2°', 'Medio de Cultivo', 'Material'];
-const UNITS = ['mL', 'µL', 'Alícuotas', 'g', 'mg', 'Unidades'];
+const UNITS = ['mL', 'L', 'µL', 'Alícuotas', 'g', 'mg', 'Unidades', 'Cajas', 'Paquetes'];
+
+const renderDynamicFields = (item, updateItem, isExpired, isLowStock) => {
+  const t = item.type;
+  
+  if (t === 'Anticuerpo 1°' || t === 'Anticuerpo 2°') {
+    return (
+      <>
+        <div className="inv-field-group">
+          <label>Marca</label>
+          <input className="input-field" value={item.brand || ''} onChange={e => updateItem(item.id, 'brand', e.target.value)} placeholder="Ej. Abcam, Cell Signaling" />
+        </div>
+        <div className="inv-field-group">
+          <label>Sitio de Incubación</label>
+          <input className="input-field" value={item.target || ''} onChange={e => updateItem(item.id, 'target', e.target.value)} placeholder="Ej. Rabbit anti-Mouse" />
+        </div>
+        <div className="inv-field-group">
+          <label>Lote</label>
+          <input className="input-field" value={item.batch || item.concentration || ''} onChange={e => updateItem(item.id, 'batch', e.target.value)} placeholder="Número de lote" />
+        </div>
+        <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
+          <label>Cantidad Disponible {(isLowStock && item.quantity > 0) && <span style={{color: 'var(--warning)', fontSize: '0.75rem', marginLeft:'4px'}}>(Stock Bajo)</span>}</label>
+          <div style={{display: 'flex', gap: '8px', width: '100%'}}>
+            <input type="number" className="input-field" style={{flex: '1', minWidth: '0'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
+            <select className="input-field" value={item.unit || 'µL'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', minWidth: '80px'}}>
+              <option value="µL">µL</option>
+              <option value="Alícuotas">Alícuotas</option>
+            </select>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (t === 'Solución Stock') {
+    return (
+      <>
+        <div className="inv-field-group">
+          <label>Concentración</label>
+          <input className="input-field" value={item.concentration || ''} onChange={e => updateItem(item.id, 'concentration', e.target.value)} placeholder="Ej. 10x, 1mg/ml" />
+        </div>
+        <div className="inv-field-group">
+          <label>Elaborado Por</label>
+          <input className="input-field" value={item.author || ''} onChange={e => updateItem(item.id, 'author', e.target.value)} placeholder="Autor" />
+        </div>
+        <div className="inv-field-group">
+          <label>Fecha Elaboración</label>
+          <input type="date" className="input-field" value={item.creationDate || ''} onChange={e => updateItem(item.id, 'creationDate', e.target.value)} />
+        </div>
+        <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
+          <label>Cantidad Disponible {(isLowStock && item.quantity > 0) && <span style={{color: 'var(--warning)', fontSize: '0.75rem', marginLeft:'4px'}}>(Stock Bajo)</span>}</label>
+          <div style={{display: 'flex', gap: '8px', width: '100%'}}>
+            <input type="number" className="input-field" style={{flex: '1', minWidth: '0'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
+            <select className="input-field" value={item.unit || 'mL'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', minWidth: '80px'}}>
+              {['mL', 'L', 'g', 'mg'].map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (t === 'Material') {
+    return (
+      <>
+        <div className="inv-field-group">
+          <label>Marca</label>
+          <input className="input-field" value={item.brand || ''} onChange={e => updateItem(item.id, 'brand', e.target.value)} placeholder="Ej. Eppendorf, Corning" />
+        </div>
+        <div className="inv-field-group">
+          <label>Especificación / Tamaño</label>
+          <input className="input-field" value={item.specs || item.concentration || ''} onChange={e => updateItem(item.id, 'specs', e.target.value)} placeholder="Ej. 1.5mL, 10µL" />
+        </div>
+        <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
+          <label>Cantidad Disponible {(isLowStock && item.quantity > 0) && <span style={{color: 'var(--warning)', fontSize: '0.75rem', marginLeft:'4px'}}>(Stock Bajo)</span>}</label>
+          <div style={{display: 'flex', gap: '8px', width: '100%'}}>
+            <input type="number" className="input-field" style={{flex: '1', minWidth: '0'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
+            <select className="input-field" value={item.unit || 'Cajas'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', minWidth: '80px'}}>
+              {['Unidades', 'Cajas', 'Paquetes'].map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (t === 'Medio de Cultivo') {
+    return (
+      <>
+        <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
+          <label>Suplementos</label>
+          <input className="input-field" value={item.supplements || item.concentration || ''} onChange={e => updateItem(item.id, 'supplements', e.target.value)} placeholder="Ej. 10% FBS, 1% PenStrep" />
+        </div>
+        <div className="inv-field-group">
+          <label>Fecha Elaboración</label>
+          <input type="date" className="input-field" value={item.creationDate || ''} onChange={e => updateItem(item.id, 'creationDate', e.target.value)} />
+        </div>
+        <div className="inv-field-group">
+          <label style={{color: isExpired ? 'var(--danger)' : 'var(--text-secondary)'}}>Caducidad {isExpired && '⚠️'}</label>
+          <input type="date" className="input-field" value={item.expDate || ''} onChange={e => updateItem(item.id, 'expDate', e.target.value)} style={{borderColor: isExpired ? 'var(--danger)' : ''}} />
+        </div>
+        <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
+          <label>Cantidad Disponible {(isLowStock && item.quantity > 0) && <span style={{color: 'var(--warning)', fontSize: '0.75rem', marginLeft:'4px'}}>(Stock Bajo)</span>}</label>
+          <div style={{display: 'flex', gap: '8px', width: '100%'}}>
+            <input type="number" className="input-field" style={{flex: '1', minWidth: '0'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
+            <select className="input-field" value={item.unit || 'mL'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', minWidth: '80px'}}>
+              {['mL', 'L', 'Alícuotas'].map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Fallback: Reactivo genérico
+  return (
+    <>
+      <div className="inv-field-group">
+        <label>Marca</label>
+        <input className="input-field" value={item.brand || ''} onChange={e => updateItem(item.id, 'brand', e.target.value)} placeholder="Ej. Sigma-Aldrich" />
+      </div>
+      <div className="inv-field-group">
+        <label>Número de Catálogo</label>
+        <input className="input-field" value={item.catalog || ''} onChange={e => updateItem(item.id, 'catalog', e.target.value)} placeholder="Ej. M4659" />
+      </div>
+      <div className="inv-field-group">
+        <label>Peso Molecular</label>
+        <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+          <input type="number" className="input-field" style={{flex: 1, minWidth: 0}} value={item.mw || ''} onChange={e => updateItem(item.id, 'mw', e.target.value)} placeholder="Ej. 18.01" />
+          <span style={{fontSize: '0.85rem', color: 'var(--text-secondary)'}}>g/mol</span>
+        </div>
+      </div>
+      <div className="inv-field-group">
+        <label style={{color: isExpired ? 'var(--danger)' : 'var(--text-secondary)'}}>Caducidad {isExpired && '⚠️'}</label>
+        <input type="date" className="input-field" value={item.expDate || ''} onChange={e => updateItem(item.id, 'expDate', e.target.value)} style={{borderColor: isExpired ? 'var(--danger)' : ''}} />
+      </div>
+      <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
+        <label>Cantidad Disponible {(isLowStock && item.quantity > 0) && <span style={{color: 'var(--warning)', fontSize: '0.75rem', marginLeft:'4px'}}>(Stock Bajo)</span>}</label>
+        <div style={{display: 'flex', gap: '8px', width: '100%'}}>
+          <input type="number" className="input-field" style={{flex: '1', minWidth: '0'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
+          <select className="input-field" value={item.unit || 'mL'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', minWidth: '80px'}}>
+            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+          </select>
+        </div>
+      </div>
+    </>
+  );
+};
 
 export default function Inventory({ state, setState }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -112,43 +259,11 @@ export default function Inventory({ state, setState }) {
                 </div>
                 
                 <div className="inv-field-group">
-                  <label>Concentración / Lote</label>
-                  <input className="input-field" value={item.concentration} onChange={e => updateItem(item.id, 'concentration', e.target.value)} placeholder="Ej. 10x, 1mg/ml" />
-                </div>
-
-                <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
-                  <label>Cantidad Disponible {(isLowStock && item.quantity > 0) && <span style={{color: 'var(--warning)', fontSize: '0.75rem', marginLeft:'4px'}}>(Stock Bajo)</span>}</label>
-                  <div style={{display: 'flex', gap: '8px', width: '100%'}}>
-                    <input 
-                      type="number" 
-                      className="input-field" 
-                      style={{flex: '1', minWidth: '0'}}
-                      value={item.quantity} 
-                      onChange={e => updateItem(item.id, 'quantity', e.target.value)} 
-                    />
-                    <select className="input-field" value={item.unit} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', minWidth: '80px'}}>
-                      {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="inv-field-group">
                   <label>Ubicación</label>
-                  <input className="input-field" value={item.location} onChange={e => updateItem(item.id, 'location', e.target.value)} placeholder="Ej. -80°C Cajón 3" />
+                  <input className="input-field" value={item.location || ''} onChange={e => updateItem(item.id, 'location', e.target.value)} placeholder="Ej. -80°C Cajón 3" />
                 </div>
 
-                <div className="inv-field-group">
-                  <label style={{color: isExpired ? 'var(--danger)' : 'var(--text-secondary)'}}>
-                    Caducidad {isExpired && '⚠️'}
-                  </label>
-                  <input 
-                    type="date" 
-                    className="input-field" 
-                    value={item.expDate} 
-                    onChange={e => updateItem(item.id, 'expDate', e.target.value)} 
-                    style={{borderColor: isExpired ? 'var(--danger)' : ''}}
-                  />
-                </div>
+                {renderDynamicFields(item, updateItem, isExpired, isLowStock)}
 
                 <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
                   <label>Observaciones</label>
