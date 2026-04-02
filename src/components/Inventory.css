@@ -9,6 +9,8 @@
   padding: 20px 24px;
   margin-bottom: 24px;
   border-radius: 12px;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
 .search-box {
@@ -27,12 +29,13 @@
   padding: 10px;
   color: var(--text-primary);
   outline: none;
-  min-width: 200px;
+  min-width: 150px;
+  width: 100%;
 }
 
 .inventory-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
   gap: 16px;
 }
 
@@ -91,4 +94,15 @@
 .inv-field-group select option {
   background-color: var(--bg-color);
   color: var(--text-primary);
+}
+
+@media (max-width: 500px) {
+  .inventory-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .inv-card-body {
+    grid-template-columns: 1fr; /* Columna única en móviles para evitar que se corten textos (ej. Caducidad) */
+  }
 }
