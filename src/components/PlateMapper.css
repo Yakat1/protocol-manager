@@ -14,9 +14,18 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  flex: 1; /* Para que ocupe todo el espacio horizontal sin empujar a los demás */
+  scrollbar-width: none; /* Ocultar scrollbar en Firefox */
+}
+.plate-mapper-toolbar .group-selector::-webkit-scrollbar {
+  display: none; /* Ocultar scrollbar en Chrome/Safari */
 }
 
 .group-chip {
+  white-space: nowrap;
+  flex-shrink: 0;
   padding: 6px 14px;
   border-radius: 20px;
   font-size: 0.8rem;
@@ -44,8 +53,8 @@
 .plate-grid {
   display: grid;
   grid-template-columns: 36px repeat(12, 1fr);
-  gap: 3px;
-  min-width: 600px;
+  gap: 4px;
+  min-width: 650px; /* Incrementado para que la placa se vea más grande y sea más fácil dar tap */
 }
 
 .plate-col-header {
@@ -80,8 +89,8 @@
   color: rgba(255,255,255,0.8);
   user-select: none;
   position: relative;
-  min-width: 36px;
-  min-height: 36px;
+  min-width: 40px;
+  min-height: 40px;
 }
 
 .plate-well:hover {
