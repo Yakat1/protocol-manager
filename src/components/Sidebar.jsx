@@ -2,7 +2,7 @@ import { Plus, Trash2, Download, Upload, Save } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { exportCSV, exportBackup } from '../utils/export';
 
-export default function Sidebar({ state, setState, activeSubjectId, setActiveSubjectId, activeTab, setActiveTab, tabs }) {
+export default function Sidebar({ state, setState, activeSubjectId, setActiveSubjectId, activeTab, setActiveTab, tabs, user, onLogout, isOpen, onClose }) {
   const addSubject = () => {
     const newSubject = {
       id: uuidv4(),
@@ -29,7 +29,7 @@ export default function Sidebar({ state, setState, activeSubjectId, setActiveSub
   };
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-header">
         <div className="protocol-title">
           <input 

@@ -39,6 +39,7 @@ export default function App() {
   const [activeSubjectId, setActiveSubjectId] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
   const [toast, setToast] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const firestoreUnsubRef = useRef(null);
   const saveTimerRef = useRef(null);
 
@@ -149,11 +150,11 @@ export default function App() {
     );
   }
 
-  // ── AuthGate: si no hay sesión en modo Web (no Electron) ─────────────────
-  // En Electron, permitir usar la app sin login (datos locales)
+  // ── AuthGate: requerido en TODOS los modos (Web y Electron) ────────────────
+  // En Electron ocultamos el botón de Google (los popups OAuth requieren config extra).
   const isElectron = !!window.electronAPI;
-  if (!user && !isElectron && state) {
-    return <AuthGate onAuthenticated={(u) => setUser(u)} />;
+  if (!user && state) {
+    return <AuthGate onAuthenticated={(u) => setUser(u)} isElectron={isElectron} />;
   }
 
   if (!state) {
@@ -204,16 +205,34 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {/* Barra superior móvil con hamburguesa */}
+      <div className="mobile-topbar">
+        <div className="mobile-topbar-title">
+          🔬 {state?.protocolName || 'LIMS'}
+        </div>
+        <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} aria-label="Abrir menú">
+          ☰
+        </button>
+      </div>
+
+      {/* Overlay oscuro (solo móvil) */}
+      <div
+        className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
       <Sidebar
         state={state}
         setState={setState}
         activeSubjectId={activeSubjectId}
-        setActiveSubjectId={(id) => { setActiveSubjectId(id); setActiveTab('subjects'); }}
+        setActiveSubjectId={(id) => { setActiveSubjectId(id); setActiveTab('subjects'); setSidebarOpen(false); }}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={(tab) => { setActiveTab(tab); setSidebarOpen(false); }}
         tabs={TABS}
         user={user}
         onLogout={handleLogout}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
       <div className="workspace">
         {renderMainContent()}
