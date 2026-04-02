@@ -67,7 +67,10 @@ export default function App() {
   // ── 1) Escuchar cambios de autenticación ──────────────────────────────────
   useEffect(() => {
     const unsubAuth = onUserChange(async (firebaseUser) => {
-      setUser(firebaseUser ?? null);
+      setUser((current) => {
+        if (current?.isGuest) return current;
+        return firebaseUser ?? null;
+      });
       
       if (firebaseUser) {
         // Cargar estado de Firestore (con fallback a IndexedDB)
@@ -125,8 +128,12 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    await logoutUser();
-    showToast('Sesión cerrada correctamente.');
+    if (user?.isGuest) {
+      setUser(null);
+    } else {
+      await logoutUser();
+    }
+    showToast('Sesión iniciada/cerrada.');
   };
 
   const handleExportCSV = () => {

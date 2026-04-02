@@ -1,16 +1,37 @@
-# React + Vite
+# Protocol Manager LIMS
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistema de Gestión de Información de Laboratorio (LIMS) híbrido, diseñado como una aplicación web progresiva (PWA) instalable en móviles y como un programa de escritorio independiente (`.exe`) para Windows.
 
-Currently, two official plugins are available:
+## Características
+1. **Modo Híbrido:** Aplicación de navegador (PWA) sincronizada en tiempo real con la nube (Firebase Firestore) y aplicación de escritorio sincronizada localmente (IndexedDB).
+2. **Modo Offline/Invitado:** Los investigadores pueden usar la aplicación sin necesidad de conexión o autenticación. En este modo los datos no salen de la computadora local.
+3. **Múltiples Módulos Especializados:**
+   - Gestor de sujetos (ratones/modelos)
+   - Cultivos Celulares y Línea de Tiempo interactiva
+   - Planificador de Microplacas con exportación 
+   - Analizador / Calculadora / Reporte de Western Blot
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## 📱 Cómo usar la PWA (Navegador/Celular)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Visita el enlace oficial publicado en Github Pages (por ejemplo: `https://yakat1.github.io/protocol-manager`), inicia sesión o entra al menú de "Invitado", y en tu menú lateral encontrarás el botón **Instalar App** para guardarla como una app nativa en tu teléfono Android o iOS.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 💻 Instalar y lanzar la versión de Escritorio (.exe)
+
+Si usas Windows, puedes generar y lanzar tu propio ejecutable independiente (`.exe`) siguiendo estos pasos:
+
+1. Clona el repositorio y abre una terminal.
+2. Descarga todas las dependencias del proyecto ejecutando:
+   ```bash
+   npm install
+   ```
+3. Ejecuta el compilador de Electron (esto creará los binarios del .exe empaquetados en un instalador en la carpeta `release`):
+   ```bash
+   npm run electron:build
+   ```
+4. Navega a tu carpeta local en la ruta `release/` y abre el instalador `.exe`. La aplicación de escritorio se instalará y abrirá inmediatamente.
+
+*(Nota: Opcionalmente puedes lanzar la aplicación de escritorio en modo desarrollo sin compilar el instalador con el comando `npm run electron:dev`)*
