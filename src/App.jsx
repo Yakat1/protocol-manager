@@ -40,8 +40,29 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [toast, setToast] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
   const firestoreUnsubRef = useRef(null);
   const saveTimerRef = useRef(null);
+
+  // 0) Escuchar evento de instalación de la PWA
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault(); // Evitar que Chrome muestre el mini-infobar automático
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallPWA = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    }
+  };
 
   // ── 1) Escuchar cambios de autenticación ──────────────────────────────────
   useEffect(() => {
@@ -234,6 +255,8 @@ export default function App() {
         onLogout={handleLogout}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        deferredPrompt={deferredPrompt}
+        onInstallPWA={handleInstallPWA}
       />
       <div className="workspace">
         {renderMainContent()}

@@ -2,7 +2,7 @@ import { Plus, Trash2, Download, Upload, Save } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { exportCSV, exportBackup } from '../utils/export';
 
-export default function Sidebar({ state, setState, activeSubjectId, setActiveSubjectId, activeTab, setActiveTab, tabs, user, onLogout, isOpen, onClose }) {
+export default function Sidebar({ state, setState, activeSubjectId, setActiveSubjectId, activeTab, setActiveTab, tabs, user, onLogout, isOpen, onClose, deferredPrompt, onInstallPWA }) {
   const addSubject = () => {
     const newSubject = {
       id: uuidv4(),
@@ -99,6 +99,11 @@ export default function Sidebar({ state, setState, activeSubjectId, setActiveSub
       )}
 
       <div className="sidebar-footer">
+        {deferredPrompt && (
+          <button className="btn btn-primary" style={{width: '100%', justifyContent: 'center', fontSize: '0.9rem'}} onClick={onInstallPWA}>
+             📱 Instalar App
+          </button>
+        )}
         <button className="btn" style={{width: '100%', justifyContent: 'center', fontSize: '0.8rem'}} onClick={() => exportBackup(state)}>
           <Save size={14}/> Respaldar (JSON)
         </button>
