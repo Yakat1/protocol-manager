@@ -1,22 +1,24 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { loadState, saveState } from './utils/storage';
 import { exportCSV, exportBackup } from './utils/export';
 import { onUserChange, logoutUser, subscribeToState } from './utils/firebase';
 import AuthGate from './components/AuthGate';
 import Sidebar from './components/Sidebar';
-import Workspace from './components/Workspace';
-import PlateMapper from './components/PlateMapper';
-import Calculator from './components/Calculator';
-import Timers from './components/Timers';
-import CellCounter from './components/CellCounter';
-import Charts from './components/Charts';
-import WesternBlot from './components/WesternBlot';
-import WBReport from './components/WBReport';
-import Inventory from './components/Inventory';
-import ProtocolsManager from './components/ProtocolsManager';
-import CellCulture from './components/CellCulture';
-import Dashboard from './components/Dashboard';
 import './index.css';
+
+// ── Lazy-loaded modules (cada uno se descarga solo cuando el usuario navega a esa pestaña) ──
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Workspace = lazy(() => import('./components/Workspace'));
+const PlateMapper = lazy(() => import('./components/PlateMapper'));
+const Calculator = lazy(() => import('./components/Calculator'));
+const Timers = lazy(() => import('./components/Timers'));
+const CellCounter = lazy(() => import('./components/CellCounter'));
+const Charts = lazy(() => import('./components/Charts'));
+const WesternBlot = lazy(() => import('./components/WesternBlot'));
+const WBReport = lazy(() => import('./components/WBReport'));
+const Inventory = lazy(() => import('./components/Inventory'));
+const ProtocolsManager = lazy(() => import('./components/ProtocolsManager'));
+const CellCulture = lazy(() => import('./components/CellCulture'));
 
 const TABS = [
   { id: 'home', label: 'Inicio', icon: '🏠' },
@@ -266,7 +268,14 @@ export default function App() {
         onInstallPWA={handleInstallPWA}
       />
       <div className="workspace">
-        {renderMainContent()}
+        <Suspense fallback={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)', gap: '12px' }}>
+            <div className="lazy-spinner" />
+            Cargando módulo…
+          </div>
+        }>
+          {renderMainContent()}
+        </Suspense>
       </div>
       {toast && <div className="toaster">{toast}</div>}
     </div>
