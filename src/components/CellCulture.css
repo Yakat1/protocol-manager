@@ -415,3 +415,37 @@
     pointer-events: none;
   }
 }
+
+/* === RESPONSIVE MOBILE FIXES === */
+@media (max-width: 768px) {
+  .culture-container {
+    padding: 16px;
+    height: auto;
+  }
+
+  .culture-split-view {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .culture-sidebar {
+    width: 100%;
+    max-height: 250px;
+    margin-bottom: 24px;
+  }
+
+  .culture-timeline-view {
+    width: 100%;
+    min-height: 500px;
+    padding-right: 0;
+  }
+
+  .culture-log-card {
+    flex-direction: column;
+  }
+
+  .culture-log-info {
+    border-right: none;
+    border-bottom: 1px solid var(--panel-border);
+  }
+}
