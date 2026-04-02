@@ -195,6 +195,7 @@ export default function App() {
             state={state}
             setState={setState}
             activeSubjectId={activeSubjectId}
+            setActiveSubjectId={setActiveSubjectId}
             onExportCSV={handleExportCSV}
             onExportBackup={handleExportBackup}
             onImportBackup={handleImportBackup}

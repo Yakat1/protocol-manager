@@ -1,26 +1,92 @@
 import React from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import VariablesManager from './VariablesManager';
 import ImageGallery from './ImageGallery';
-import { Download, Upload, Save } from 'lucide-react';
+import { Download, Upload, Save, Plus, Users } from 'lucide-react';
 
-export default function Workspace({ state, setState, activeSubjectId, onExportCSV, onExportBackup, onImportBackup }) {
+export default function Workspace({ state, setState, activeSubjectId, setActiveSubjectId, onExportCSV, onExportBackup, onImportBackup }) {
   if (!activeSubjectId) {
+    const addSubject = () => {
+      const newSubject = {
+        id: uuidv4(),
+        name: `Muestra ${state.subjects.length + 1}`,
+        group: 'Control',
+        measurements: {},
+        images: []
+      };
+      setState({ ...state, subjects: [...state.subjects, newSubject] });
+      setActiveSubjectId(newSubject.id);
+    };
+
     return (
-      <div className="empty-state">
-        <h2 style={{color: 'var(--text-primary)'}}>Bienvenido al Asistente de Protocolo</h2>
-        <p>Selecciona o crea un sujeto en la barra lateral para comenzar a registrar datos experimentales.</p>
-        
-        <div style={{marginTop: '40px', display: 'flex', gap: '16px'}}>
+      <div className="workspace-header" style={{flexDirection: 'column', height: '100%'}}>
+        <div style={{marginBottom: '24px'}}>
+          <h1 style={{color: 'var(--text-primary)', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '8px'}}>
+            <Users size={28} color="var(--accent)" /> Gestión de Sujetos Experimentales
+          </h1>
+          <p style={{color: 'var(--text-secondary)', margin: 0}}>Crea nuevos sujetos, asignales un grupo experimental y registra sus variables en vivo.</p>
+        </div>
+
+        <div className="glass-panel" style={{display: 'flex', flexWrap: 'wrap', gap: '16px', padding: '24px', alignItems: 'flex-start'}}>
+          <button 
+            onClick={addSubject} 
+            style={{
+              padding: '20px', 
+              border: '2px dashed var(--accent)', 
+              borderRadius: '12px', 
+              background: 'rgba(59, 130, 246, 0.05)',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s',
+              minWidth: '200px'
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(59, 130, 246, 0.05)'; }}
+          >
+            <Plus size={32} color="var(--accent)" />
+            <span style={{fontWeight: 600}}>Añadir Nuevo Sujeto</span>
+            <span style={{fontSize: '0.8rem', color: 'var(--text-secondary)'}}>Crear ficha de datos</span>
+          </button>
+
+          {state.subjects.map(subj => (
+            <div 
+              key={subj.id}
+              className="glass-panel"
+              onClick={() => setActiveSubjectId(subj.id)}
+              style={{
+                padding: '20px',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                minWidth: '200px',
+                transition: 'all 0.2s',
+                border: '1px solid var(--panel-border)'
+              }}
+              onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--text-secondary)'; }}
+              onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--panel-border)'; }}
+            >
+              <span style={{fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--text-primary)'}}>{subj.name}</span>
+              <span style={{fontSize: '0.85rem', color: 'var(--text-secondary)'}}>Grupo: {subj.group || 'Sin grupo'}</span>
+              <span style={{fontSize: '0.8rem', color: 'var(--accent)', marginTop: '8px', fontWeight: 500}}>
+                 Ver ficha →
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{marginTop: 'auto', paddingTop: '40px', display: 'flex', gap: '16px'}}>
           <button className="btn" onClick={onExportCSV} title="Exportar tabulados a CSV para Excel">
             <Download size={16} /> Exportar CSV
           </button>
           <button className="btn btn-primary" onClick={onExportBackup}>
             <Save size={16} /> Respaldar Datos (JSON)
           </button>
-          <label className="btn" style={{cursor: 'pointer'}}>
-            <Upload size={16} /> Importar Respaldo
-            <input type="file" accept=".json" style={{display: 'none'}} onChange={onImportBackup} />
-          </label>
         </div>
       </div>
     );
