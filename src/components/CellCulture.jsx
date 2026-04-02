@@ -163,7 +163,7 @@ export default function CellCulture({ state, setState }) {
     <div className="culture-container">
       {/* Header General */}
       <div className="culture-header glass-panel">
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px'}}>
           <div>
             <h2 style={{color: 'var(--text-primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px'}}>
               <Microscope size={24} color="var(--success)"/> Bitácora de Cultivos
