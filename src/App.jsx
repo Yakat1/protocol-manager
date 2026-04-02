@@ -119,7 +119,7 @@ export default function App() {
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       saveState(state, user?.uid ?? null).catch(console.error);
-    }, 1000);
+    }, 5000);
 
     return () => clearTimeout(saveTimerRef.current);
   }, [state, user]);
