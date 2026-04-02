@@ -4,7 +4,7 @@
 
 .calc-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
   gap: 24px;
 }
 
@@ -44,4 +44,10 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .calc-row {
+    grid-template-columns: 1fr; /* Apilar inputs en pantallas muy pequeñas */
+  }
 }
