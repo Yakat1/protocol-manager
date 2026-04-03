@@ -80,7 +80,7 @@ export function getDefaultState() {
  * Guarda el estado. Siempre sincroniza en IndexedDB local (para offline).
  * Si hay userId, también sincroniza con Firestore en segundo plano.
  */
-export async function saveState(state, userId = null) {
+export async function saveState(state, userId = null, sessionId = null) {
   // Siempre guardar localmente (offline + Electron)
   await saveStateLocal(state);
 
@@ -88,7 +88,7 @@ export async function saveState(state, userId = null) {
   if (userId) {
     try {
       const { saveStateToCloud } = await import('./firebase.js');
-      await saveStateToCloud(userId, state);
+      await saveStateToCloud(userId, state, sessionId);
     } catch (err) {
       console.warn('Sincronización en nube fallida (sin internet). Datos guardados localmente.', err);
     }

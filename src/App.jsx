@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react'
 import { loadState, saveState } from './utils/storage';
 import { exportCSV, exportBackup } from './utils/export';
 import { onUserChange, logoutUser, subscribeToState } from './utils/firebase';
+import { v4 as uuidv4 } from 'uuid';
 import AuthGate from './components/AuthGate';
 import Sidebar from './components/Sidebar';
 import './index.css';
@@ -45,6 +46,8 @@ export default function App() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const firestoreUnsubRef = useRef(null);
   const saveTimerRef = useRef(null);
+  const [sessionId, setSessionId] = useState(() => uuidv4());
+  const [isSuspended, setIsSuspended] = useState(false);
 
   // ── Slice updaters (estables vía useCallback + functional setState) ────────
   const setInventory = useCallback((inventory) => {
@@ -88,7 +91,11 @@ export default function App() {
         setState(loaded);
 
         if (firestoreUnsubRef.current) firestoreUnsubRef.current();
-        firestoreUnsubRef.current = subscribeToState(firebaseUser.uid, (remoteState) => {
+        firestoreUnsubRef.current = subscribeToState(firebaseUser.uid, (remoteData) => {
+          if (remoteData.sessionId && remoteData.sessionId !== sessionId) {
+            setIsSuspended(true);
+          }
+          const remoteState = remoteData.state;
           setState(prev => {
             const mergedSubjects = (remoteState.subjects || []).map(rs => {
               const local = (prev?.subjects || []).find(s => s.id === rs.id);
@@ -116,10 +123,12 @@ export default function App() {
     if (!state) return;
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      saveState(state, user?.uid ?? null).catch(console.error);
+      if (!isSuspended) {
+        saveState(state, user?.uid ?? null, sessionId).catch(console.error);
+      }
     }, 5000);
     return () => clearTimeout(saveTimerRef.current);
-  }, [state, user]);
+  }, [state, user, isSuspended, sessionId]);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
@@ -214,6 +223,30 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {isSuspended && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          color: 'white', textAlign: 'center', padding: '24px'
+        }}>
+          <div style={{ fontSize: '3rem', marginBottom: '16px' }}>⏸️</div>
+          <h2 style={{ marginBottom: '12px', color: '#f87171' }}>Sesión Suspendida</h2>
+          <p style={{ maxWidth: '400px', marginBottom: '24px', lineHeight: '1.5', color: '#9ca3af' }}>
+            Otra pestaña o dispositivo está modificando este protocolo actualmente. 
+            Esta sesión ha sido pausada para evitar pérdida de datos por sobrescritura.
+          </p>
+          <button 
+            style={{ padding: '10px 20px', fontSize: '1rem', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+            onClick={() => {
+              setSessionId(uuidv4());
+              setIsSuspended(false);
+            }}
+          >
+            Tomar el Control y Seguir Editando
+          </button>
+        </div>
+      )}
       <div className="mobile-topbar">
         <div className="mobile-topbar-title">🔬 {state?.protocolName || 'LIMS'}</div>
         <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} aria-label="Abrir menú">☰</button>

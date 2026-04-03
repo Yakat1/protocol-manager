@@ -57,7 +57,7 @@ const getUserDocRef = (userId) =>
  * Las imágenes base64 grandes se guardan en IndexedDB local (no en Firestore)
  * para no exceder el límite de 1MB por documento de Firestore.
  */
-export async function saveStateToCloud(userId, state) {
+export async function saveStateToCloud(userId, state, sessionId = null) {
   // Extraer imágenes (base64 pesadas) antes de subir a Firestore
   const stateWithoutImages = {
     ...state,
@@ -68,6 +68,7 @@ export async function saveStateToCloud(userId, state) {
   const ref = getUserDocRef(userId);
   await setDoc(ref, { 
     state: JSON.stringify(stateWithoutImages),
+    sessionId: sessionId,
     updatedAt: new Date().toISOString()
   }, { merge: true });
 }
@@ -96,7 +97,7 @@ export function subscribeToState(userId, callback) {
       const data = snap.data();
       try {
         const parsed = JSON.parse(data.state);
-        callback(parsed);
+        callback({ state: parsed, sessionId: data.sessionId });
       } catch (e) {
         console.error('Error parsing Firestore state:', e);
       }
