@@ -46,7 +46,7 @@ export default function App() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const firestoreUnsubRef = useRef(null);
   const saveTimerRef = useRef(null);
-  const [sessionId, setSessionId] = useState(() => uuidv4());
+  const sessionIdRef = useRef(uuidv4());
   const [isSuspended, setIsSuspended] = useState(false);
 
   // ── Slice updaters (estables vía useCallback + functional setState) ────────
@@ -92,7 +92,7 @@ export default function App() {
 
         if (firestoreUnsubRef.current) firestoreUnsubRef.current();
         firestoreUnsubRef.current = subscribeToState(firebaseUser.uid, (remoteData) => {
-          if (remoteData.sessionId && remoteData.sessionId !== sessionId) {
+          if (remoteData.sessionId && remoteData.sessionId !== sessionIdRef.current) {
             setIsSuspended(true);
           }
           const remoteState = remoteData.state;
@@ -124,11 +124,11 @@ export default function App() {
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       if (!isSuspended) {
-        saveState(state, user?.uid ?? null, sessionId).catch(console.error);
+        saveState(state, user?.uid ?? null, sessionIdRef.current).catch(console.error);
       }
     }, 5000);
     return () => clearTimeout(saveTimerRef.current);
-  }, [state, user, isSuspended, sessionId]);
+  }, [state, user, isSuspended]);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
@@ -239,8 +239,9 @@ export default function App() {
           <button 
             style={{ padding: '10px 20px', fontSize: '1rem', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
             onClick={() => {
-              setSessionId(uuidv4());
+              sessionIdRef.current = uuidv4();
               setIsSuspended(false);
+              saveState(state, user?.uid ?? null, sessionIdRef.current).catch(console.error);
             }}
           >
             Tomar el Control y Seguir Editando
