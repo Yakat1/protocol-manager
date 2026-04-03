@@ -47,6 +47,7 @@ export async function loadStateLocal() {
         if (!result.cultureProtocols) result.cultureProtocols = [];
         if (!result.cultureLogs) result.cultureLogs = [];
         if (!result.cultures) result.cultures = [];
+        if (!result.settings) result.settings = { theme: 'dark' };
         resolve(result);
       } else {
         resolve(getDefaultState());
@@ -71,6 +72,9 @@ export function getDefaultState() {
     cultureProtocols: [],
     cultureLogs: [],
     cultures: [],
+    settings: {
+      theme: 'dark' // Generic setting placeholder
+    }
   };
 }
 

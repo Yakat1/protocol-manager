@@ -6,7 +6,10 @@ import {
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -46,6 +49,15 @@ export const logoutUser = () => signOut(auth);
 
 export const onUserChange = (callback) =>
   onAuthStateChanged(auth, callback);
+
+export const updateUserPassword = async (currentPassword, newPassword) => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("auth/no-user");
+  
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+  return updatePassword(user, newPassword);
+};
 
 // ─── Firestore Helpers ────────────────────────────────────────────────────────
 

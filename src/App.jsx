@@ -5,6 +5,7 @@ import { onUserChange, logoutUser, subscribeToState } from './utils/firebase';
 import { v4 as uuidv4 } from 'uuid';
 import AuthGate from './components/AuthGate';
 import Sidebar from './components/Sidebar';
+import ProfileSettings from './components/ProfileSettings';
 import './index.css';
 
 // ── Lazy-loaded modules ──
@@ -48,6 +49,7 @@ export default function App() {
   const saveTimerRef = useRef(null);
   const sessionIdRef = useRef(uuidv4());
   const [isSuspended, setIsSuspended] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   // ── Slice updaters (estables vía useCallback + functional setState) ────────
   const setInventory = useCallback((inventory) => {
@@ -223,6 +225,16 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {showProfileModal && user && (
+        <ProfileSettings
+          user={user}
+          state={state}
+          updateState={updateState}
+          onClose={() => setShowProfileModal(false)}
+          onLogout={handleLogout}
+          showToast={showToast}
+        />
+      )}
       {isSuspended && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -265,6 +277,7 @@ export default function App() {
         tabs={TABS}
         user={user}
         onLogout={handleLogout}
+        onOpenProfile={() => { setShowProfileModal(true); setSidebarOpen(false); }}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         deferredPrompt={deferredPrompt}

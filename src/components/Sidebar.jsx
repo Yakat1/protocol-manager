@@ -1,8 +1,8 @@
-import { Plus, Trash2, Download, Upload, Save } from 'lucide-react';
+import { Plus, Trash2, Download, Upload, Save, User } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { exportCSV, exportBackup } from '../utils/export';
 
-export default function Sidebar({ state, updateState, activeSubjectId, setActiveSubjectId, activeTab, setActiveTab, tabs, user, onLogout, isOpen, onClose, deferredPrompt, onInstallPWA }) {
+export default function Sidebar({ state, updateState, activeSubjectId, setActiveSubjectId, activeTab, setActiveTab, tabs, user, onLogout, onOpenProfile, isOpen, onClose, deferredPrompt, onInstallPWA }) {
   const addSubject = () => {
     const newSubject = {
       id: uuidv4(),
@@ -100,13 +100,34 @@ export default function Sidebar({ state, updateState, activeSubjectId, setActive
 
       <div className="sidebar-footer">
         {deferredPrompt && (
-          <button className="btn btn-primary" style={{width: '100%', justifyContent: 'center', fontSize: '0.9rem'}} onClick={onInstallPWA}>
+          <button className="btn btn-primary" style={{width: '100%', justifyContent: 'center', fontSize: '0.9rem', marginBottom: '8px'}} onClick={onInstallPWA}>
              📱 Instalar App
           </button>
         )}
-        <button className="btn" style={{width: '100%', justifyContent: 'center', fontSize: '0.8rem'}} onClick={() => exportBackup(state)}>
-          <Save size={14}/> Respaldar (JSON)
-        </button>
+        <div style={{display: 'flex', gap: '8px', marginBottom: '8px'}}>
+          <button className="btn" style={{flex: 1, justifyContent: 'center', fontSize: '0.8rem', padding: '6px'}} onClick={() => exportBackup(state)}>
+            <Save size={14}/> Backup (JSON)
+          </button>
+        </div>
+        {user && (
+          <button 
+            className="btn glass-panel" 
+            style={{ width: '100%', padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '10px', border: '1px solid var(--border)', background: 'transparent' }} 
+            onClick={onOpenProfile}
+          >
+            <div style={{ background: 'var(--primary)', color: 'white', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <User size={16}/>
+            </div>
+            <div style={{ textAlign: 'left', overflow: 'hidden' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                Mi Perfil
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                {user.isGuest ? 'Invitado' : user.email}
+              </div>
+            </div>
+          </button>
+        )}
       </div>
     </div>
   );
