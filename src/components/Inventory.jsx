@@ -28,8 +28,8 @@ const renderDynamicFields = (item, updateItem, isExpired, isLowStock) => {
         <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
           <label>Cantidad Disponible {(isLowStock && item.quantity > 0) && <span style={{color: 'var(--warning)', fontSize: '0.75rem', marginLeft:'4px'}}>(Stock Bajo)</span>}</label>
           <div style={{display: 'flex', gap: '8px', width: '100%'}}>
-            <input type="number" className="input-field" style={{flex: '1', minWidth: '0'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
-            <select className="input-field" value={item.unit || 'µL'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', minWidth: '80px'}}>
+            <input type="number" className="input-field" style={{flex: '1 1 auto', minWidth: '80px'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
+            <select className="input-field" value={item.unit || 'µL'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', width: '90px'}}>
               <option value="µL">µL</option>
               <option value="Alícuotas">Alícuotas</option>
             </select>
@@ -57,8 +57,8 @@ const renderDynamicFields = (item, updateItem, isExpired, isLowStock) => {
         <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
           <label>Cantidad Disponible {(isLowStock && item.quantity > 0) && <span style={{color: 'var(--warning)', fontSize: '0.75rem', marginLeft:'4px'}}>(Stock Bajo)</span>}</label>
           <div style={{display: 'flex', gap: '8px', width: '100%'}}>
-            <input type="number" className="input-field" style={{flex: '1', minWidth: '0'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
-            <select className="input-field" value={item.unit || 'mL'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', minWidth: '80px'}}>
+            <input type="number" className="input-field" style={{flex: '1 1 auto', minWidth: '80px'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
+            <select className="input-field" value={item.unit || 'mL'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', width: '90px'}}>
               {['mL', 'L', 'g', 'mg'].map(u => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
@@ -81,8 +81,8 @@ const renderDynamicFields = (item, updateItem, isExpired, isLowStock) => {
         <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
           <label>Cantidad Disponible {(isLowStock && item.quantity > 0) && <span style={{color: 'var(--warning)', fontSize: '0.75rem', marginLeft:'4px'}}>(Stock Bajo)</span>}</label>
           <div style={{display: 'flex', gap: '8px', width: '100%'}}>
-            <input type="number" className="input-field" style={{flex: '1', minWidth: '0'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
-            <select className="input-field" value={item.unit || 'Cajas'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', minWidth: '80px'}}>
+            <input type="number" className="input-field" style={{flex: '1 1 auto', minWidth: '80px'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
+            <select className="input-field" value={item.unit || 'Cajas'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', width: '90px'}}>
               {['Unidades', 'Cajas', 'Paquetes'].map(u => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
@@ -109,8 +109,8 @@ const renderDynamicFields = (item, updateItem, isExpired, isLowStock) => {
         <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
           <label>Cantidad Disponible {(isLowStock && item.quantity > 0) && <span style={{color: 'var(--warning)', fontSize: '0.75rem', marginLeft:'4px'}}>(Stock Bajo)</span>}</label>
           <div style={{display: 'flex', gap: '8px', width: '100%'}}>
-            <input type="number" className="input-field" style={{flex: '1', minWidth: '0'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
-            <select className="input-field" value={item.unit || 'mL'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', minWidth: '80px'}}>
+            <input type="number" className="input-field" style={{flex: '1 1 auto', minWidth: '80px'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
+            <select className="input-field" value={item.unit || 'mL'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', width: '90px'}}>
               {['mL', 'L', 'Alícuotas'].map(u => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
@@ -144,8 +144,8 @@ const renderDynamicFields = (item, updateItem, isExpired, isLowStock) => {
       <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
         <label>Cantidad Disponible {(isLowStock && item.quantity > 0) && <span style={{color: 'var(--warning)', fontSize: '0.75rem', marginLeft:'4px'}}>(Stock Bajo)</span>}</label>
         <div style={{display: 'flex', gap: '8px', width: '100%'}}>
-          <input type="number" className="input-field" style={{flex: '1', minWidth: '0'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
-          <select className="input-field" value={item.unit || 'mL'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', minWidth: '80px'}}>
+          <input type="number" className="input-field" style={{flex: '1 1 auto', minWidth: '80px'}} value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
+          <select className="input-field" value={item.unit || 'mL'} onChange={e => updateItem(item.id, 'unit', e.target.value)} style={{flex: '0 0 auto', width: '90px'}}>
             {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
           </select>
         </div>
