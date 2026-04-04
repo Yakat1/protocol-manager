@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Beaker, FlaskConical, MinusCircle, ArrowRightLeft, FlaskRound } from 'lucide-react';
+import { Beaker, FlaskConical, MinusCircle, ArrowRightLeft, FlaskRound, Plus, Trash2, Box } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 import './Calculator.css';
 
 // ── Conversion factor tables (ported from lab/calculations.py) ──────────────
@@ -37,8 +38,12 @@ export default function Calculator({ inventory: inventoryProp, setInventory }) {
   const [molarity, setMolarity] = useState({ mw: '34.01', stockPercent: '30', stockDensity: '1.11', targetConc: '150', targetVol: '10' });
   const [selectedInventoryId, setSelectedInventoryId] = useState('');
 
-  // ── NEW: Buffer Creator ───────────────────────────────────────────────────
-  const [buffer, setBuffer] = useState({ mw: '', targetConc: '', targetVol: '', concUnit: 'mM', volUnit: 'mL' });
+  // ── Buffer Creator (multi-component) ──────────────────────────────────────
+  const [bufferName, setBufferName] = useState('');
+  const [bufferComponents, setBufferComponents] = useState([
+    { id: uuidv4(), name: '', mw: '', targetConc: '', concUnit: 'mM' }
+  ]);
+  const [bufferVol, setBufferVol] = useState({ vol: '', unit: 'mL' });
 
   // ── NEW: Unit Converter ───────────────────────────────────────────────────
   const [converter, setConverter] = useState({ value: '', fromUnit: 'g', toUnit: 'mg', type: 'mass' });
@@ -85,17 +90,56 @@ export default function Calculator({ inventory: inventoryProp, setInventory }) {
     return { stockM: stockM.toFixed(1), neededUl: (needed * 1000).toFixed(2) };
   };
 
-  // ── NEW: Buffer calculation ───────────────────────────────────────────────
-  const bufferResult = () => {
-    const mw = parseFloat(buffer.mw);
-    const conc = parseFloat(buffer.targetConc);
-    const vol = parseFloat(buffer.targetVol);
-    if (!mw || !conc || !vol || mw <= 0) return null;
+  // ── Buffer calculation (multi-component) ──────────────────────────────────
+  const bufferResults = () => {
+    const vol = parseFloat(bufferVol.vol);
+    if (!vol || vol <= 0) return null;
+    const volL = vol * (VOLUME_FACTORS[bufferVol.unit] || 1);
 
-    const concM = conc * (CONC_FACTORS[buffer.concUnit] || 1);
-    const volL  = vol  * (VOLUME_FACTORS[buffer.volUnit] || 1);
-    const massG = concM * volL * mw;
-    return massG;
+    const results = [];
+    for (const comp of bufferComponents) {
+      const mw = parseFloat(comp.mw);
+      const conc = parseFloat(comp.targetConc);
+      if (!mw || !conc || mw <= 0) continue;
+      const concM = conc * (CONC_FACTORS[comp.concUnit] || 1);
+      const massG = concM * volL * mw;
+      results.push({ id: comp.id, name: comp.name || 'Sin nombre', massG, concLabel: `${conc} ${comp.concUnit}` });
+    }
+    return results.length > 0 ? results : null;
+  };
+
+  const addBufferComponent = () => {
+    setBufferComponents(prev => [...prev, { id: uuidv4(), name: '', mw: '', targetConc: '', concUnit: 'mM' }]);
+  };
+
+  const removeBufferComponent = (id) => {
+    if (bufferComponents.length <= 1) return;
+    setBufferComponents(prev => prev.filter(c => c.id !== id));
+  };
+
+  const updateBufferComponent = (id, field, value) => {
+    setBufferComponents(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
+  const handleSaveBufferToInventory = () => {
+    const bResults = bufferResults();
+    if (!bResults) return alert('Calcula los componentes primero.');
+    const name = bufferName.trim() || 'Buffer sin nombre';
+    const concDescription = bResults.map(r => `${r.concLabel} ${r.name}`).join(', ');
+    const newItem = {
+      id: uuidv4(),
+      name: name,
+      type: 'Solución Stock',
+      concentration: concDescription,
+      quantity: parseFloat(bufferVol.vol) || 0,
+      unit: bufferVol.unit,
+      location: 'Mesa',
+      prepDate: new Date().toISOString().split('T')[0],
+      expDate: '',
+      notes: `Preparado desde Calculadora. Componentes: ${concDescription}`,
+    };
+    setInventory([newItem, ...inventory]);
+    alert(`"${name}" guardado en Inventario como Solución Stock.`);
   };
 
   // ── NEW: Unit conversion ──────────────────────────────────────────────────
@@ -108,7 +152,7 @@ export default function Calculator({ inventory: inventoryProp, setInventory }) {
   const dRes = dilutionResult();
   const fRes = fentonResult();
   const mRes = molarityResult();
-  const bRes = bufferResult();
+  const bResults = bufferResults();
   const cRes = converterResult();
 
   // Helper to format mass result smartly
@@ -234,52 +278,103 @@ export default function Calculator({ inventory: inventoryProp, setInventory }) {
           )}
         </div>
 
-        {/* ════════════════  NEW: Buffer Creator  ════════════════ */}
-        <div className="glass-panel calc-card">
+        {/* ════════════════  Buffer Creator (Multi-Component)  ════════════════ */}
+        <div className="glass-panel calc-card" style={{gridColumn: '1 / -1'}}>
           <h4><FlaskRound size={18}/> Creador de Buffer / Solución</h4>
           <p style={{fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px', marginTop: '-8px'}}>
-            Calcula cuánto pesar de un reactivo sólido para preparar una solución a la concentración y volumen deseados.
+            Agrega los componentes de tu buffer y calcula cuánto pesar de cada uno.
           </p>
-          <div className="calc-row">
+
+          {/* Buffer name + volume */}
+          <div className="calc-row" style={{marginBottom: '12px'}}>
             <div className="input-group">
-              <label className="input-label">Peso Molecular (g/mol)</label>
-              <input className="input-field" type="number" placeholder="ej. 58.44 (NaCl)" value={buffer.mw} onChange={e => setBuffer({...buffer, mw: e.target.value})} />
+              <label className="input-label">Nombre del Buffer</label>
+              <input className="input-field" type="text" placeholder="ej. PBS 1X, Buffer de Lisis" value={bufferName} onChange={e => setBufferName(e.target.value)} />
             </div>
             <div className="input-group">
-              <label className="input-label">Concentración Deseada</label>
+              <label className="input-label">Volumen Final</label>
               <div style={{display: 'flex', gap: '6px'}}>
-                <input className="input-field" type="number" placeholder="ej. 150" value={buffer.targetConc} onChange={e => setBuffer({...buffer, targetConc: e.target.value})} style={{flex: 1}} />
-                <select className="input-field" style={{width: '70px', padding: '4px'}} value={buffer.concUnit} onChange={e => setBuffer({...buffer, concUnit: e.target.value})}>
-                  {Object.keys(CONC_FACTORS).map(u => <option key={u} value={u}>{u}</option>)}
+                <input className="input-field" type="number" placeholder="ej. 500" value={bufferVol.vol} onChange={e => setBufferVol({...bufferVol, vol: e.target.value})} style={{flex: 1}} />
+                <select className="input-field" style={{width: '70px', padding: '4px'}} value={bufferVol.unit} onChange={e => setBufferVol({...bufferVol, unit: e.target.value})}>
+                  {Object.keys(VOLUME_FACTORS).map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
             </div>
           </div>
-          <div className="input-group">
-            <label className="input-label">Volumen Final</label>
-            <div style={{display: 'flex', gap: '6px'}}>
-              <input className="input-field" type="number" placeholder="ej. 500" value={buffer.targetVol} onChange={e => setBuffer({...buffer, targetVol: e.target.value})} style={{flex: 1}} />
-              <select className="input-field" style={{width: '70px', padding: '4px'}} value={buffer.volUnit} onChange={e => setBuffer({...buffer, volUnit: e.target.value})}>
-                {Object.keys(VOLUME_FACTORS).map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </div>
+
+          {/* Component rows */}
+          <div style={{borderTop: '1px solid var(--border)', paddingTop: '12px'}}>
+            <label className="input-label" style={{marginBottom: '8px', display: 'block'}}>Componentes</label>
+            {bufferComponents.map((comp, idx) => (
+              <div key={comp.id} style={{display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'flex-end', flexWrap: 'wrap'}}>
+                <div style={{flex: '1 1 120px', minWidth: '100px'}}>
+                  {idx === 0 && <label className="input-label" style={{fontSize: '0.7rem'}}>Nombre</label>}
+                  <input className="input-field" type="text" placeholder="ej. NaCl" value={comp.name} onChange={e => updateBufferComponent(comp.id, 'name', e.target.value)} />
+                </div>
+                <div style={{flex: '0 1 100px', minWidth: '80px'}}>
+                  {idx === 0 && <label className="input-label" style={{fontSize: '0.7rem'}}>PM (g/mol)</label>}
+                  <input className="input-field" type="number" placeholder="58.44" value={comp.mw} onChange={e => updateBufferComponent(comp.id, 'mw', e.target.value)} />
+                </div>
+                <div style={{flex: '0 1 100px', minWidth: '80px'}}>
+                  {idx === 0 && <label className="input-label" style={{fontSize: '0.7rem'}}>Conc.</label>}
+                  <input className="input-field" type="number" placeholder="150" value={comp.targetConc} onChange={e => updateBufferComponent(comp.id, 'targetConc', e.target.value)} />
+                </div>
+                <div style={{flex: '0 0 65px'}}>
+                  {idx === 0 && <label className="input-label" style={{fontSize: '0.7rem'}}>Unidad</label>}
+                  <select className="input-field" style={{padding: '4px', width: '100%'}} value={comp.concUnit} onChange={e => updateBufferComponent(comp.id, 'concUnit', e.target.value)}>
+                    {Object.keys(CONC_FACTORS).map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <button 
+                  className="btn" 
+                  style={{padding: '4px 6px', opacity: bufferComponents.length <= 1 ? 0.3 : 1, flex: '0 0 auto'}} 
+                  onClick={() => removeBufferComponent(comp.id)} 
+                  disabled={bufferComponents.length <= 1}
+                  title="Eliminar componente"
+                >
+                  <Trash2 size={14}/>
+                </button>
+              </div>
+            ))}
+            <button className="btn" style={{fontSize: '0.8rem', padding: '6px 12px', marginTop: '4px'}} onClick={addBufferComponent}>
+              <Plus size={14} style={{marginRight: '4px'}}/> Añadir Componente
+            </button>
           </div>
-          {bRes !== null && (
-            <div className="calc-result">
-              {(() => {
-                const fmt = formatMassResult(bRes);
-                return (
-                  <>
-                    <div className="calc-result-value">Pesar {fmt.val} {fmt.unit}</div>
-                    <div className="calc-result-label">
-                      Disolver en {buffer.targetVol} {buffer.volUnit} de solvente para obtener una solución {buffer.targetConc} {buffer.concUnit}.
-                    </div>
-                    <div className="calc-result-label" style={{marginTop: '6px', opacity: 0.7}}>
-                      Masa exacta en gramos: {bRes.toExponential(4)} g
-                    </div>
-                  </>
-                );
-              })()}
+
+          {/* Results table */}
+          {bResults && (
+            <div className="calc-result" style={{marginTop: '16px'}}>
+              <div className="calc-result-value" style={{fontSize: '1.1rem', marginBottom: '10px'}}>
+                {bufferName || 'Buffer'} — {bufferVol.vol} {bufferVol.unit}
+              </div>
+              <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem'}}>
+                <thead>
+                  <tr style={{borderBottom: '1px solid var(--border)', textAlign: 'left'}}>
+                    <th style={{padding: '6px 8px', color: 'var(--text-secondary)'}}>Componente</th>
+                    <th style={{padding: '6px 8px', color: 'var(--text-secondary)'}}>Concentración</th>
+                    <th style={{padding: '6px 8px', color: 'var(--text-secondary)', textAlign: 'right'}}>Masa a Pesar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bResults.map(r => {
+                    const fmt = formatMassResult(r.massG);
+                    return (
+                      <tr key={r.id} style={{borderBottom: '1px solid rgba(255,255,255,0.05)'}}>
+                        <td style={{padding: '6px 8px', fontWeight: 'bold'}}>{r.name}</td>
+                        <td style={{padding: '6px 8px', color: 'var(--text-secondary)'}}>{r.concLabel}</td>
+                        <td style={{padding: '6px 8px', textAlign: 'right', color: 'var(--accent)', fontWeight: '600'}}>{fmt.val} {fmt.unit}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <button 
+                className="btn btn-primary" 
+                style={{marginTop: '12px', width: '100%', justifyContent: 'center', fontSize: '0.85rem', padding: '8px'}}
+                onClick={handleSaveBufferToInventory}
+              >
+                <Box size={14} style={{marginRight: '6px'}}/> Guardar en Inventario como Solución Stock
+              </button>
             </div>
           )}
         </div>
