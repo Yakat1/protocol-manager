@@ -60,6 +60,10 @@ export default function App() {
     setState(prev => ({ ...prev, cultureProtocols }));
   }, []);
 
+  const setBufferRecipes = useCallback((bufferRecipes) => {
+    setState(prev => ({ ...prev, bufferRecipes }));
+  }, []);
+
   // Updater genérico para componentes que modifican múltiples slices
   const updateState = useCallback((partial) => {
     setState(prev => ({ ...prev, ...partial }));
@@ -191,7 +195,7 @@ export default function App() {
       case 'plate':
         return <PlateMapper state={state} updateState={updateState} />;
       case 'calculator':
-        return <Calculator inventory={state.inventory} setInventory={setInventory} />;
+        return <Calculator inventory={state.inventory} setInventory={setInventory} bufferRecipes={state.bufferRecipes || []} setBufferRecipes={setBufferRecipes} />;
       case 'timers':
         return <Timers />;
       case 'counter':

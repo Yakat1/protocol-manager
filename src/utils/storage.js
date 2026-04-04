@@ -48,6 +48,7 @@ export async function loadStateLocal() {
         if (!result.cultureLogs) result.cultureLogs = [];
         if (!result.cultures) result.cultures = [];
         if (!result.settings) result.settings = { theme: 'dark' };
+        if (!result.bufferRecipes) result.bufferRecipes = [];
         resolve(result);
       } else {
         resolve(getDefaultState());
@@ -73,8 +74,9 @@ export function getDefaultState() {
     cultureLogs: [],
     cultures: [],
     settings: {
-      theme: 'dark' // Generic setting placeholder
-    }
+      theme: 'dark'
+    },
+    bufferRecipes: [],
   };
 }
 

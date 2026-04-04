@@ -29,8 +29,9 @@ function formatSmart(val) {
   return val.toExponential(4);
 }
 
-export default function Calculator({ inventory: inventoryProp, setInventory }) {
+export default function Calculator({ inventory: inventoryProp, setInventory, bufferRecipes: bufferRecipesProp, setBufferRecipes }) {
   const inventory = inventoryProp || [];
+  const bufferRecipes = bufferRecipesProp || [];
 
   // ── Existing calculators ──────────────────────────────────────────────────
   const [dilution, setDilution] = useState({ c1: '', v1: '', c2: '', vf: '' });
@@ -45,7 +46,14 @@ export default function Calculator({ inventory: inventoryProp, setInventory }) {
   ]);
   const [bufferVol, setBufferVol] = useState({ vol: '', unit: 'mL' });
 
-  // ── NEW: Unit Converter ───────────────────────────────────────────────────
+  // ── Recipe Library State ───────────────────────────────────────────────
+  const [showRecipes, setShowRecipes] = useState(false);
+  const [recipeSearch, setRecipeSearch] = useState('');
+  const [showSaveForm, setShowSaveForm] = useState(false);
+  const [recipeToSave, setRecipeToSave] = useState({ name: '', category: '' });
+  const [pendingDelete, setPendingDelete] = useState(null);
+
+  // ── Unit Converter ───────────────────────────────────────────────────
   const [converter, setConverter] = useState({ value: '', fromUnit: 'g', toUnit: 'mg', type: 'mass' });
 
   // ── Inventory discount handler ────────────────────────────────────────────
@@ -142,7 +150,46 @@ export default function Calculator({ inventory: inventoryProp, setInventory }) {
     alert(`"${name}" guardado en Inventario como Solución Stock.`);
   };
 
-  // ── NEW: Unit conversion ──────────────────────────────────────────────────
+  // ── Recipe Handlers ────────────────────────────────────────────────────────
+  const handleSaveRecipe = () => {
+    const name = recipeToSave.name.trim() || bufferName.trim() || 'Sin nombre';
+    const category = recipeToSave.category.trim() || 'General';
+    const newRecipe = {
+      id: uuidv4(),
+      name,
+      category,
+      components: bufferComponents.map(c => ({...c, id: uuidv4()})),
+      createdAt: new Date().toISOString(),
+    };
+    setBufferRecipes([newRecipe, ...bufferRecipes]);
+    setShowSaveForm(false);
+    setRecipeToSave({ name: '', category: '' });
+    alert(`Receta "${name}" guardada en la categoría "${category}".`);
+  };
+
+  const handleLoadRecipe = (recipe) => {
+    setBufferComponents(recipe.components.map(c => ({...c, id: uuidv4()})));
+    setBufferName(recipe.name);
+    setShowRecipes(false);
+  };
+
+  const handleDeleteRecipe = (id) => {
+    if (pendingDelete === id) {
+      if (confirm('¿Estas seguro de que deseas eliminar esta receta? Esta acción no se puede deshacer.')) {
+        setBufferRecipes(bufferRecipes.filter(r => r.id !== id));
+      }
+      setPendingDelete(null);
+    } else {
+      setPendingDelete(id);
+    }
+  };
+
+  // Grouped by category for display
+  const groupedRecipes = bufferRecipes
+    .filter(r => !recipeSearch || r.name.toLowerCase().includes(recipeSearch.toLowerCase()) || r.category.toLowerCase().includes(recipeSearch.toLowerCase()))
+    .reduce((acc, r) => { acc[r.category] = [...(acc[r.category] || []), r]; return acc; }, {});
+
+  // ── Unit Conversion ──────────────────────────────────────────────────
   const converterResult = () => {
     const group = UNIT_GROUPS[converter.type];
     if (!group) return null;
@@ -280,10 +327,82 @@ export default function Calculator({ inventory: inventoryProp, setInventory }) {
 
         {/* ════════════════  Buffer Creator (Multi-Component)  ════════════════ */}
         <div className="glass-panel calc-card">
-          <h4><FlaskRound size={18}/> Creador de Buffer / Solución</h4>
-          <p style={{fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px', marginTop: '-8px'}}>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px'}}>
+            <h4 style={{margin: 0}}><FlaskRound size={18}/> Creador de Buffer</h4>
+            <button className="btn" style={{fontSize: '0.75rem', padding: '4px 8px'}} onClick={() => { setShowRecipes(!showRecipes); setPendingDelete(null); }}>
+              📂 {showRecipes ? 'Cerrar Biblioteca' : `Biblioteca${bufferRecipes.length > 0 ? ` (${bufferRecipes.length})` : ''}`}
+            </button>
+          </div>
+          <p style={{fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px', marginTop: '4px'}}>
             Agrega los componentes de tu buffer y calcula cuánto pesar de cada uno.
           </p>
+
+          {/* ── Recipe Library Panel ── */}
+          {showRecipes && (
+            <div style={{background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '12px', marginBottom: '16px', borderTop: '2px solid var(--primary)'}}>
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
+                <span style={{fontWeight: 'bold', fontSize: '0.9rem'}}>📚 Recetas Guardadas</span>
+              </div>
+              <input
+                className="input-field"
+                type="text"
+                placeholder="Buscar por nombre o categoría..."
+                value={recipeSearch}
+                onChange={e => setRecipeSearch(e.target.value)}
+                style={{marginBottom: '10px', fontSize: '0.8rem'}}
+              />
+              {Object.keys(groupedRecipes).length === 0 && (
+                <p style={{color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center', padding: '12px 0'}}>No hay recetas guardadas.</p>
+              )}
+              {Object.entries(groupedRecipes).map(([cat, recipes]) => (
+                <div key={cat} style={{marginBottom: '12px'}}>
+                  <div style={{fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px'}}>📁 {cat}</div>
+                  {recipes.map(recipe => (
+                    <div key={recipe.id} style={{display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', marginBottom: '4px'}}>
+                      <div style={{flex: 1, minWidth: 0}}>
+                        <div style={{fontWeight: '600', fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{recipe.name}</div>
+                        <div style={{fontSize: '0.7rem', color: 'var(--text-secondary)'}}>{recipe.components.length} componente{recipe.components.length !== 1 ? 's' : ''}</div>
+                      </div>
+                      <button className="btn" style={{fontSize: '0.75rem', padding: '3px 8px', flex: '0 0 auto'}} onClick={() => handleLoadRecipe(recipe)}>Cargar</button>
+                      <button
+                        className="btn"
+                        style={{fontSize: '0.75rem', padding: '3px 8px', flex: '0 0 auto', background: pendingDelete === recipe.id ? 'rgba(239,68,68,0.2)' : 'transparent', border: pendingDelete === recipe.id ? '1px solid #ef4444' : '1px solid var(--border)', color: pendingDelete === recipe.id ? '#ef4444' : 'var(--text-secondary)'}}
+                        onClick={() => handleDeleteRecipe(recipe.id)}
+                        title={pendingDelete === recipe.id ? 'Confirmar eliminación' : 'Eliminar receta'}
+                      >
+                        {pendingDelete === recipe.id ? '⚠️ Confirmar' : '🗑️'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Save Recipe Form */}
+          {showSaveForm && (
+            <div style={{background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: '8px', padding: '12px', marginBottom: '14px'}}>
+              <div style={{fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '10px'}}>💾 Guardar como Receta</div>
+              <div className="calc-row">
+                <div className="input-group">
+                  <label className="input-label" style={{fontSize: '0.75rem'}}>Nombre de la Receta</label>
+                  <input className="input-field" type="text" placeholder={bufferName || 'Ej. PBS 1x'} value={recipeToSave.name} onChange={e => setRecipeToSave({...recipeToSave, name: e.target.value})} />
+                </div>
+                <div className="input-group">
+                  <label className="input-label" style={{fontSize: '0.75rem'}}>Categoría</label>
+                  <input className="input-field" type="text" placeholder="Ej. Electroforesis, Lisis" value={recipeToSave.category} onChange={e => setRecipeToSave({...recipeToSave, category: e.target.value})} list="recipe-categories" />
+                  <datalist id="recipe-categories">
+                    {[...new Set(bufferRecipes.map(r => r.category))].map(cat => <option key={cat} value={cat}/>)}
+                    {['Electroforesis','Lisis','Purificación','Inmunoensayo','General'].map(c => <option key={c} value={c}/>)}
+                  </datalist>
+                </div>
+              </div>
+              <div style={{display: 'flex', gap: '8px', marginTop: '8px'}}>
+                <button className="btn btn-primary" style={{flex: 1, justifyContent: 'center', fontSize: '0.8rem'}} onClick={handleSaveRecipe}>Confirmar Guardar</button>
+                <button className="btn" style={{fontSize: '0.8rem'}} onClick={() => setShowSaveForm(false)}>Cancelar</button>
+              </div>
+            </div>
+          )}
 
           {/* Buffer name + volume */}
           <div className="calc-row" style={{marginBottom: '12px'}}>
@@ -368,13 +487,22 @@ export default function Calculator({ inventory: inventoryProp, setInventory }) {
                   })}
                 </tbody>
               </table>
-              <button 
-                className="btn btn-primary" 
-                style={{marginTop: '12px', width: '100%', justifyContent: 'center', fontSize: '0.85rem', padding: '8px'}}
-                onClick={handleSaveBufferToInventory}
-              >
-                <Box size={14} style={{marginRight: '6px'}}/> Guardar en Inventario como Solución Stock
-              </button>
+              <div style={{display: 'flex', gap: '8px', marginTop: '12px'}}>
+                <button 
+                  className="btn btn-primary" 
+                  style={{flex: 1, justifyContent: 'center', fontSize: '0.8rem', padding: '8px'}}
+                  onClick={handleSaveBufferToInventory}
+                >
+                  <Box size={14} style={{marginRight: '6px'}}/> A Inventario
+                </button>
+                <button
+                  className="btn"
+                  style={{flex: 1, justifyContent: 'center', fontSize: '0.8rem', padding: '8px', border: '1px solid var(--primary)', color: 'var(--primary)'}}
+                  onClick={() => { setShowSaveForm(true); setShowRecipes(false); }}
+                >
+                  ⭐ Guardar Receta
+                </button>
+              </div>
             </div>
           )}
         </div>
