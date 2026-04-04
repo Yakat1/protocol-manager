@@ -279,7 +279,7 @@ export default function Calculator({ inventory: inventoryProp, setInventory }) {
         </div>
 
         {/* ════════════════  Buffer Creator (Multi-Component)  ════════════════ */}
-        <div className="glass-panel calc-card" style={{gridColumn: '1 / -1'}}>
+        <div className="glass-panel calc-card">
           <h4><FlaskRound size={18}/> Creador de Buffer / Solución</h4>
           <p style={{fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px', marginTop: '-8px'}}>
             Agrega los componentes de tu buffer y calcula cuánto pesar de cada uno.
