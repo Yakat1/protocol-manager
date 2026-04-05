@@ -177,6 +177,72 @@ export default function PersonalLog({ labId, user, can }) {
     URL.revokeObjectURL(url);
   };
 
+  const exportWord = () => {
+    if (filtered.length === 0) return;
+
+    let html = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head><meta charset='utf-8'><title>Bitácora Personal</title>
+      <style>
+        body { font-family: Arial, sans-serif; font-size: 11pt; }
+        h1 { color: #2c3e50; text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .date-header { font-size: 14pt; color: #2980b9; margin-top: 20px; font-weight: bold; border-bottom: 1px solid #bdc3c7; }
+        .entry { margin-bottom: 15px; padding: 10px; border: 1px solid #e0e0e0; background-color: #f9f9f9; }
+        .meta { color: #555; font-size: 10pt; margin-bottom: 5px; }
+        .activity { font-weight: bold; font-size: 12pt; margin-bottom: 5px; }
+        .section { margin-bottom: 5px; }
+        .label { font-weight: bold; color: #333; }
+        .admin-note { background-color: #fff3e0; border-left: 3px solid #f59e0b; padding: 5px; margin-top: 10px; font-size: 9pt; color: #d35400; }
+      </style>
+      </head><body>
+      <h1>Bitácora de Laboratorio</h1>
+    `;
+
+    sortedDates.forEach(date => {
+      html += `<div class="date-header">Fecha: ${date}</div>`;
+      groupedByDate[date].forEach(log => {
+        html += `<div class="entry">`;
+        html += `<div class="meta">⏱️ Hora: ${log.time || '--:--'} | 👤 Usuario: ${log.userName || 'Anónimo'} | 💭 Mood: ${log.mood}</div>`;
+        html += `<div class="activity">${log.activity}</div>`;
+        
+        if (log.observations) {
+          html += `<div class="section"><span class="label">📋 Observaciones:</span> <i>${log.observations}</i></div>`;
+        }
+        if (log.equipment && log.equipment.length > 0) {
+          html += `<div class="section"><span class="label">⚙️ Equipos:</span> ${log.equipment.join(', ')}</div>`;
+        }
+        if (log.incidents) {
+          html += `<div class="section"><span class="label" style="color:red;">⚠️ Incidentes:</span> <span style="color:red;">${log.incidents}</span></div>`;
+        }
+        if (log.tags && log.tags.length > 0) {
+          html += `<div class="section"><span class="label">🏷️ Etiquetas:</span> ${log.tags.map(t => '#' + t).join(' ')}</div>`;
+        }
+        if (log.adminEdit && log.adminEdit.isEdited) {
+          html += `
+            <div class="admin-note">
+              <strong>🛡️ Editado por Admin:</strong> ${log.adminEdit.editedBy} (${log.adminEdit.editedAt.split('T')[0]})<br>
+              ${log.adminEdit.adminNote ? `<em>Nota: ${log.adminEdit.adminNote}</em>` : ''}
+            </div>
+          `;
+        }
+        html += `</div>`;
+      });
+    });
+
+    html += `</body></html>`;
+
+    // Download as .doc
+    const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'Bitacora_Laboratorio.doc';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
       {/* Header */}
@@ -193,6 +259,9 @@ export default function PersonalLog({ labId, user, can }) {
           <div style={{ display: 'flex', gap: '8px' }}>
             <button className="btn btn-primary" onClick={() => { resetForm(); setShowForm(true); }}>
               <Plus size={14} /> Nueva Entrada
+            </button>
+            <button className="btn" onClick={exportWord} title="Exportar a Word" style={{ background: 'rgba(43, 87, 154, 0.1)', color: '#2b579a', border: '1px solid rgba(43, 87, 154, 0.3)' }}>
+              <Download size={14} /> Word
             </button>
             <button className="btn" onClick={exportCSV} title="Exportar CSV">
               <Download size={14} /> CSV
