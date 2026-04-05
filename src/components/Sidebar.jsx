@@ -58,30 +58,42 @@ export default function Sidebar({ state, updateState, activeSubjectId, setActive
             </span>
           </div>
         )}
-
-        {/* Tab Navigation */}
-        <div className="sidebar-tabs">
-          {tabs.map(tab => (
-            <button 
-              key={tab.id}
-              className={`sidebar-tab ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-              title={tab.label}
-            >
-              <span className="sidebar-tab-icon">{tab.icon}</span>
-              <span className="sidebar-tab-label">{tab.label}</span>
-            </button>
-          ))}
-        </div>
       </div>
 
-      <div className="sidebar-content" style={{display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center', padding: '40px 20px'}}>
-        <div>
-          <div style={{fontSize: '2.5rem', marginBottom: '12px'}}>{tabs.find(t => t.id === activeTab)?.icon}</div>
-          <div>{tabs.find(t => t.id === activeTab)?.label}</div>
-          <div style={{fontSize: '0.8rem', marginTop: '8px', opacity: 0.7}}>Viendo sección {tabs.find(t => t.id === activeTab)?.label}</div>
-        </div>
+      {/* Tab Navigation Menu */}
+      <div className="sidebar-nav">
+        {[
+          { label: 'Visión General', items: ['home', 'charts', 'journal'] },
+          { label: 'Gestión Principal', items: ['subjects', 'culture', 'inventory', 'protocols'] },
+          { label: 'Herramientas', items: ['plate', 'calculator', 'timers', 'counter'] },
+          { label: 'Reportes WB', items: ['western', 'wbreport'] },
+          { label: 'Ajustes', items: ['admin'] } // admin tab is conditional
+        ].map((group, idx) => {
+          const groupTabs = group.items.map(tid => tabs.find(t => t.id === tid)).filter(Boolean);
+          if (groupTabs.length === 0) return null;
+          
+          return (
+            <div key={idx}>
+              <span className="nav-group-label">{group.label}</span>
+              <div className="sidebar-tabs">
+                {groupTabs.map(tab => (
+                  <button 
+                    key={tab.id}
+                    className={`sidebar-tab ${activeTab === tab.id ? 'active' : ''}`}
+                    onClick={() => setActiveTab(tab.id)}
+                    title={tab.label}
+                  >
+                    <span className="sidebar-tab-icon">{tab.icon}</span>
+                    <span className="sidebar-tab-label">{tab.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+
 
       <div className="sidebar-footer">
         {deferredPrompt && (
@@ -96,20 +108,35 @@ export default function Sidebar({ state, updateState, activeSubjectId, setActive
         </div>
         {user && (
           <button 
-            className="btn glass-panel" 
-            style={{ width: '100%', padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '10px', border: '1px solid var(--border)', background: 'transparent' }} 
+            className="btn" 
+            style={{ 
+              width: '100%', 
+              padding: '12px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'flex-start', 
+              gap: '12px', 
+              border: 'none', 
+              background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', 
+              color: 'white',
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(234, 88, 12, 0.3)'
+            }} 
             onClick={onOpenProfile}
           >
-            <div style={{ background: 'var(--primary)', color: 'white', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <User size={16}/>
+            <div style={{ background: 'rgba(255,255,255,0.2)', color: 'white', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <User size={18}/>
             </div>
-            <div style={{ textAlign: 'left', overflow: 'hidden' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+            <div style={{ textAlign: 'left', overflow: 'hidden', flex: 1 }}>
+              <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'white', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                 Mi Perfil
               </div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                 {user.isGuest ? 'Invitado' : user.email}
               </div>
+            </div>
+            <div style={{ color: 'rgba(255,255,255,0.8)' }}>
+              <ChevronDown size={16} />
             </div>
           </button>
         )}
