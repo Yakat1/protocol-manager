@@ -10,85 +10,162 @@ const GRID_SIZE = 9;
 const GRID_ROWS = 'ABCDEFGHI'.split('');
 
 // ── Aliquot Grid Modal ─────────────────────────────────────────────────────
-function AliquotGridModal({ item, updateItem, onClose }) {
-  const map = item.storageMap || Array(GRID_SIZE * GRID_SIZE).fill(false);
-  const boxName = item.boxName || '';
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+function AliquotGridModal({ item, updateItemMulti, onClose }) {
+  const initRows = item.gridRows || 9;
+  const initCols = item.gridCols || 9;
+  const initMap = (item.storageMap && item.storageMap.length === initRows * initCols)
+    ? [...item.storageMap]
+    : Array(initRows * initCols).fill(false);
+
+  const [rows, setRows] = useState(initRows);
+  const [cols, setCols] = useState(initCols);
+  const [map, setMap] = useState(initMap);
+  const [boxName, setBoxName] = useState(item.boxName || '');
+  const [pendingRows, setPendingRows] = useState(initRows);
+  const [pendingCols, setPendingCols] = useState(initCols);
+
+  const saveToInventory = (newMap, newRows, newCols, newBoxName) => {
+    updateItemMulti(item.id, {
+      storageMap: newMap,
+      quantity: newMap.filter(Boolean).length,
+      gridRows: newRows,
+      gridCols: newCols,
+      boxName: newBoxName,
+    });
+  };
 
   const toggle = (idx) => {
-    const next = [...map];
-    next[idx] = !next[idx];
-    updateItem(item.id, 'storageMap', next);
-    updateItem(item.id, 'quantity', next.filter(Boolean).length);
+    setMap(prev => {
+      const next = [...prev];
+      next[idx] = !next[idx];
+      saveToInventory(next, rows, cols, boxName);
+      return next;
+    });
   };
 
   const fillAll = () => {
-    const next = Array(GRID_SIZE * GRID_SIZE).fill(true);
-    updateItem(item.id, 'storageMap', next);
-    updateItem(item.id, 'quantity', GRID_SIZE * GRID_SIZE);
+    const next = Array(rows * cols).fill(true);
+    setMap(next);
+    saveToInventory(next, rows, cols, boxName);
   };
 
   const clearAll = () => {
-    const next = Array(GRID_SIZE * GRID_SIZE).fill(false);
-    updateItem(item.id, 'storageMap', next);
-    updateItem(item.id, 'quantity', 0);
+    const next = Array(rows * cols).fill(false);
+    setMap(next);
+    saveToInventory(next, rows, cols, boxName);
+  };
+
+  const applyDimensions = () => {
+    const newMap = Array(pendingRows * pendingCols).fill(false);
+    // Preserve existing filled positions that fit
+    for (let r = 0; r < Math.min(rows, pendingRows); r++) {
+      for (let c = 0; c < Math.min(cols, pendingCols); c++) {
+        newMap[r * pendingCols + c] = map[r * cols + c] || false;
+      }
+    }
+    setRows(pendingRows);
+    setCols(pendingCols);
+    setMap(newMap);
+    saveToInventory(newMap, pendingRows, pendingCols, boxName);
+  };
+
+  const handleBoxNameChange = (val) => {
+    setBoxName(val);
+    updateItemMulti(item.id, { boxName: val });
   };
 
   const occupied = map.filter(Boolean).length;
+  const rowLabels = ALPHABET.slice(0, rows).split('');
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="glass-panel" style={{padding: '24px', maxWidth: '460px', width: '95vw'}} onClick={e => e.stopPropagation()}>
+      <div className="glass-panel" style={{padding: '24px', maxWidth: '520px', width: '95vw', maxHeight: '90vh', overflowY: 'auto'}} onClick={e => e.stopPropagation()}>
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
-          <h4 style={{margin: 0}}>🧊 Mapa de Caja: {item.name}</h4>
-          <button className="btn-icon" onClick={onClose} style={{fontSize: '1.2rem'}}>✕</button>
+          <h4 style={{margin: 0}}>🧊 Caja de Alícuotas: {item.name}</h4>
+          <button className="btn-icon" onClick={onClose} style={{fontSize: '1.2rem', lineHeight: 1}}>×</button>
         </div>
+
+        {/* Box name */}
         <div style={{marginBottom: '10px'}}>
           <label style={{fontSize: '0.8rem', color: 'var(--text-secondary)'}}>Nombre de la Caja</label>
-          <input className="input-field" placeholder="Ej. Caja A1 - Freezer 2" value={boxName} onChange={e => updateItem(item.id, 'boxName', e.target.value)} />
+          <input className="input-field" placeholder="Ej. Caja A1 - Freezer 2" value={boxName} onChange={e => handleBoxNameChange(e.target.value)} />
         </div>
+
+        {/* Dimension picker */}
+        <div style={{display: 'flex', gap: '8px', alignItems: 'flex-end', marginBottom: '12px', flexWrap: 'wrap'}}>
+          <div>
+            <label style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>Filas (A–Z)</label>
+            <input type="number" className="input-field" min={1} max={26} value={pendingRows}
+              onChange={e => setPendingRows(Math.max(1, Math.min(26, parseInt(e.target.value) || 1)))}
+              style={{width: '70px'}} />
+          </div>
+          <div>
+            <label style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>Columnas</label>
+            <input type="number" className="input-field" min={1} max={26} value={pendingCols}
+              onChange={e => setPendingCols(Math.max(1, Math.min(26, parseInt(e.target.value) || 1)))}
+              style={{width: '70px'}} />
+          </div>
+          <button className="btn btn-primary" style={{fontSize: '0.8rem', padding: '7px 12px'}} onClick={applyDimensions}>
+            Aplicar {pendingRows}×{pendingCols}
+          </button>
+          <span style={{fontSize: '0.8rem', color: 'var(--text-secondary)', alignSelf: 'center'}}>{rows}×{cols} actual</span>
+        </div>
+
+        {/* Stats + quick actions */}
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
-          <span style={{fontSize: '0.85rem', fontWeight: 'bold'}}>{occupied} / {GRID_SIZE * GRID_SIZE} ocupadas</span>
+          <span style={{fontSize: '0.85rem', fontWeight: 'bold'}}>
+            {occupied} / {rows * cols} ocupadas
+          </span>
           <div style={{display: 'flex', gap: '6px'}}>
-            <button className="btn" style={{fontSize: '0.7rem', padding: '3px 8px'}} onClick={fillAll}>Llenar</button>
-            <button className="btn" style={{fontSize: '0.7rem', padding: '3px 8px'}} onClick={clearAll}>Vaciar</button>
+            <button className="btn" style={{fontSize: '0.7rem', padding: '3px 8px'}} onClick={fillAll}>Llenar Todas</button>
+            <button className="btn" style={{fontSize: '0.7rem', padding: '3px 8px'}} onClick={clearAll}>Vaciar Todas</button>
           </div>
         </div>
-        <div style={{display: 'grid', gridTemplateColumns: `28px repeat(${GRID_SIZE}, 1fr)`, gap: '3px', fontSize: '0.7rem'}}>
-          {/* Header row */}
-          <div></div>
-          {Array.from({length: GRID_SIZE}, (_, i) => (
-            <div key={`h${i}`} style={{textAlign: 'center', fontWeight: 'bold', color: 'var(--text-secondary)', padding: '2px 0'}}>{i+1}</div>
-          ))}
-          {/* Grid rows */}
-          {GRID_ROWS.map((row, ri) => (
-            <React.Fragment key={row}>
-              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: 'var(--text-secondary)'}}>{row}</div>
-              {Array.from({length: GRID_SIZE}, (_, ci) => {
-                const idx = ri * GRID_SIZE + ci;
-                const filled = map[idx];
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => toggle(idx)}
-                    style={{
-                      width: '100%', aspectRatio: '1', borderRadius: '4px', cursor: 'pointer',
-                      background: filled ? 'var(--primary)' : 'rgba(255,255,255,0.06)',
-                      border: '1px solid ' + (filled ? 'var(--primary)' : 'var(--border)'),
-                      transition: 'all 0.15s',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '0.6rem', color: filled ? '#fff' : 'transparent'
-                    }}
-                    title={`${row}${ci+1}`}
-                  >
-                    ●
-                  </div>
-                );
-              })}
-            </React.Fragment>
-          ))}
+
+        {/* Grid */}
+        <div style={{overflowX: 'auto'}}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: `24px repeat(${cols}, minmax(22px, 1fr))`,
+            gap: '3px',
+            minWidth: `${24 + cols * 25}px`,
+          }}>
+            {/* Column header */}
+            <div />
+            {Array.from({length: cols}, (_, i) => (
+              <div key={i} style={{textAlign: 'center', fontWeight: 'bold', fontSize: '0.65rem', color: 'var(--text-secondary)', paddingBottom: '2px'}}>{i + 1}</div>
+            ))}
+            {/* Rows */}
+            {rowLabels.map((row, ri) => (
+              <React.Fragment key={row}>
+                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.7rem', color: 'var(--text-secondary)'}}>{row}</div>
+                {Array.from({length: cols}, (_, ci) => {
+                  const idx = ri * cols + ci;
+                  const filled = map[idx] || false;
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => toggle(idx)}
+                      title={`${row}${ci + 1}`}
+                      style={{
+                        aspectRatio: '1', borderRadius: '3px', cursor: 'pointer',
+                        background: filled ? 'var(--primary)' : 'rgba(255,255,255,0.07)',
+                        border: '1px solid ' + (filled ? 'var(--primary)' : 'var(--border)'),
+                        transition: 'background 0.1s, border-color 0.1s',
+                        userSelect: 'none',
+                      }}
+                    />
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
         </div>
-        <div style={{textAlign: 'center', marginTop: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)'}}>
-          Haz clic en cada posición para marcar/desmarcar alícuotas.
+
+        <div style={{textAlign: 'center', marginTop: '12px', fontSize: '0.75rem', color: 'var(--text-secondary)'}}>
+          Haz clic en cada posición para marcar / desmarcar una alícuota.
         </div>
       </div>
     </div>
@@ -265,7 +342,12 @@ export default function Inventory({ inventory: inventoryProp, setInventory }) {
   };
 
   const updateItem = (id, field, value) => {
-    setInventory(inventory.map(item => item.id === id ? { ...item, [field]: value } : item));
+    setInventory(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+  };
+
+  // Atomic multi-field update — avoids stale closure when updating several fields at once
+  const updateItemMulti = (id, updates) => {
+    setInventory(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
   };
 
   const removeItem = (id) => {
@@ -393,7 +475,7 @@ export default function Inventory({ inventory: inventoryProp, setInventory }) {
       {aliquotModalId && (() => {
         const item = inventory.find(i => i.id === aliquotModalId);
         if (!item) return null;
-        return <AliquotGridModal item={item} updateItem={updateItem} onClose={() => setAliquotModalId(null)} />;
+        return <AliquotGridModal item={item} updateItemMulti={updateItemMulti} onClose={() => setAliquotModalId(null)} />;
       })()}
     </div>
   );
