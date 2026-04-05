@@ -36,6 +36,13 @@ export default function usePermissions(role) {
       manageMembers: isAdmin,
       viewAuditLog: isAdmin,
       editLabSettings: isAdmin,
+
+      // Personal Logbook (Bitácora)
+      addLogEntry: isMember,
+      editOwnLog: isMember,
+      editOthersLogs: isAdmin,
+      deleteOthersLogs: isAdmin,
+      viewAllLogs: isAdmin,
     };
   }, [role]);
 

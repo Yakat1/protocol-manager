@@ -24,6 +24,7 @@ const Inventory = lazy(() => import('./components/Inventory'));
 const ProtocolsManager = lazy(() => import('./components/ProtocolsManager'));
 const CellCulture = lazy(() => import('./components/CellCulture'));
 const LabAdmin = lazy(() => import('./components/LabAdmin'));
+const PersonalLog = lazy(() => import('./components/PersonalLog'));
 
 const TABS = [
   { id: 'home', label: 'Inicio', icon: '🏠' },
@@ -38,6 +39,7 @@ const TABS = [
   { id: 'inventory', label: 'Inventario', icon: '📦' },
   { id: 'protocols', label: 'Protocolos', icon: '📜' },
   { id: 'culture', label: 'Cultivos', icon: '🦠' },
+  { id: 'journal', label: 'Bitácora', icon: '📔' },
 ];
 
 const ADMIN_TAB = { id: 'admin', label: 'Admin', icon: '🛡️' };
@@ -310,6 +312,8 @@ export default function App() {
         return <ProtocolsManager protocols={state.cultureProtocols} inventory={state.inventory} setCultureProtocols={setCultureProtocols} can={can} />;
       case 'culture':
         return <CellCulture state={state} updateState={updateState} can={can} user={user} labId={activeLabId} />;
+      case 'journal':
+        return <PersonalLog labId={activeLabId} user={user} can={can} />;
       case 'admin':
         return userRole === 'admin' ? <LabAdmin labId={activeLabId} user={user} /> : null;
       default:

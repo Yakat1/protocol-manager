@@ -332,22 +332,46 @@ export function subscribeToAuditLog(labId, callback, maxEntries = 200) {
 // ─── Migration helper: move protocols/{userId} → labs/{labId} ────────────────
 
 export async function migrateUserToLab(user) {
-  // Check if user already has a profile with labs
   const profile = await getUserProfile(user.uid);
   if (profile?.labs?.length > 0) return profile;
 
-  // Try to load legacy data
   const legacyState = await loadStateFromCloud(user.uid);
-  
-  // Create a new lab
   const labName = legacyState?.protocolName || 'Mi Laboratorio';
   const labId = await createLab(user, labName);
 
-  // If there was legacy data, save it as the lab state
   if (legacyState) {
     await saveLabState(labId, legacyState);
   }
 
   const updatedProfile = await getUserProfile(user.uid);
   return updatedProfile;
+}
+
+// ─── Personal Logbook (Bitácora) ─────────────────────────────────────────────
+
+export async function addPersonalLog(labId, logData) {
+  const colRef = collection(db, 'labs', labId, 'personalLogs');
+  const docRef = await addDoc(colRef, {
+    ...logData,
+    createdAt: new Date().toISOString(),
+  });
+  return docRef.id;
+}
+
+export async function updatePersonalLog(labId, logId, logData) {
+  const ref = doc(db, 'labs', labId, 'personalLogs', logId);
+  await setDoc(ref, logData, { merge: true });
+}
+
+export async function deletePersonalLog(labId, logId) {
+  await deleteDoc(doc(db, 'labs', labId, 'personalLogs', logId));
+}
+
+export function subscribeToPersonalLogs(labId, callback) {
+  const colRef = collection(db, 'labs', labId, 'personalLogs');
+  const q = query(colRef, orderBy('createdAt', 'desc'), limit(500));
+  return onSnapshot(q, (snap) => {
+    const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    callback(logs);
+  });
 }
