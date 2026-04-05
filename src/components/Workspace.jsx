@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import VariablesManager from './VariablesManager';
 import ImageGallery from './ImageGallery';
 import { Download, Upload, Save, Plus, Users, Box, Trash2 } from 'lucide-react';
+import './CellCulture.css';
 
 export default function Workspace({ state, setState, updateState, activeSubjectId, setActiveSubjectId, onExportCSV, onExportBackup, onImportBackup }) {
   const addSubject = () => {
