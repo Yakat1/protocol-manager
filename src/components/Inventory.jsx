@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, Box, Droplet, Search, Download, Grid } from 'lucide-react';
 import { exportInventoryCSV } from '../utils/export';
+import { writeAuditEntry } from '../utils/firebase';
 import './Inventory.css';
 
 const ITEM_TYPES = ['Reactivo', 'Solución Stock', 'Anticuerpo 1°', 'Anticuerpo 2°', 'Medio de Cultivo', 'Material'];
@@ -328,12 +329,17 @@ const renderDynamicFields = (item, updateItem, isExpired, isLowStock) => {
   );
 };
 
-export default function Inventory({ inventory: inventoryProp, setInventory }) {
+export default function Inventory({ inventory: inventoryProp, setInventory, can, user, labId }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [aliquotModalId, setAliquotModalId] = useState(null);
   
   const inventory = inventoryProp || [];
+
+  const audit = (action, target, details) => {
+    if (!labId || !user) return;
+    writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action, target, details }).catch(console.error);
+  };
 
   const addItem = () => {
     const newItem = {
@@ -348,6 +354,7 @@ export default function Inventory({ inventory: inventoryProp, setInventory }) {
       notes: ''
     };
     setInventory([newItem, ...inventory]);
+    audit('inventory_add', 'Nuevo Item', { note: 'Ítem creado' });
   };
 
   const updateItem = (id, field, value) => {
@@ -360,8 +367,11 @@ export default function Inventory({ inventory: inventoryProp, setInventory }) {
   };
 
   const removeItem = (id) => {
+    if (!can?.deleteInventory) return;
+    const item = inventory.find(i => i.id === id);
     if (confirm('¿Seguro que deseas eliminar este ítem del inventario?')) {
-      setInventory(inventory.filter(item => item.id !== id));
+      setInventory(inventory.filter(i => i.id !== id));
+      audit('inventory_delete', item?.name || id, { note: 'Ítem eliminado del inventario' });
     }
   };
 
@@ -401,9 +411,11 @@ export default function Inventory({ inventory: inventoryProp, setInventory }) {
             <option value="">Todos los Tipos</option>
             {ITEM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
-          <button className="btn btn-primary" onClick={addItem}>
-            <Plus size={16} /> Nuevo Ítem
-          </button>
+          {(!can || can.addInventory) && (
+            <button className="btn btn-primary" onClick={addItem}>
+              <Plus size={16} /> Nuevo Ítem
+            </button>
+          )}
           <button className="btn" onClick={() => exportInventoryCSV(inventory)} title="Exportar a CSV">
             <Download size={16} /> Excel (CSV)
           </button>
@@ -426,7 +438,7 @@ export default function Inventory({ inventory: inventoryProp, setInventory }) {
                   onChange={e => updateItem(item.id, 'name', e.target.value)}
                   placeholder="Nombre del Item"
                 />
-                <button className="btn-icon" onClick={() => removeItem(item.id)}><Trash2 size={16}/></button>
+                {(!can || can.deleteInventory) && <button className="btn-icon" onClick={() => removeItem(item.id)}><Trash2 size={16}/></button>}
               </div>
 
               <div className="inv-card-body">

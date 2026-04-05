@@ -16,7 +16,7 @@ const QUILL_MODULES = {
   ],
 };
 
-export default function ProtocolsManager({ protocols: protocolsProp, inventory: inventoryProp, setCultureProtocols }) {
+export default function ProtocolsManager({ protocols: protocolsProp, inventory: inventoryProp, setCultureProtocols, can }) {
   const protocols = protocolsProp || [];
   const inventory = inventoryProp || [];
   const [activeProtoId, setActiveProtoId] = useState(null);
@@ -30,6 +30,7 @@ export default function ProtocolsManager({ protocols: protocolsProp, inventory: 
   }, [protocols.length, activeProtoId]);
 
   const addProtocol = () => {
+    if (can && !can.createProtocol) return;
     const newP = {
       id: uuidv4(),
       name: 'Nuevo Protocolo de Cultivo',
@@ -41,6 +42,7 @@ export default function ProtocolsManager({ protocols: protocolsProp, inventory: 
   };
 
   const removeProtocol = (id) => {
+    if (can && !can.deleteProtocol) return;
     if (confirm('¿Eliminar protocolo? Esta acción no se puede deshacer.')) {
       setCultureProtocols(protocols.filter(p => p.id !== id));
       if (activeProtoId === id) setActiveProtoId(null);

@@ -1,8 +1,8 @@
-import { Plus, Trash2, Download, Upload, Save, User } from 'lucide-react';
+import { Plus, Trash2, Download, Upload, Save, User, ChevronDown } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { exportCSV, exportBackup } from '../utils/export';
 
-export default function Sidebar({ state, updateState, activeSubjectId, setActiveSubjectId, activeTab, setActiveTab, tabs, user, onLogout, onOpenProfile, isOpen, onClose, deferredPrompt, onInstallPWA }) {
+export default function Sidebar({ state, updateState, activeSubjectId, setActiveSubjectId, activeTab, setActiveTab, tabs, user, onLogout, onOpenProfile, isOpen, onClose, deferredPrompt, onInstallPWA, labProfile, activeLabId, onSwitchLab, userRole, can }) {
   const addSubject = () => {
     const newSubject = {
       id: uuidv4(),
@@ -28,9 +28,33 @@ export default function Sidebar({ state, updateState, activeSubjectId, setActive
     updateState({ protocolName: e.target.value });
   };
 
+  const labs = labProfile?.labs || [];
+
   return (
     <div className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-header">
+        {/* Lab Switcher */}
+        {labs.length > 0 && (
+          <div style={{ marginBottom: '8px' }}>
+            <select
+              className="input-field"
+              value={activeLabId || ''}
+              onChange={e => onSwitchLab && onSwitchLab(e.target.value)}
+              style={{
+                width: '100%', fontSize: '0.8rem', padding: '6px 8px',
+                background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)',
+                fontWeight: 'bold', cursor: 'pointer'
+              }}
+            >
+              {labs.map(lab => (
+                <option key={lab.labId} value={lab.labId}>
+                  🏢 {lab.labName} {lab.role === 'admin' ? '(Admin)' : '(Estudiante)'}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="protocol-title">
           <input 
             className="input-field" 
@@ -38,8 +62,23 @@ export default function Sidebar({ state, updateState, activeSubjectId, setActive
             value={state.protocolName} 
             onChange={updateProtocolName} 
             placeholder="Título del Protocolo"
+            readOnly={userRole === 'student'}
           />
         </div>
+
+        {/* Role badge */}
+        {userRole && (
+          <div style={{ textAlign: 'center', marginBottom: '4px' }}>
+            <span style={{
+              fontSize: '0.65rem', padding: '2px 8px', borderRadius: '10px',
+              background: userRole === 'admin' ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.15)',
+              color: userRole === 'admin' ? '#f59e0b' : '#3b82f6',
+              fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px'
+            }}>
+              {userRole === 'admin' ? '🛡️ Administrador' : '📚 Estudiante'}
+            </span>
+          </div>
+        )}
 
         {/* Tab Navigation */}
         <div className="sidebar-tabs">

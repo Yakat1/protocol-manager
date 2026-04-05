@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react';
-import { loadState, saveState } from './utils/storage';
+import { loadState, saveState, saveStateLocal, loadStateLocal, getDefaultState } from './utils/storage';
 import { exportCSV, exportBackup } from './utils/export';
-import { onUserChange, logoutUser, subscribeToState } from './utils/firebase';
+import { onUserChange, logoutUser, subscribeToLabState, saveLabState, getUserProfile, setUserProfile, getLabMembers } from './utils/firebase';
 import { v4 as uuidv4 } from 'uuid';
+import usePermissions from './hooks/usePermissions';
 import AuthGate from './components/AuthGate';
+import LabSetup from './components/LabSetup';
 import Sidebar from './components/Sidebar';
 import ProfileSettings from './components/ProfileSettings';
 import './index.css';
@@ -21,6 +23,7 @@ const WBReport = lazy(() => import('./components/WBReport'));
 const Inventory = lazy(() => import('./components/Inventory'));
 const ProtocolsManager = lazy(() => import('./components/ProtocolsManager'));
 const CellCulture = lazy(() => import('./components/CellCulture'));
+const LabAdmin = lazy(() => import('./components/LabAdmin'));
 
 const TABS = [
   { id: 'home', label: 'Inicio', icon: '🏠' },
@@ -37,6 +40,8 @@ const TABS = [
   { id: 'culture', label: 'Cultivos', icon: '🦠' },
 ];
 
+const ADMIN_TAB = { id: 'admin', label: 'Admin', icon: '🛡️' };
+
 export default function App() {
   const [user, setUser] = useState(undefined);
   const [state, setState] = useState(null);
@@ -50,6 +55,17 @@ export default function App() {
   const sessionIdRef = useRef(uuidv4());
   const [isSuspended, setIsSuspended] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+
+  // ── Lab Context ─────────────────────────────────────────────────────────────
+  const [labProfile, setLabProfile] = useState(null); // full user profile with labs[]
+  const [activeLabId, setActiveLabId] = useState(null);
+  const [userRole, setUserRole] = useState(null); // 'admin' | 'student'
+  const [needsLabSetup, setNeedsLabSetup] = useState(false);
+
+  const { can } = usePermissions(userRole);
+
+  // Determine active tabs based on role
+  const visibleTabs = userRole === 'admin' ? [...TABS, ADMIN_TAB] : TABS;
 
   // ── Slice updaters (estables vía useCallback + functional setState) ────────
   const setInventory = useCallback((inventory) => {
@@ -93,54 +109,131 @@ export default function App() {
       });
 
       if (firebaseUser) {
-        const loaded = await loadState(firebaseUser.uid);
-        setState(loaded);
-
-        if (firestoreUnsubRef.current) firestoreUnsubRef.current();
-        firestoreUnsubRef.current = subscribeToState(firebaseUser.uid, (remoteData) => {
-          if (remoteData.sessionId && remoteData.sessionId !== sessionIdRef.current) {
-            setIsSuspended(true);
+        // Check if user has a lab profile
+        try {
+          const profile = await getUserProfile(firebaseUser.uid);
+          if (profile?.labs?.length > 0) {
+            setLabProfile(profile);
+            const labId = profile.activeLab || profile.labs[0].labId;
+            setActiveLabId(labId);
+            // Get user role from lab membership
+            const lab = profile.labs.find(l => l.labId === labId);
+            setUserRole(lab?.role || 'student');
+            setNeedsLabSetup(false);
+          } else {
+            setNeedsLabSetup(true);
           }
-          const remoteState = remoteData.state;
-          setState(prev => {
-            const mergedSubjects = (remoteState.subjects || []).map(rs => {
-              const local = (prev?.subjects || []).find(s => s.id === rs.id);
-              return local ? { ...rs, images: local.images || [] } : rs;
-            });
-            const mergedLogs = (remoteState.cultureLogs || []).map(rl => {
-              const local = (prev?.cultureLogs || []).find(l => l.id === rl.id);
-              return local ? { ...rl, images: local.images || [] } : rl;
-            });
-            return { ...remoteState, subjects: mergedSubjects, cultureLogs: mergedLogs };
-          });
-        });
+        } catch (err) {
+          console.warn('Could not load lab profile, falling back:', err);
+          setNeedsLabSetup(true);
+        }
       } else {
         if (firestoreUnsubRef.current) { firestoreUnsubRef.current(); firestoreUnsubRef.current = null; }
-        const loaded = await loadState();
-        setState(loaded);
+        const loaded = await loadStateLocal();
+        setState(loaded || getDefaultState());
+        setLabProfile(null);
+        setActiveLabId(null);
+        setUserRole(null);
+        setNeedsLabSetup(false);
       }
     });
 
     return () => { unsubAuth(); if (firestoreUnsubRef.current) firestoreUnsubRef.current(); };
   }, []);
 
-  // ── 2) Auto-save debounce (5s) ────────────────────────────────────────────
+  // ── 2) Subscribe to active lab state ───────────────────────────────────────
+  useEffect(() => {
+    if (!activeLabId || !user) return;
+
+    // Load initial state from lab
+    const loadLabData = async () => {
+      try {
+        const { loadLabState } = await import('./utils/firebase');
+        const labState = await loadLabState(activeLabId);
+        if (labState) {
+          const localCache = await loadStateLocal();
+          // Merge images from local cache
+          const merged = mergeImages(labState, localCache);
+          setState(merged);
+        } else {
+          setState(getDefaultState());
+        }
+      } catch (err) {
+        console.warn('Failed to load lab state, using local cache:', err);
+        const localCache = await loadStateLocal();
+        setState(localCache || getDefaultState());
+      }
+    };
+    loadLabData();
+
+    // Subscribe to real-time
+    if (firestoreUnsubRef.current) firestoreUnsubRef.current();
+    firestoreUnsubRef.current = subscribeToLabState(activeLabId, (remoteData) => {
+      if (remoteData.sessionId && remoteData.sessionId !== sessionIdRef.current) {
+        setIsSuspended(true);
+      }
+      const remoteState = remoteData.state;
+      setState(prev => {
+        const mergedSubjects = (remoteState.subjects || []).map(rs => {
+          const local = (prev?.subjects || []).find(s => s.id === rs.id);
+          return local ? { ...rs, images: local.images || [] } : rs;
+        });
+        const mergedLogs = (remoteState.cultureLogs || []).map(rl => {
+          const local = (prev?.cultureLogs || []).find(l => l.id === rl.id);
+          return local ? { ...rl, images: local.images || [] } : rl;
+        });
+        return { ...remoteState, subjects: mergedSubjects, cultureLogs: mergedLogs };
+      });
+    });
+
+    return () => { if (firestoreUnsubRef.current) firestoreUnsubRef.current(); };
+  }, [activeLabId, user]);
+
+  // ── 3) Auto-save debounce (5s) ────────────────────────────────────────────
   useEffect(() => {
     if (!state) return;
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       if (!isSuspended) {
-        saveState(state, user?.uid ?? null, sessionIdRef.current).catch(console.error);
+        // Always save locally
+        saveStateLocal(state);
+        // Save to lab if active
+        if (activeLabId) {
+          saveLabState(activeLabId, state, sessionIdRef.current).catch(console.error);
+        }
       }
     }, 5000);
     return () => clearTimeout(saveTimerRef.current);
-  }, [state, user, isSuspended]);
+  }, [state, activeLabId, isSuspended]);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
   const handleLogout = async () => {
     if (user?.isGuest) { setUser(null); } else { await logoutUser(); }
+    setLabProfile(null); setActiveLabId(null); setUserRole(null);
     showToast('Sesión cerrada.');
+  };
+
+  // ── Lab switching ──────────────────────────────────────────────────────────
+  const switchLab = async (labId) => {
+    if (labId === activeLabId) return;
+    setActiveLabId(labId);
+    const lab = labProfile?.labs?.find(l => l.labId === labId);
+    setUserRole(lab?.role || 'student');
+    setState(null); // triggers loading state
+    // Update user profile with active lab
+    if (user?.uid) {
+      setUserProfile(user.uid, { activeLab: labId }).catch(console.error);
+    }
+  };
+
+  const handleLabReady = (profile) => {
+    setLabProfile(profile);
+    const labId = profile.activeLab || profile.labs[0]?.labId;
+    setActiveLabId(labId);
+    const lab = profile.labs.find(l => l.labId === labId);
+    setUserRole(lab?.role || 'student');
+    setNeedsLabSetup(false);
   };
 
   const handleExportCSV = () => { exportCSV(state); showToast('CSV exportado'); };
@@ -179,6 +272,11 @@ export default function App() {
     return <AuthGate onAuthenticated={(u) => setUser(u)} isElectron={isElectron} />;
   }
 
+  // Lab setup gate (for authenticated users without a lab)
+  if (user && needsLabSetup) {
+    return <LabSetup user={user} onLabReady={handleLabReady} />;
+  }
+
   if (!state) {
     return (
       <div className="app-container">
@@ -195,7 +293,7 @@ export default function App() {
       case 'plate':
         return <PlateMapper state={state} updateState={updateState} />;
       case 'calculator':
-        return <Calculator inventory={state.inventory} setInventory={setInventory} bufferRecipes={state.bufferRecipes || []} setBufferRecipes={setBufferRecipes} />;
+        return <Calculator inventory={state.inventory} setInventory={setInventory} bufferRecipes={state.bufferRecipes || []} setBufferRecipes={setBufferRecipes} can={can} user={user} labId={activeLabId} />;
       case 'timers':
         return <Timers />;
       case 'counter':
@@ -207,11 +305,13 @@ export default function App() {
       case 'wbreport':
         return <WBReport />;
       case 'inventory':
-        return <Inventory inventory={state.inventory} setInventory={setInventory} />;
+        return <Inventory inventory={state.inventory} setInventory={setInventory} can={can} user={user} labId={activeLabId} />;
       case 'protocols':
-        return <ProtocolsManager protocols={state.cultureProtocols} inventory={state.inventory} setCultureProtocols={setCultureProtocols} />;
+        return <ProtocolsManager protocols={state.cultureProtocols} inventory={state.inventory} setCultureProtocols={setCultureProtocols} can={can} />;
       case 'culture':
-        return <CellCulture state={state} updateState={updateState} />;
+        return <CellCulture state={state} updateState={updateState} can={can} user={user} labId={activeLabId} />;
+      case 'admin':
+        return userRole === 'admin' ? <LabAdmin labId={activeLabId} user={user} /> : null;
       default:
         return (
           <Workspace
@@ -257,7 +357,10 @@ export default function App() {
             onClick={() => {
               sessionIdRef.current = uuidv4();
               setIsSuspended(false);
-              saveState(state, user?.uid ?? null, sessionIdRef.current).catch(console.error);
+              saveStateLocal(state);
+              if (activeLabId) {
+                saveLabState(activeLabId, state, sessionIdRef.current).catch(console.error);
+              }
             }}
           >
             Tomar el Control y Seguir Editando
@@ -278,7 +381,7 @@ export default function App() {
         setActiveSubjectId={(id) => { setActiveSubjectId(id); setActiveTab('subjects'); setSidebarOpen(false); }}
         activeTab={activeTab}
         setActiveTab={(tab) => { setActiveTab(tab); setSidebarOpen(false); }}
-        tabs={TABS}
+        tabs={visibleTabs}
         user={user}
         onLogout={handleLogout}
         onOpenProfile={() => { setShowProfileModal(true); setSidebarOpen(false); }}
@@ -286,6 +389,11 @@ export default function App() {
         onClose={() => setSidebarOpen(false)}
         deferredPrompt={deferredPrompt}
         onInstallPWA={handleInstallPWA}
+        labProfile={labProfile}
+        activeLabId={activeLabId}
+        onSwitchLab={switchLab}
+        userRole={userRole}
+        can={can}
       />
       <div className="workspace">
         <Suspense fallback={
@@ -300,4 +408,17 @@ export default function App() {
       {toast && <div className="toaster">{toast}</div>}
     </div>
   );
+}
+
+function mergeImages(cloudState, localState) {
+  if (!localState) return cloudState;
+  const mergedSubjects = (cloudState.subjects || []).map(cs => {
+    const ls = (localState.subjects || []).find(s => s.id === cs.id);
+    return ls ? { ...cs, images: ls.images || [] } : cs;
+  });
+  const mergedLogs = (cloudState.cultureLogs || []).map(cl => {
+    const ll = (localState.cultureLogs || []).find(l => l.id === cl.id);
+    return ll ? { ...cl, images: ll.images || [] } : cl;
+  });
+  return { ...cloudState, subjects: mergedSubjects, cultureLogs: mergedLogs };
 }

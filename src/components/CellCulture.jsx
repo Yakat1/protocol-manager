@@ -2,15 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, Microscope, Image as ImageIcon, Archive, Clock, Search, Box, ExternalLink } from 'lucide-react';
 import { compressImage } from '../utils/imageCompressor';
+import { writeAuditEntry } from '../utils/firebase';
 import './CellCulture.css';
 
 const DEFAULT_ACTIONS = ['Descongelar', 'Pasaje / Split', 'Congelar', 'Cambio de Medio', 'Adición de Tratamiento', 'Observación'];
 
-export default function CellCulture({ state, updateState }) {
+export default function CellCulture({ state, updateState, can, user, labId }) {
   const [showConfig, setShowConfig] = useState(false);
   const [activeCultureId, setActiveCultureId] = useState(null);
-  const [printMode, setPrintMode] = useState(null); // 'single' | 'all'
-  const [customPrompt, setCustomPrompt] = useState(null); // { message, defaultValue, onConfirm }
+  const [printMode, setPrintMode] = useState(null);
+  const [customPrompt, setCustomPrompt] = useState(null);
+
+  const audit = (action, target, details) => {
+    if (!labId || !user) return;
+    writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action, target, details }).catch(console.error);
+  };
 
   const askUser = (message, defaultValue, onConfirm) => {
     setCustomPrompt({ message, defaultValue, onConfirm });
@@ -58,11 +64,13 @@ export default function CellCulture({ state, updateState }) {
 
   // == Lógica de Cultivos ==
   const addCulture = () => {
+    if (can && !can.addCulture) return;
     askUser('Nombre de la Placa o Línea (Ej. HUVEC P3)', '', (name) => {
       if (name) {
         const newC = { id: uuidv4(), cellLine: name, dateStarted: new Date().toISOString().split('T')[0], status: 'Activo' };
         updateState({ cultures: [newC, ...cultures] });
         setActiveCultureId(newC.id);
+        audit('culture_add', name, { note: 'Cultivo creado' });
       }
     });
   };
@@ -70,9 +78,12 @@ export default function CellCulture({ state, updateState }) {
     updateState({ cultures: cultures.map(c => c.id === id ? { ...c, status: c.status === 'Activo' ? 'Archivado' : 'Activo' } : c) });
   };
   const removeCulture = (id) => {
+    if (can && !can.deleteCulture) return;
+    const culture = cultures.find(c => c.id === id);
     if (confirm('¿Eliminar cultivo y toda su cronología? Esta acción es irreversible.')) {
       updateState({ cultures: cultures.filter(c => c.id !== id), cultureLogs: logs.filter(l => l.cultureId !== id) });
       if (activeCultureId === id) setActiveCultureId(null);
+      audit('culture_delete', culture?.cellLine || id, { note: 'Cultivo eliminado con toda su cronología' });
     }
   };
   const convertToSubject = (culture) => {
@@ -90,11 +101,13 @@ export default function CellCulture({ state, updateState }) {
   // == Lógica de Timeline (Logs) ==
   const addLogToActive = () => {
     if (!activeCultureId) return alert('Selecciona o crea un cultivo activo.');
+    const culture = cultures.find(c => c.id === activeCultureId);
     const newLog = {
       id: uuidv4(), cultureId: activeCultureId, date: new Date().toISOString().split('T')[0],
       passage: 1, action: 'Observación', protocolUsed: '', confluence: 50, observations: '', checkedMaterials: [], images: []
     };
     updateState({ cultureLogs: [newLog, ...logs] });
+    audit('culture_log_add', culture?.cellLine || activeCultureId, { note: 'Evento de cultivo añadido' });
   };
   const updateLog = (id, field, value) => {
     updateState({ cultureLogs: logs.map(l => l.id === id ? { ...l, [field]: value } : l) });
@@ -123,7 +136,13 @@ export default function CellCulture({ state, updateState }) {
     }
   };
   const removeLog = (id) => {
-    if (confirm('¿Eliminar este evento de la línea de tiempo?')) updateState({ cultureLogs: logs.filter(l => l.id !== id) });
+    if (can && !can.deleteCultureLog) return;
+    const log = logs.find(l => l.id === id);
+    const culture = cultures.find(c => c.id === log?.cultureId);
+    if (confirm('¿Eliminar este evento de la línea de tiempo?')) {
+      updateState({ cultureLogs: logs.filter(l => l.id !== id) });
+      audit('culture_log_delete', culture?.cellLine || 'Evento', { note: `Evento ${log?.action} eliminado` });
+    }
   };
   const handleImageUpload = async (e, logId) => {
     const files = Array.from(e.target.files);

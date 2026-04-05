@@ -29,7 +29,7 @@ function formatSmart(val) {
   return val.toExponential(4);
 }
 
-export default function Calculator({ inventory: inventoryProp, setInventory, bufferRecipes: bufferRecipesProp, setBufferRecipes }) {
+export default function Calculator({ inventory: inventoryProp, setInventory, bufferRecipes: bufferRecipesProp, setBufferRecipes, can, user, labId }) {
   const inventory = inventoryProp || [];
   const bufferRecipes = bufferRecipesProp || [];
 
