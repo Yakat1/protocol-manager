@@ -15,9 +15,17 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 function AliquotGridModal({ item, updateItemMulti, onClose }) {
   const initRows = item.gridRows || 9;
   const initCols = item.gridCols || 9;
-  const initMap = (item.storageMap && item.storageMap.length === initRows * initCols)
-    ? [...item.storageMap]
-    : Array(initRows * initCols).fill(false);
+
+  // Firebase/IndexedDB can deserialize arrays as plain objects — force to real Array
+  const toArray = (val, size) => {
+    if (!val) return Array(size).fill(false);
+    if (Array.isArray(val) && val.length === size) return [...val];
+    // Reconstruct from object with numeric keys e.g. {0:false, 1:true,...}
+    return Array.from({ length: size }, (_, i) => Boolean(val[i]));
+  };
+
+  const initSize = initRows * initCols;
+  const initMap = toArray(item.storageMap, initSize);
 
   const [rows, setRows] = useState(initRows);
   const [cols, setCols] = useState(initCols);
@@ -27,22 +35,23 @@ function AliquotGridModal({ item, updateItemMulti, onClose }) {
   const [pendingCols, setPendingCols] = useState(initCols);
 
   const saveToInventory = (newMap, newRows, newCols, newBoxName) => {
+    const safeMap = Array.isArray(newMap) ? newMap : Array.from(newMap || []);
     updateItemMulti(item.id, {
-      storageMap: newMap,
-      quantity: newMap.filter(Boolean).length,
+      storageMap: safeMap,
+      quantity: safeMap.filter(Boolean).length,
       gridRows: newRows,
       gridCols: newCols,
       boxName: newBoxName,
     });
   };
 
+  // ⚠️ Do NOT call setInventory inside a setMap updater — React anti-pattern.
+  // Compute next map first, then call both setters separately.
   const toggle = (idx) => {
-    setMap(prev => {
-      const next = [...prev];
-      next[idx] = !next[idx];
-      saveToInventory(next, rows, cols, boxName);
-      return next;
-    });
+    const next = [...map];
+    next[idx] = !next[idx];
+    setMap(next);
+    saveToInventory(next, rows, cols, boxName);
   };
 
   const fillAll = () => {
@@ -59,10 +68,9 @@ function AliquotGridModal({ item, updateItemMulti, onClose }) {
 
   const applyDimensions = () => {
     const newMap = Array(pendingRows * pendingCols).fill(false);
-    // Preserve existing filled positions that fit
     for (let r = 0; r < Math.min(rows, pendingRows); r++) {
       for (let c = 0; c < Math.min(cols, pendingCols); c++) {
-        newMap[r * pendingCols + c] = map[r * cols + c] || false;
+        newMap[r * pendingCols + c] = (map[r * cols + c]) || false;
       }
     }
     setRows(pendingRows);
@@ -76,7 +84,8 @@ function AliquotGridModal({ item, updateItemMulti, onClose }) {
     updateItemMulti(item.id, { boxName: val });
   };
 
-  const occupied = map.filter(Boolean).length;
+  const safeMap = Array.isArray(map) ? map : Array(rows * cols).fill(false);
+  const occupied = safeMap.filter(Boolean).length;
   const rowLabels = ALPHABET.slice(0, rows).split('');
 
   return (
@@ -143,7 +152,7 @@ function AliquotGridModal({ item, updateItemMulti, onClose }) {
                 <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.7rem', color: 'var(--text-secondary)'}}>{row}</div>
                 {Array.from({length: cols}, (_, ci) => {
                   const idx = ri * cols + ci;
-                  const filled = map[idx] || false;
+                  const filled = safeMap[idx] || false;
                   return (
                     <div
                       key={idx}
