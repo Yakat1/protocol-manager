@@ -321,7 +321,33 @@ export default function CellCulture({ state, updateState }) {
 
                             <div className="log-field-group" style={{gridColumn: '1 / -1', marginTop: '8px'}}>
                               <label>Confluencia Estimada ({log.confluence}%)</label>
-                              <input type="range" min="0" max="100" step="5" className="culture-range-input" value={log.confluence} onChange={e => updateLog(log.id, 'confluence', e.target.value)} />
+                              <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
+                                <input type="range" min="0" max="100" step="5" className="culture-range-input" value={log.confluence} onChange={e => updateLog(log.id, 'confluence', e.target.value)} style={{flex: 1}} />
+                                <div style={{
+                                  width: '60px', height: '60px', borderRadius: '6px',
+                                  border: '2px solid var(--border)', position: 'relative', overflow: 'hidden',
+                                  background: 'rgba(0,0,0,0.3)', flexShrink: 0
+                                }}>
+                                  {/* Flask fill */}
+                                  <div style={{
+                                    position: 'absolute', bottom: 0, left: 0, right: 0,
+                                    height: `${log.confluence}%`,
+                                    background: `linear-gradient(to top, rgba(16,185,129,0.5), rgba(16,185,129,0.15))`,
+                                    transition: 'height 0.3s ease'
+                                  }} />
+                                  {/* Cell dots */}
+                                  {Array.from({length: Math.round(parseInt(log.confluence) / 4)}, (_, i) => (
+                                    <div key={i} style={{
+                                      position: 'absolute',
+                                      width: '4px', height: '4px', borderRadius: '50%',
+                                      background: 'rgba(16,185,129,0.8)',
+                                      bottom: `${(i * 17 + 5) % (parseInt(log.confluence) || 1)}%`,
+                                      left: `${(i * 23 + 10) % 85}%`,
+                                    }} />
+                                  ))}
+                                  <div style={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.7rem', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.5)'}}>{log.confluence}%</div>
+                                </div>
+                              </div>
                             </div>
 
                             <div className="log-field-group" style={{gridColumn: '1 / -1'}}>

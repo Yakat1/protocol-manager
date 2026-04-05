@@ -201,7 +201,7 @@ export default function App() {
       case 'counter':
         return <CellCounter />;
       case 'charts':
-        return <Charts subjects={state.subjects} variables={state.variables} />;
+        return <Charts subjects={state.subjects} variables={state.variables} cultures={state.cultures} cultureLogs={state.cultureLogs} />;
       case 'western':
         return <WesternBlot subjects={state.subjects} variables={state.variables} updateState={updateState} />;
       case 'wbreport':

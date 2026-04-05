@@ -1,11 +1,99 @@
 import React, { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, Box, Droplet, Search, Download } from 'lucide-react';
+import { Plus, Trash2, Box, Droplet, Search, Download, Grid } from 'lucide-react';
 import { exportInventoryCSV } from '../utils/export';
 import './Inventory.css';
 
 const ITEM_TYPES = ['Reactivo', 'Solución Stock', 'Anticuerpo 1°', 'Anticuerpo 2°', 'Medio de Cultivo', 'Material'];
 const UNITS = ['mL', 'L', 'µL', 'Alícuotas', 'g', 'mg', 'Unidades', 'Cajas', 'Paquetes'];
+const GRID_SIZE = 9;
+const GRID_ROWS = 'ABCDEFGHI'.split('');
+
+// ── Aliquot Grid Modal ─────────────────────────────────────────────────────
+function AliquotGridModal({ item, updateItem, onClose }) {
+  const map = item.storageMap || Array(GRID_SIZE * GRID_SIZE).fill(false);
+  const boxName = item.boxName || '';
+
+  const toggle = (idx) => {
+    const next = [...map];
+    next[idx] = !next[idx];
+    updateItem(item.id, 'storageMap', next);
+    updateItem(item.id, 'quantity', next.filter(Boolean).length);
+  };
+
+  const fillAll = () => {
+    const next = Array(GRID_SIZE * GRID_SIZE).fill(true);
+    updateItem(item.id, 'storageMap', next);
+    updateItem(item.id, 'quantity', GRID_SIZE * GRID_SIZE);
+  };
+
+  const clearAll = () => {
+    const next = Array(GRID_SIZE * GRID_SIZE).fill(false);
+    updateItem(item.id, 'storageMap', next);
+    updateItem(item.id, 'quantity', 0);
+  };
+
+  const occupied = map.filter(Boolean).length;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="glass-panel" style={{padding: '24px', maxWidth: '460px', width: '95vw'}} onClick={e => e.stopPropagation()}>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
+          <h4 style={{margin: 0}}>🧊 Mapa de Caja: {item.name}</h4>
+          <button className="btn-icon" onClick={onClose} style={{fontSize: '1.2rem'}}>✕</button>
+        </div>
+        <div style={{marginBottom: '10px'}}>
+          <label style={{fontSize: '0.8rem', color: 'var(--text-secondary)'}}>Nombre de la Caja</label>
+          <input className="input-field" placeholder="Ej. Caja A1 - Freezer 2" value={boxName} onChange={e => updateItem(item.id, 'boxName', e.target.value)} />
+        </div>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
+          <span style={{fontSize: '0.85rem', fontWeight: 'bold'}}>{occupied} / {GRID_SIZE * GRID_SIZE} ocupadas</span>
+          <div style={{display: 'flex', gap: '6px'}}>
+            <button className="btn" style={{fontSize: '0.7rem', padding: '3px 8px'}} onClick={fillAll}>Llenar</button>
+            <button className="btn" style={{fontSize: '0.7rem', padding: '3px 8px'}} onClick={clearAll}>Vaciar</button>
+          </div>
+        </div>
+        <div style={{display: 'grid', gridTemplateColumns: `28px repeat(${GRID_SIZE}, 1fr)`, gap: '3px', fontSize: '0.7rem'}}>
+          {/* Header row */}
+          <div></div>
+          {Array.from({length: GRID_SIZE}, (_, i) => (
+            <div key={`h${i}`} style={{textAlign: 'center', fontWeight: 'bold', color: 'var(--text-secondary)', padding: '2px 0'}}>{i+1}</div>
+          ))}
+          {/* Grid rows */}
+          {GRID_ROWS.map((row, ri) => (
+            <React.Fragment key={row}>
+              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: 'var(--text-secondary)'}}>{row}</div>
+              {Array.from({length: GRID_SIZE}, (_, ci) => {
+                const idx = ri * GRID_SIZE + ci;
+                const filled = map[idx];
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => toggle(idx)}
+                    style={{
+                      width: '100%', aspectRatio: '1', borderRadius: '4px', cursor: 'pointer',
+                      background: filled ? 'var(--primary)' : 'rgba(255,255,255,0.06)',
+                      border: '1px solid ' + (filled ? 'var(--primary)' : 'var(--border)'),
+                      transition: 'all 0.15s',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '0.6rem', color: filled ? '#fff' : 'transparent'
+                    }}
+                    title={`${row}${ci+1}`}
+                  >
+                    ●
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
+        <div style={{textAlign: 'center', marginTop: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)'}}>
+          Haz clic en cada posición para marcar/desmarcar alícuotas.
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const renderDynamicFields = (item, updateItem, isExpired, isLowStock) => {
   const t = item.type;
@@ -157,6 +245,7 @@ const renderDynamicFields = (item, updateItem, isExpired, isLowStock) => {
 export default function Inventory({ inventory: inventoryProp, setInventory }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [aliquotModalId, setAliquotModalId] = useState(null);
   
   const inventory = inventoryProp || [];
 
@@ -233,9 +322,9 @@ export default function Inventory({ inventory: inventoryProp, setInventory }) {
       <div className="inventory-grid">
         {filteredInventory.map(item => {
           
-          // Check if it's expired
           const isExpired = item.expDate && new Date(item.expDate) < new Date();
-          const isLowStock = parseFloat(item.quantity) <= 2; // Arbritary low stock rule
+          const threshold = item.lowStockThreshold != null ? parseFloat(item.lowStockThreshold) : (item.initialStock ? parseFloat(item.initialStock) * 0.1 : 2);
+          const isLowStock = parseFloat(item.quantity) <= threshold && parseFloat(item.quantity) > 0;
 
           return (
             <div key={item.id} className="inventory-card">
@@ -268,6 +357,25 @@ export default function Inventory({ inventory: inventoryProp, setInventory }) {
                   <label>Observaciones</label>
                   <input className="input-field" value={item.notes} onChange={e => updateItem(item.id, 'notes', e.target.value)} placeholder="Notas adicionales..." />
                 </div>
+
+                {/* Dynamic threshold */}
+                <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
+                  <label style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>Umbral de Stock Bajo (alertar debajo de)</label>
+                  <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+                    <input type="number" className="input-field" style={{flex: '1 1 auto', minWidth: '80px', fontSize: '0.85rem'}} value={item.lowStockThreshold ?? ''} onChange={e => updateItem(item.id, 'lowStockThreshold', e.target.value)} placeholder={`Auto: ${item.initialStock ? (parseFloat(item.initialStock)*0.1).toFixed(1) : '2'}`} />
+                    <span style={{fontSize: '0.8rem', color: 'var(--text-secondary)'}}>{item.unit || 'uds'}</span>
+                    {!item.initialStock && <button className="btn" style={{fontSize: '0.7rem', padding: '2px 6px', whiteSpace: 'nowrap'}} onClick={() => updateItem(item.id, 'initialStock', item.quantity)} title="Fijar stock actual como referencia del 10%">📌 Fijar</button>}
+                  </div>
+                </div>
+
+                {/* Aliquot grid button */}
+                {item.unit === 'Alícuotas' && (
+                  <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
+                    <button className="btn" style={{width: '100%', justifyContent: 'center', fontSize: '0.8rem', gap: '6px'}} onClick={() => setAliquotModalId(item.id)}>
+                      <Grid size={14}/> 🧊 Mapa de Caja {item.boxName ? `(${item.boxName})` : ''}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -280,6 +388,13 @@ export default function Inventory({ inventory: inventoryProp, setInventory }) {
           </div>
         )}
       </div>
+
+      {/* Aliquot Grid Modal */}
+      {aliquotModalId && (() => {
+        const item = inventory.find(i => i.id === aliquotModalId);
+        if (!item) return null;
+        return <AliquotGridModal item={item} updateItem={updateItem} onClose={() => setAliquotModalId(null)} />;
+      })()}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ErrorBar, Legend, Cell, ComposedChart } from 'recharts';
-import { Plus, X, BarChart3 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ErrorBar, Legend, Cell, ComposedChart, LineChart, Line } from 'recharts';
+import { Plus, X, BarChart3, Download } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import './Charts.css';
 
@@ -78,12 +78,17 @@ const BoxPlotShape = (props) => {
   );
 };
 
-export default function Charts({ subjects, variables }) {
+export default function Charts({ subjects, variables, cultures: culturesProp, cultureLogs: cultureLogsProp }) {
   const [groups, setGroups] = useState(DEFAULT_GROUPS);
   const [values, setValues] = useState({}); // { groupId: ['val1','val2',...] }
   const [chartTitle, setChartTitle] = useState('Viabilidad Celular (% vs Control)');
   const [yLabel, setYLabel] = useState('% Viabilidad');
   const [chartType, setChartType] = useState('bar'); // 'bar' | 'box'
+  const [activeView, setActiveView] = useState('analysis'); // 'analysis' | 'growth'
+  const [selectedCultures, setSelectedCultures] = useState([]);
+
+  const cultures = culturesProp || [];
+  const cultureLogs = cultureLogsProp || [];
 
   const addGroup = () => {
     const idx = groups.length % COLORS.length;
@@ -161,8 +166,56 @@ export default function Charts({ subjects, variables }) {
     };
   }).filter(d => d.n > 0);
 
+  // ── Growth Curve Logic ───────────────────────────────────────────────────────
+  const toggleCultureSelection = (id) => {
+    setSelectedCultures(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+  };
+
+  const growthData = (() => {
+    if (selectedCultures.length === 0) return [];
+    const allDates = new Set();
+    const byDate = {};
+    selectedCultures.forEach(cId => {
+      const logs = cultureLogs.filter(l => l.cultureId === cId).sort((a,b) => new Date(a.date) - new Date(b.date));
+      logs.forEach(l => {
+        allDates.add(l.date);
+        if (!byDate[l.date]) byDate[l.date] = {};
+        byDate[l.date][cId] = parseInt(l.confluence) || 0;
+      });
+    });
+    return [...allDates].sort().map(date => ({ date, ...byDate[date] }));
+  })();
+
+  const exportGrowthCSV = () => {
+    if (growthData.length === 0) return alert('No hay datos para exportar.');
+    const cultureNames = selectedCultures.map(id => {
+      const c = cultures.find(cc => cc.id === id);
+      return c ? c.cellLine : id;
+    });
+    let csv = 'Fecha,' + cultureNames.join(',') + '\n';
+    growthData.forEach(row => {
+      csv += row.date + ',' + selectedCultures.map(id => row[id] ?? '').join(',') + '\n';
+    });
+    const blob = new Blob([csv], {type: 'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'curvas_crecimiento.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="charts-container">
+      {/* Tab Toggle */}
+      <div style={{display: 'flex', gap: '8px', marginBottom: '16px'}}>
+        <button className={`btn ${activeView === 'analysis' ? 'btn-primary' : ''}`} onClick={() => setActiveView('analysis')} style={{flex: 1, justifyContent: 'center'}}>
+          📊 Análisis de Datos
+        </button>
+        <button className={`btn ${activeView === 'growth' ? 'btn-primary' : ''}`} onClick={() => setActiveView('growth')} style={{flex: 1, justifyContent: 'center'}}>
+          🦠 Curvas de Crecimiento
+        </button>
+      </div>
+
+      {activeView === 'analysis' ? (
+        <>
       {/* Config */}
       <div className="chart-config" style={{alignItems: 'flex-end', gap: '16px'}}>
         <div className="input-group" style={{marginBottom: 0, flex: '1 1 150px'}}>
@@ -251,60 +304,22 @@ export default function Charts({ subjects, variables }) {
             {chartType === 'bar' ? (
               <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fill: 'var(--text-primary)', fontSize: 13, fontWeight: 500 }}
-                  axisLine={{ stroke: 'rgba(255,255,255,0.2)' }}
-                />
-                <YAxis
-                  label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: 'var(--text-primary)', fontSize: 13, fontWeight: 500 }}
-                  tick={{ fill: 'var(--text-primary)', fontSize: 13 }}
-                  axisLine={{ stroke: 'rgba(255,255,255,0.2)' }}
-                />
-                <Tooltip
-                  cursor={{fill: 'rgba(255,255,255,0.05)'}}
-                  contentStyle={{ background: '#161b22', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                  itemStyle={{ color: '#e6edf3' }}
-                  labelStyle={{ color: '#e6edf3', fontWeight: 'bold', marginBottom: '4px' }}
-                  formatter={(value, name, props) => {
-                    const item = props.payload;
-                    return [`${value.toFixed(3)} ± ${item.sd.toFixed(3)} (n=${item.n})`, yLabel];
-                  }}
-                />
+                <XAxis dataKey="name" tick={{ fill: 'var(--text-primary)', fontSize: 13, fontWeight: 500 }} axisLine={{ stroke: 'rgba(255,255,255,0.2)' }} />
+                <YAxis label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: 'var(--text-primary)', fontSize: 13, fontWeight: 500 }} tick={{ fill: 'var(--text-primary)', fontSize: 13 }} axisLine={{ stroke: 'rgba(255,255,255,0.2)' }} />
+                <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ background: '#161b22', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }} itemStyle={{ color: '#e6edf3' }} labelStyle={{ color: '#e6edf3', fontWeight: 'bold', marginBottom: '4px' }} formatter={(value, name, props) => { const item = props.payload; return [`${value.toFixed(3)} ± ${item.sd.toFixed(3)} (n=${item.n})`, yLabel]; }} />
                 <Bar dataKey="mean" radius={[4, 4, 0, 0]}>
                   <ErrorBar dataKey="sd" width={10} strokeWidth={2} stroke="#e6edf3" />
-                  {chartData.map((entry, i) => (
-                    <Cell key={`cell-${i}`} fill={entry.color} />
-                  ))}
+                  {chartData.map((entry, i) => (<Cell key={`cell-${i}`} fill={entry.color} />))}
                 </Bar>
               </BarChart>
             ) : (
               <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fill: 'var(--text-primary)', fontSize: 13, fontWeight: 500 }}
-                  axisLine={{ stroke: 'rgba(255,255,255,0.2)' }}
-                />
-                <YAxis
-                  label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: 'var(--text-primary)', fontSize: 13, fontWeight: 500 }}
-                  tick={{ fill: 'var(--text-primary)', fontSize: 13 }}
-                  axisLine={{ stroke: 'rgba(255,255,255,0.2)' }}
-                />
-                <Tooltip
-                  cursor={{fill: 'rgba(255,255,255,0.05)'}}
-                  contentStyle={{ background: '#161b22', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                  itemStyle={{ color: '#e6edf3' }}
-                  labelStyle={{ color: '#e6edf3', fontWeight: 'bold', marginBottom: '4px' }}
-                  formatter={(value, name, props) => {
-                    const box = props.payload.fullBox;
-                    return [`Min: ${box[0].toFixed(2)}, Q1: ${box[1].toFixed(2)}, Med: ${box[2].toFixed(2)}, Q3: ${box[3].toFixed(2)}, Max: ${box[4].toFixed(2)} (n=${props.payload.n})`, yLabel];
-                  }}
-                />
+                <XAxis dataKey="name" tick={{ fill: 'var(--text-primary)', fontSize: 13, fontWeight: 500 }} axisLine={{ stroke: 'rgba(255,255,255,0.2)' }} />
+                <YAxis label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: 'var(--text-primary)', fontSize: 13, fontWeight: 500 }} tick={{ fill: 'var(--text-primary)', fontSize: 13 }} axisLine={{ stroke: 'rgba(255,255,255,0.2)' }} />
+                <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ background: '#161b22', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }} itemStyle={{ color: '#e6edf3' }} labelStyle={{ color: '#e6edf3', fontWeight: 'bold', marginBottom: '4px' }} formatter={(value, name, props) => { const box = props.payload.fullBox; return [`Min: ${box[0].toFixed(2)}, Q1: ${box[1].toFixed(2)}, Med: ${box[2].toFixed(2)}, Q3: ${box[3].toFixed(2)}, Max: ${box[4].toFixed(2)} (n=${props.payload.n})`, yLabel]; }} />
                 <Bar dataKey="boxData" shape={<BoxPlotShape />}>
-                  {chartData.map((entry, i) => (
-                    <Cell key={`cell-${i}`} fill={entry.color} />
-                  ))}
+                  {chartData.map((entry, i) => (<Cell key={`cell-${i}`} fill={entry.color} />))}
                 </Bar>
               </ComposedChart>
             )}
@@ -315,6 +330,86 @@ export default function Charts({ subjects, variables }) {
           <BarChart3 size={48} style={{opacity: 0.3}} />
           <p>Ingresa valores numéricos en los grupos de arriba para generar la gráfica de barras con Media ± DE.</p>
         </div>
+      )}
+        </>
+      ) : (
+        /* ────────── GROWTH CURVES VIEW ────────── */
+        <>
+          <div className="glass-panel" style={{padding: '16px', marginBottom: '16px'}}>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
+              <h4 style={{margin: 0}}>🦠 Selecciona Cultivos a Comparar</h4>
+              {growthData.length > 0 && (
+                <button className="btn" style={{fontSize: '0.8rem'}} onClick={exportGrowthCSV}>
+                  <Download size={14} style={{marginRight: '4px'}}/> CSV
+                </button>
+              )}
+            </div>
+            {cultures.length === 0 ? (
+              <p style={{color: 'var(--text-secondary)', textAlign: 'center', padding: '20px'}}>No hay cultivos registrados. Ve a la Bitácora de Cultivos para crear uno.</p>
+            ) : (
+              <div style={{display: 'flex', flexWrap: 'wrap', gap: '8px'}}>
+                {cultures.map((c, idx) => {
+                  const isSelected = selectedCultures.includes(c.id);
+                  const color = COLORS[idx % COLORS.length];
+                  return (
+                    <button
+                      key={c.id}
+                      className="btn"
+                      style={{
+                        fontSize: '0.8rem', padding: '6px 12px',
+                        background: isSelected ? color : 'transparent',
+                        border: `2px solid ${color}`,
+                        color: isSelected ? '#fff' : color,
+                        fontWeight: isSelected ? 'bold' : 'normal'
+                      }}
+                      onClick={() => toggleCultureSelection(c.id)}
+                    >
+                      {c.cellLine}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {growthData.length > 0 ? (
+            <div className="glass-panel chart-wrapper">
+              <h4 style={{marginBottom: '16px'}}>Confluencia vs Tiempo</h4>
+              <ResponsiveContainer width="100%" height={400}>
+                <LineChart data={growthData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                  <XAxis dataKey="date" tick={{ fill: 'var(--text-primary)', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.2)' }} />
+                  <YAxis domain={[0, 100]} label={{ value: '% Confluencia', angle: -90, position: 'insideLeft', fill: 'var(--text-primary)', fontSize: 13 }} tick={{ fill: 'var(--text-primary)', fontSize: 12 }} axisLine={{ stroke: 'rgba(255,255,255,0.2)' }} />
+                  <Tooltip contentStyle={{ background: '#161b22', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }} itemStyle={{ color: '#e6edf3' }} labelStyle={{ color: '#e6edf3', fontWeight: 'bold' }} />
+                  <Legend />
+                  {selectedCultures.map((cId, idx) => {
+                    const culture = cultures.find(c => c.id === cId);
+                    return (
+                      <Line
+                        key={cId}
+                        type="monotone"
+                        dataKey={cId}
+                        name={culture ? culture.cellLine : cId}
+                        stroke={COLORS[idx % COLORS.length]}
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                        connectNulls
+                      />
+                    );
+                  })}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            selectedCultures.length > 0 && (
+              <div className="glass-panel chart-empty">
+                <BarChart3 size={48} style={{opacity: 0.3}} />
+                <p>Los cultivos seleccionados no tienen datos de confluencia registrados aún.</p>
+              </div>
+            )
+          )}
+        </>
       )}
     </div>
   );
