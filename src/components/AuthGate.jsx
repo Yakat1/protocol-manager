@@ -33,13 +33,24 @@ export default function AuthGate({ onAuthenticated, isElectron = false }) {
   };
 
   const handleGoogle = async () => {
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+    const isWebView = /FBAN|FBAV|Instagram|WhatsApp|Line|Snapchat|MicroMessenger/i.test(ua);
+    
+    if (isWebView) {
+      alert("⚠️ Estás abriendo la aplicación desde WhatsApp/FB o un navegador privado.\n\nPor políticas de seguridad y cookies de estos navegadores, Google Login suele fallar retornando un error (missing initial state).\n\n👉 Por favor, toca las opciones (los tres puntos arriba a la derecha) y elige 'Abrir en el navegador' (Safari o Chrome) o utiliza inicio de sesión por Correo/Contraseña.");
+      return;
+    }
+
     setError('');
     setLoading(true);
     try {
       const cred = await loginWithGoogle();
-      onAuthenticated(cred.user);
+      if(cred && cred.user) {
+        onAuthenticated(cred.user);
+      }
     } catch (err) {
-      setError('No se pudo iniciar sesión con Google.');
+      console.error(err);
+      setError('Error con Google. Intenta correo/contraseña o usa un navegador normal (Firefox/Chrome/Safari).');
     }
     setLoading(false);
   };
