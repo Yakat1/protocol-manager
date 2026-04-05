@@ -14,9 +14,29 @@ const UNIT_GROUPS = {
   conc:   { label: 'Concentración', units: Object.keys(CONC_FACTORS),   factors: CONC_FACTORS },
 };
 
+function parseCalcFloat(valString) {
+  if (valString === null || valString === undefined) return NaN;
+  if (typeof valString !== 'string') valString = String(valString);
+  valString = valString.trim();
+  if (valString === '') return NaN;
+  
+  if (valString.toLowerCase().includes('e')) {
+    const parts = valString.toLowerCase().split('e');
+    if (parts.length === 2) {
+      const base = Number.parseFloat(parts[0]);
+      const exponent = Number.parseFloat(parts[1]);
+      if (!isNaN(base) && !isNaN(exponent)) {
+        return base * Math.pow(10, exponent);
+      }
+    }
+  }
+  
+  return Number.parseFloat(valString);
+}
+
 function convertUnit(value, from, to, factors) {
   if (!value || !from || !to || !factors[from] || !factors[to]) return null;
-  const base = parseFloat(value) * factors[from];
+  const base = parseCalcFloat(value) * factors[from];
   return base / factors[to];
 }
 
@@ -78,26 +98,26 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
   // ── Calculation functions ─────────────────────────────────────────────────
   const dilutionResult = () => {
     const { c1, c2, vf } = dilution;
-    if (c1 && c2 && vf && parseFloat(c1) > 0) {
-      return (parseFloat(c2) * parseFloat(vf)) / parseFloat(c1);
+    if (c1 && c2 && vf && parseCalcFloat(c1) > 0) {
+      return (parseCalcFloat(c2) * parseCalcFloat(vf)) / parseCalcFloat(c1);
     }
     return null;
   };
 
   const fentonResult = () => {
-    const h2o2 = parseFloat(fenton.h2o2Target);
-    const ratio = parseFloat(fenton.feRatio);
-    const vol = parseFloat(fenton.volumeMl);
+    const h2o2 = parseCalcFloat(fenton.h2o2Target);
+    const ratio = parseCalcFloat(fenton.feRatio);
+    const vol = parseCalcFloat(fenton.volumeMl);
     if (!h2o2 || !ratio || !vol) return null;
     return { feConc: h2o2 / ratio, h2o2, vol };
   };
 
   const molarityResult = () => {
-    const mw = parseFloat(molarity.mw);
-    const pct = parseFloat(molarity.stockPercent) / 100;
-    const density = parseFloat(molarity.stockDensity);
-    const target = parseFloat(molarity.targetConc);
-    const vol = parseFloat(molarity.targetVol);
+    const mw = parseCalcFloat(molarity.mw);
+    const pct = parseCalcFloat(molarity.stockPercent) / 100;
+    const density = parseCalcFloat(molarity.stockDensity);
+    const target = parseCalcFloat(molarity.targetConc);
+    const vol = parseCalcFloat(molarity.targetVol);
     if (!mw || !pct || !density || !target || !vol) return null;
     const stockM = (pct * density * 1e6) / mw;
     const needed = (target / 1000 * vol) / (stockM / 1000);
@@ -106,14 +126,14 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
 
   // ── Buffer calculation (multi-component) ──────────────────────────────────
   const bufferResults = () => {
-    const vol = parseFloat(bufferVol.vol);
+    const vol = parseCalcFloat(bufferVol.vol);
     if (!vol || vol <= 0) return null;
     const volL = vol * (VOLUME_FACTORS[bufferVol.unit] || 1);
 
     const results = [];
     for (const comp of bufferComponents) {
-      const mw = parseFloat(comp.mw);
-      const conc = parseFloat(comp.targetConc);
+      const mw = parseCalcFloat(comp.mw);
+      const conc = parseCalcFloat(comp.targetConc);
       if (!mw || !conc || mw <= 0) continue;
       const concM = conc * (CONC_FACTORS[comp.concUnit] || 1);
       const massG = concM * volL * mw;
@@ -145,7 +165,7 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
       name: name,
       type: 'Solución Stock',
       concentration: concDescription,
-      quantity: parseFloat(bufferVol.vol) || 0,
+      quantity: parseCalcFloat(bufferVol.vol) || 0,
       unit: bufferVol.unit,
       location: 'Mesa',
       prepDate: new Date().toISOString().split('T')[0],
@@ -226,21 +246,21 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
           <div className="calc-row">
             <div className="input-group">
               <label className="input-label">C₁ (Conc. Stock)</label>
-              <input className="input-field" type="number" placeholder="ej. 1000 µM" value={dilution.c1} onChange={e => setDilution({...dilution, c1: e.target.value})} />
+              <input className="input-field" type="text" inputMode="decimal" placeholder="ej. 1000 µM" value={dilution.c1} onChange={e => setDilution({...dilution, c1: e.target.value})} />
             </div>
             <div className="input-group">
               <label className="input-label">C₂ (Conc. Deseada)</label>
-              <input className="input-field" type="number" placeholder="ej. 150 µM" value={dilution.c2} onChange={e => setDilution({...dilution, c2: e.target.value})} />
+              <input className="input-field" type="text" inputMode="decimal" placeholder="ej. 150 µM" value={dilution.c2} onChange={e => setDilution({...dilution, c2: e.target.value})} />
             </div>
           </div>
           <div className="input-group">
             <label className="input-label">Vf (Vol. Final deseado, µL)</label>
-            <input className="input-field" type="number" placeholder="ej. 1000 µL" value={dilution.vf} onChange={e => setDilution({...dilution, vf: e.target.value})} />
+            <input className="input-field" type="text" inputMode="decimal" placeholder="ej. 1000 µL" value={dilution.vf} onChange={e => setDilution({...dilution, vf: e.target.value})} />
           </div>
           {dRes !== null && (
             <div className="calc-result">
               <div className="calc-result-value">{dRes.toFixed(2)} c.u.</div>
-              <div className="calc-result-label">Volumen de Stock necesario (V₁). Agregar {(parseFloat(dilution.vf) - dRes).toFixed(2)} c.u. de solvente.</div>
+              <div className="calc-result-label">Volumen de Stock necesario (V₁). Agregar {(parseCalcFloat(dilution.vf) - dRes).toFixed(2)} c.u. de solvente.</div>
               {inventory.length > 0 && (
                 <div style={{marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center'}}>
                   <select className="input-field" style={{padding: '4px', fontSize: '0.8rem'}} value={selectedInventoryId} onChange={e => setSelectedInventoryId(e.target.value)}>
@@ -262,16 +282,16 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
           <div className="calc-row">
             <div className="input-group">
               <label className="input-label">H₂O₂ Objetivo (µM)</label>
-              <input className="input-field" type="number" value={fenton.h2o2Target} onChange={e => setFenton({...fenton, h2o2Target: e.target.value})} />
+              <input className="input-field" type="text" inputMode="decimal" value={fenton.h2o2Target} onChange={e => setFenton({...fenton, h2o2Target: e.target.value})} />
             </div>
             <div className="input-group">
               <label className="input-label">Ratio Fe:H₂O₂ (1:X)</label>
-              <input className="input-field" type="number" value={fenton.feRatio} onChange={e => setFenton({...fenton, feRatio: e.target.value})} />
+              <input className="input-field" type="text" inputMode="decimal" value={fenton.feRatio} onChange={e => setFenton({...fenton, feRatio: e.target.value})} />
             </div>
           </div>
           <div className="input-group">
             <label className="input-label">Volumen Final (mL)</label>
-            <input className="input-field" type="number" value={fenton.volumeMl} onChange={e => setFenton({...fenton, volumeMl: e.target.value})} />
+            <input className="input-field" type="text" inputMode="decimal" value={fenton.volumeMl} onChange={e => setFenton({...fenton, volumeMl: e.target.value})} />
           </div>
           {fRes && (
             <div className="calc-result">
@@ -289,26 +309,26 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
           <div className="calc-row">
             <div className="input-group">
               <label className="input-label">Peso Molecular (g/mol)</label>
-              <input className="input-field" type="number" value={molarity.mw} onChange={e => setMolarity({...molarity, mw: e.target.value})} />
+              <input className="input-field" type="text" inputMode="decimal" value={molarity.mw} onChange={e => setMolarity({...molarity, mw: e.target.value})} />
             </div>
             <div className="input-group">
               <label className="input-label">Stock (%p/v)</label>
-              <input className="input-field" type="number" value={molarity.stockPercent} onChange={e => setMolarity({...molarity, stockPercent: e.target.value})} />
+              <input className="input-field" type="text" inputMode="decimal" value={molarity.stockPercent} onChange={e => setMolarity({...molarity, stockPercent: e.target.value})} />
             </div>
           </div>
           <div className="calc-row">
             <div className="input-group">
               <label className="input-label">Densidad Stock (g/mL)</label>
-              <input className="input-field" type="number" value={molarity.stockDensity} onChange={e => setMolarity({...molarity, stockDensity: e.target.value})} />
+              <input className="input-field" type="text" inputMode="decimal" value={molarity.stockDensity} onChange={e => setMolarity({...molarity, stockDensity: e.target.value})} />
             </div>
             <div className="input-group">
               <label className="input-label">Conc. Objetivo (µM)</label>
-              <input className="input-field" type="number" value={molarity.targetConc} onChange={e => setMolarity({...molarity, targetConc: e.target.value})} />
+              <input className="input-field" type="text" inputMode="decimal" value={molarity.targetConc} onChange={e => setMolarity({...molarity, targetConc: e.target.value})} />
             </div>
           </div>
           <div className="input-group">
             <label className="input-label">Volumen Final (mL)</label>
-            <input className="input-field" type="number" value={molarity.targetVol} onChange={e => setMolarity({...molarity, targetVol: e.target.value})} />
+            <input className="input-field" type="text" inputMode="decimal" value={molarity.targetVol} onChange={e => setMolarity({...molarity, targetVol: e.target.value})} />
           </div>
           {mRes && (
             <div className="calc-result">
@@ -322,7 +342,7 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
                     <option value="">Seleccionar Reactivo...</option>
                     {inventory.map(i => <option key={i.id} value={i.id}>{i.name} ({i.quantity} {i.unit})</option>)}
                   </select>
-                  <button className="btn" style={{padding: '4px 8px', fontSize: '0.8rem'}} onClick={() => handleDiscount(parseFloat(mRes.neededUl))}>
+                  <button className="btn" style={{padding: '4px 8px', fontSize: '0.8rem'}} onClick={() => handleDiscount(parseCalcFloat(mRes.neededUl))}>
                     <MinusCircle size={14} style={{marginRight: '4px'}}/> Descontar
                   </button>
                 </div>
@@ -419,7 +439,7 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
             <div className="input-group">
               <label className="input-label">Volumen Final</label>
               <div style={{display: 'flex', gap: '6px'}}>
-                <input className="input-field" type="number" placeholder="ej. 500" value={bufferVol.vol} onChange={e => setBufferVol({...bufferVol, vol: e.target.value})} style={{flex: 1}} />
+                <input className="input-field" type="text" inputMode="decimal" placeholder="ej. 500" value={bufferVol.vol} onChange={e => setBufferVol({...bufferVol, vol: e.target.value})} style={{flex: 1}} />
                 <select className="input-field" style={{width: '70px', padding: '4px'}} value={bufferVol.unit} onChange={e => setBufferVol({...bufferVol, unit: e.target.value})}>
                   {Object.keys(VOLUME_FACTORS).map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
@@ -438,11 +458,11 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
                 </div>
                 <div style={{flex: '0 1 100px', minWidth: '80px'}}>
                   {idx === 0 && <label className="input-label" style={{fontSize: '0.7rem'}}>PM (g/mol)</label>}
-                  <input className="input-field" type="number" placeholder="58.44" value={comp.mw} onChange={e => updateBufferComponent(comp.id, 'mw', e.target.value)} />
+                  <input className="input-field" type="text" inputMode="decimal" placeholder="58.44" value={comp.mw} onChange={e => updateBufferComponent(comp.id, 'mw', e.target.value)} />
                 </div>
                 <div style={{flex: '0 1 100px', minWidth: '80px'}}>
                   {idx === 0 && <label className="input-label" style={{fontSize: '0.7rem'}}>Conc.</label>}
-                  <input className="input-field" type="number" placeholder="150" value={comp.targetConc} onChange={e => updateBufferComponent(comp.id, 'targetConc', e.target.value)} />
+                  <input className="input-field" type="text" inputMode="decimal" placeholder="150" value={comp.targetConc} onChange={e => updateBufferComponent(comp.id, 'targetConc', e.target.value)} />
                 </div>
                 <div style={{flex: '0 0 65px'}}>
                   {idx === 0 && <label className="input-label" style={{fontSize: '0.7rem'}}>Unidad</label>}
@@ -528,7 +548,7 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
           </div>
           <div className="input-group">
             <label className="input-label">Valor</label>
-            <input className="input-field" type="number" placeholder="Ingresa un valor" value={converter.value} onChange={e => setConverter({...converter, value: e.target.value})} />
+            <input className="input-field" type="text" inputMode="decimal" placeholder="Ingresa un valor" value={converter.value} onChange={e => setConverter({...converter, value: e.target.value})} />
           </div>
           <div className="calc-row" style={{marginTop: '12px'}}>
             <div className="input-group">
@@ -561,21 +581,21 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
           <div className="calc-row">
             <div className="input-group">
               <label className="input-label">pKa del Buffer</label>
-              <input className="input-field" type="number" step="0.01" placeholder="ej. 6.86 (fosfato)" value={bufferPH.pKa} onChange={e => setBufferPH({...bufferPH, pKa: e.target.value})} />
+              <input className="input-field" type="text" inputMode="decimal" step="0.01" placeholder="ej. 6.86 (fosfato)" value={bufferPH.pKa} onChange={e => setBufferPH({...bufferPH, pKa: e.target.value})} />
             </div>
             <div className="input-group">
               <label className="input-label">[A⁻] Base conjugada (mM)</label>
-              <input className="input-field" type="number" placeholder="ej. 80" value={bufferPH.baseConc} onChange={e => setBufferPH({...bufferPH, baseConc: e.target.value})} />
+              <input className="input-field" type="text" inputMode="decimal" placeholder="ej. 80" value={bufferPH.baseConc} onChange={e => setBufferPH({...bufferPH, baseConc: e.target.value})} />
             </div>
           </div>
           <div className="input-group" style={{marginTop: '8px'}}>
             <label className="input-label">[HA] Ácido (mM)</label>
-            <input className="input-field" type="number" placeholder="ej. 20" value={bufferPH.acidConc} onChange={e => setBufferPH({...bufferPH, acidConc: e.target.value})} />
+            <input className="input-field" type="text" inputMode="decimal" placeholder="ej. 20" value={bufferPH.acidConc} onChange={e => setBufferPH({...bufferPH, acidConc: e.target.value})} />
           </div>
           {(() => {
-            const pKa = parseFloat(bufferPH.pKa);
-            const base = parseFloat(bufferPH.baseConc);
-            const acid = parseFloat(bufferPH.acidConc);
+            const pKa = parseCalcFloat(bufferPH.pKa);
+            const base = parseCalcFloat(bufferPH.baseConc);
+            const acid = parseCalcFloat(bufferPH.acidConc);
             if (!pKa || !base || !acid || acid <= 0) return null;
             const pH = pKa + Math.log10(base / acid);
             return (
@@ -594,28 +614,28 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
           <div className="calc-row">
             <div className="input-group">
               <label className="input-label">Conc. Stock Inicial</label>
-              <input className="input-field" type="number" placeholder="ej. 2000" value={serial.stockConc} onChange={e => setSerial({...serial, stockConc: e.target.value})} />
+              <input className="input-field" type="text" inputMode="decimal" placeholder="ej. 2000" value={serial.stockConc} onChange={e => setSerial({...serial, stockConc: e.target.value})} />
             </div>
             <div className="input-group">
               <label className="input-label">Factor de Dilución</label>
-              <input className="input-field" type="number" placeholder="ej. 2 (1:2)" value={serial.dilFactor} onChange={e => setSerial({...serial, dilFactor: e.target.value})} />
+              <input className="input-field" type="text" inputMode="decimal" placeholder="ej. 2 (1:2)" value={serial.dilFactor} onChange={e => setSerial({...serial, dilFactor: e.target.value})} />
             </div>
           </div>
           <div className="calc-row" style={{marginTop: '8px'}}>
             <div className="input-group">
               <label className="input-label">Nº de Tubos</label>
-              <input className="input-field" type="number" min="2" max="20" value={serial.steps} onChange={e => setSerial({...serial, steps: e.target.value})} />
+              <input className="input-field" type="text" inputMode="decimal" min="2" max="20" value={serial.steps} onChange={e => setSerial({...serial, steps: e.target.value})} />
             </div>
             <div className="input-group">
               <label className="input-label">Vol. Final / Tubo (µL)</label>
-              <input className="input-field" type="number" placeholder="200" value={serial.tubeVol} onChange={e => setSerial({...serial, tubeVol: e.target.value})} />
+              <input className="input-field" type="text" inputMode="decimal" placeholder="200" value={serial.tubeVol} onChange={e => setSerial({...serial, tubeVol: e.target.value})} />
             </div>
           </div>
           {(() => {
-            const stock = parseFloat(serial.stockConc);
-            const factor = parseFloat(serial.dilFactor);
+            const stock = parseCalcFloat(serial.stockConc);
+            const factor = parseCalcFloat(serial.dilFactor);
             const steps = parseInt(serial.steps);
-            const vol = parseFloat(serial.tubeVol);
+            const vol = parseCalcFloat(serial.tubeVol);
             if (!stock || !factor || !steps || !vol || factor <= 1 || steps < 2) return null;
 
             const tubes = [];
