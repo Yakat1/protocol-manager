@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { updateUserPassword, getMyInvitations, acceptInvitation, declineInvitation, getUserProfile } from '../utils/firebase';
-import { X, Lock, LogOut, Code, User, Inbox, Check } from 'lucide-react';
+import { updateUserPassword, getMyInvitations, acceptInvitation, declineInvitation, getUserProfile, createLab } from '../utils/firebase';
+import { X, Lock, LogOut, Code, User, Inbox, Check, Plus } from 'lucide-react';
 import './AuthGate.css'; // Reuse glass-panel and overlay styles
 
 export default function ProfileSettings({ user, state, updateState, onClose, onLogout, showToast, onProfileUpdate }) {
@@ -13,6 +13,10 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
   // Invitations state
   const [invitations, setInvitations] = useState([]);
   const [invLoading, setInvLoading] = useState(false);
+
+  // New Lab State
+  const [newLabName, setNewLabName] = useState('');
+  const [creatingLab, setCreatingLab] = useState(false);
 
   useEffect(() => {
     if (user?.email && !user.isGuest) {
@@ -44,6 +48,24 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
       console.error(err);
     }
     setInvLoading(false);
+  };
+
+  const handleCreateLab = async (e) => {
+    e.preventDefault();
+    if (!newLabName.trim()) return;
+    setCreatingLab(true);
+    setError('');
+    setSuccess('');
+    try {
+      await createLab(user, newLabName.trim());
+      const profile = await getUserProfile(user.uid);
+      if (onProfileUpdate) onProfileUpdate(profile);
+      showToast(`Laboratorio "${newLabName.trim()}" creado exitosamente.`);
+      setNewLabName('');
+    } catch (err) {
+      setError('Error al crear laboratorio: ' + err.message);
+    }
+    setCreatingLab(false);
   };
   
   const isGoogleUser = user?.providerData?.some(p => p.providerId === 'google.com');
@@ -128,6 +150,32 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Create New Lab Section */}
+        {!user.isGuest && (
+          <div style={{ background: 'rgba(0,0,0,0.1)', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+            <h3 style={{ fontSize: '1rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Plus size={16} /> Crear Nuevo Laboratorio
+            </h3>
+            <form onSubmit={handleCreateLab} style={{ display: 'flex', gap: '8px' }}>
+              <input 
+                type="text" 
+                className="input-field" 
+                style={{ flex: 1, boxSizing: 'border-box' }}
+                placeholder="Nombre del Laboratorio" 
+                value={newLabName} 
+                onChange={e => setNewLabName(e.target.value)} 
+              />
+              <button 
+                type="submit" 
+                className="btn btn-primary" 
+                disabled={creatingLab || !newLabName.trim()}
+              >
+                {creatingLab ? 'Creando...' : 'Crear'}
+              </button>
+            </form>
           </div>
         )}
 
