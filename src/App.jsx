@@ -341,6 +341,7 @@ export default function App() {
           onClose={() => setShowProfileModal(false)}
           onLogout={handleLogout}
           showToast={showToast}
+          onProfileUpdate={handleLabReady}
         />
       )}
       {isSuspended && (

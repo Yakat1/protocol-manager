@@ -1,14 +1,50 @@
-import React, { useState } from 'react';
-import { updateUserPassword } from '../utils/firebase';
-import { X, Lock, LogOut, Code, User } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { updateUserPassword, getMyInvitations, acceptInvitation, declineInvitation, getUserProfile } from '../utils/firebase';
+import { X, Lock, LogOut, Code, User, Inbox, Check } from 'lucide-react';
 import './AuthGate.css'; // Reuse glass-panel and overlay styles
 
-export default function ProfileSettings({ user, state, updateState, onClose, onLogout, showToast }) {
+export default function ProfileSettings({ user, state, updateState, onClose, onLogout, showToast, onProfileUpdate }) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  
+  // Invitations state
+  const [invitations, setInvitations] = useState([]);
+  const [invLoading, setInvLoading] = useState(false);
+
+  useEffect(() => {
+    if (user?.email && !user.isGuest) {
+      getMyInvitations(user.email).then(setInvitations).catch(console.error);
+    }
+  }, [user]);
+
+  const handleAcceptInv = async (inv) => {
+    setInvLoading(true);
+    try {
+      await acceptInvitation(user, inv);
+      const profile = await getUserProfile(user.uid);
+      if (onProfileUpdate) onProfileUpdate(profile);
+      showToast('Invitación aceptada. Laboratorio añadido a tu cuenta.');
+      setInvitations(prev => prev.filter(i => i.labId !== inv.labId));
+    } catch (err) {
+      setError('Error al aceptar invitación: ' + err.message);
+    }
+    setInvLoading(false);
+  };
+
+  const handleDeclineInv = async (inv) => {
+    setInvLoading(true);
+    try {
+      await declineInvitation(user.email, inv.labId);
+      setInvitations(prev => prev.filter(i => i.labId !== inv.labId));
+      showToast('Invitación rechazada.');
+    } catch (err) {
+      console.error(err);
+    }
+    setInvLoading(false);
+  };
   
   const isGoogleUser = user?.providerData?.some(p => p.providerId === 'google.com');
 
@@ -64,6 +100,36 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
             {user.isGuest ? 'Modo Invitado (Sin guardado en nube)' : user.email}
           </p>
         </div>
+
+        {/* Pending Invitations Section */}
+        {!user.isGuest && invitations.length > 0 && (
+          <div style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+            <h3 style={{ fontSize: '1rem', color: 'var(--accent)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Inbox size={18} /> Invitaciones a Laboratorios
+            </h3>
+            {invitations.map((inv, i) => (
+              <div key={i} style={{
+                background: 'rgba(255,255,255,0.05)', borderRadius: '6px', padding: '10px', marginBottom: '8px',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px'
+              }}>
+                <div>
+                  <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>🏢 {inv.labName}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                    Rol: {inv.role === 'admin' ? 'Administrador' : 'Estudiante'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button className="btn btn-primary" title="Aceptar" style={{ padding: '6px' }} onClick={() => handleAcceptInv(inv)} disabled={invLoading}>
+                    <Check size={14} />
+                  </button>
+                  <button className="btn" title="Rechazar" style={{ padding: '6px', color: 'var(--danger)' }} onClick={() => handleDeclineInv(inv)} disabled={invLoading}>
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Change Password Section */}
         {!user.isGuest && (
