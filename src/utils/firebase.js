@@ -133,14 +133,7 @@ export async function createLab(user, labName) {
   const labRef = doc(collection(db, 'labs'));
   const labId = labRef.id;
 
-  // Create lab state doc
-  await setDoc(doc(db, 'labs', labId, 'meta', 'info'), {
-    name: labName,
-    createdBy: user.uid,
-    createdAt: new Date().toISOString(),
-  });
-
-  // Add creator as admin member
+  // 1) Add creator as admin member FIRST (rules allow create for any auth user)
   await setDoc(doc(db, 'labs', labId, 'members', user.uid), {
     role: 'admin',
     displayName: user.displayName || user.email,
@@ -148,7 +141,14 @@ export async function createLab(user, labName) {
     joinedAt: new Date().toISOString(),
   });
 
-  // Update user profile
+  // 2) Now create lab meta (isMember check passes because member doc exists)
+  await setDoc(doc(db, 'labs', labId, 'meta', 'info'), {
+    name: labName,
+    createdBy: user.uid,
+    createdAt: new Date().toISOString(),
+  });
+
+  // 3) Update user profile
   const profile = await getUserProfile(user.uid) || {};
   const labs = profile.labs || [];
   labs.push({ labId, labName, role: 'admin' });
