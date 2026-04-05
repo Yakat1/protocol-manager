@@ -49,6 +49,28 @@ function formatSmart(val) {
   return val.toExponential(4);
 }
 
+// Format concentration for serial dilutions
+// Detects clean half-log powers of 10 and shows e.g. "1e-4.5" instead of "3.16e-5"
+function formatConcentration(val) {
+  if (val === null || val === undefined || isNaN(val) || val === 0) return '0';
+  if (val >= 1) return val.toFixed(2);
+  
+  const log10 = Math.log10(val);
+  // Check resolution of 0.5 (half-log steps)
+  const rounded = Math.round(log10 * 2) / 2; // round to nearest 0.5
+  const reconstructed = Math.pow(10, rounded);
+  const relError = Math.abs(reconstructed - val) / val;
+  
+  if (relError < 0.005) { // within 0.5% = clean power
+    if (Number.isInteger(rounded)) {
+      return `1e${rounded}`;
+    }
+    return `1e${rounded}`;
+  }
+  
+  return val.toExponential(2);
+}
+
 export default function Calculator({ inventory: inventoryProp, setInventory, bufferRecipes: bufferRecipesProp, setBufferRecipes, can, user, labId }) {
   const inventory = inventoryProp || [];
   const bufferRecipes = bufferRecipesProp || [];
@@ -666,7 +688,7 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
                     {tubes.map(t => (
                       <tr key={t.num} style={{borderBottom: '1px solid rgba(255,255,255,0.05)'}}>
                         <td style={{padding: '5px 6px', fontWeight: 'bold'}}>{t.num}</td>
-                        <td style={{padding: '5px 6px', color: 'var(--accent)', fontWeight: '600'}}>{t.conc >= 1 ? t.conc.toFixed(2) : t.conc.toExponential(2)}</td>
+                        <td style={{padding: '5px 6px', color: 'var(--accent)', fontWeight: '600'}}>{formatConcentration(t.conc)}</td>
                         <td style={{padding: '5px 6px', fontSize: '0.75rem'}}>{t.transferFrom}</td>
                         <td style={{padding: '5px 6px', fontSize: '0.75rem'}}>{t.bufferAdd}</td>
                       </tr>
