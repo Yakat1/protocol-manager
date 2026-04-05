@@ -351,12 +351,12 @@ export default function Inventory({ inventory: inventoryProp, setInventory }) {
   };
 
   const updateItem = (id, field, value) => {
-    setInventory(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+    setInventory(inventory.map(item => item.id === id ? { ...item, [field]: value } : item));
   };
 
-  // Atomic multi-field update — avoids stale closure when updating several fields at once
+  // Atomic multi-field update for the aliquot modal
   const updateItemMulti = (id, updates) => {
-    setInventory(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+    setInventory(inventory.map(item => item.id === id ? { ...item, ...updates } : item));
   };
 
   const removeItem = (id) => {
