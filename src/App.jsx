@@ -342,6 +342,8 @@ export default function App() {
           onLogout={handleLogout}
           showToast={showToast}
           onProfileUpdate={handleLabReady}
+          activeLabId={activeLabId}
+          activeLabName={user.labs?.find(l => l.labId === activeLabId)?.labName || 'Laboratorio'}
         />
       )}
       {isSuspended && (

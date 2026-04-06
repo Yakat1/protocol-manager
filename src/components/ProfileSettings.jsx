@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { updateUserPassword, getMyInvitations, acceptInvitation, declineInvitation, getUserProfile, createLab } from '../utils/firebase';
-import { X, Lock, LogOut, Code, User, Inbox, Check, Plus } from 'lucide-react';
+import { updateUserPassword, getMyInvitations, acceptInvitation, declineInvitation, getUserProfile, createLab, getPersonalLogs } from '../utils/firebase';
+import { exportLocalBackup } from '../utils/backupExport';
+import { X, Lock, LogOut, Code, User, Inbox, Check, Plus, HardDriveDownload } from 'lucide-react';
 import './AuthGate.css'; // Reuse glass-panel and overlay styles
 
-export default function ProfileSettings({ user, state, updateState, onClose, onLogout, showToast, onProfileUpdate }) {
+export default function ProfileSettings({ user, state, updateState, onClose, onLogout, showToast, onProfileUpdate, activeLabId, activeLabName }) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -13,6 +14,9 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
   // Invitations state
   const [invitations, setInvitations] = useState([]);
   const [invLoading, setInvLoading] = useState(false);
+
+  // Backup Export state
+  const [exporting, setExporting] = useState(false);
 
   // New Lab State
   const [newLabName, setNewLabName] = useState('');
@@ -68,6 +72,24 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
     setCreatingLab(false);
   };
   
+  const handleExportBackup = async () => {
+    if (!activeLabId || user.isGuest) {
+      if (showToast) showToast('Funcionalidad no disponible en el modo actual.', 'error');
+      return;
+    }
+    setExporting(true);
+    try {
+      if (showToast) showToast('Recopilando datos y comprimiendo respaldo...', 'info');
+      const logs = await getPersonalLogs(activeLabId);
+      await exportLocalBackup(activeLabName, state, logs);
+      if (showToast) showToast('Respaldo ZIP descargado exitosamente.', 'success');
+    } catch (err) {
+      console.error(err);
+      if (showToast) showToast('Error al exportar respaldo: ' + err.message, 'error');
+    }
+    setExporting(false);
+  };
+
   const isGoogleUser = user?.providerData?.some(p => p.providerId === 'google.com');
 
   const handlePasswordChange = async (e) => {
@@ -248,7 +270,26 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
               <option value="light">☀️ Claro</option>
             </select>
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', opacity: 0.7, marginTop: '10px' }}>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Respaldo Local Avanzado</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', maxWidth: '180px' }}>
+                Descarga un .zip con todo tu inventario, sujetos, cultivos y bitácora.
+              </span>
+            </div>
+            <button 
+              className="btn btn-primary" 
+              style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)' }}
+              onClick={handleExportBackup}
+              disabled={exporting || user.isGuest}
+            >
+              <HardDriveDownload size={16} /> 
+              {exporting ? 'Comprimiendo...' : 'Generar .zip'}
+            </button>
+          </div>
+
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', opacity: 0.7, marginTop: '15px' }}>
             * Estos ajustes se guardan asociados a tu perfil.
           </p>
         </div>

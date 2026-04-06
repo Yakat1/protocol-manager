@@ -375,3 +375,10 @@ export function subscribeToPersonalLogs(labId, callback) {
     callback(logs);
   });
 }
+
+export async function getPersonalLogs(labId) {
+  const colRef = collection(db, 'labs', labId, 'personalLogs');
+  const q = query(colRef, orderBy('createdAt', 'desc'), limit(5000));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
