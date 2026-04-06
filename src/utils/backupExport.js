@@ -2,16 +2,27 @@ import JSZip from 'jszip';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 
-// Helper to remove data URI prefix
+// Helper to remove data URI prefix safely handling legacy object structures
+const asString = (img) => {
+  if (!img) return '';
+  if (typeof img === 'string') return img;
+  if (img.src) return img.src;
+  if (img.url) return img.url;
+  if (img.data) return img.data;
+  return String(img);
+};
+
 const getBase64Data = (imageStr) => {
-  if (!imageStr) return null;
-  const parts = imageStr.split(',');
+  const str = asString(imageStr);
+  if (!str) return null;
+  const parts = str.split(',');
   return parts.length > 1 ? parts[1] : parts[0];
 };
 
 const getExtension = (imageStr) => {
-  if (!imageStr) return 'jpg';
-  const match = imageStr.match(/data:image\/(png|jpeg|jpg|gif);base64/);
+  const str = asString(imageStr);
+  if (!str || typeof str.match !== 'function') return 'jpg';
+  const match = str.match(/data:image\/(png|jpeg|jpg|gif);base64/);
   return match ? match[1] : 'jpg';
 };
 
