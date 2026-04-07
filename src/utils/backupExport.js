@@ -161,7 +161,24 @@ export async function exportLocalBackup(labName, state, personalLogs) {
     culturesFolder.file("Reporte_Cultivos.doc", buildDocHtml("Bitácora de Cultivos Celulares", culturesHtml));
   }
 
-  // 5. Build ZIP and Download
+  // 5. Jaulas / Bioterio (Excel)
+  if (state.cages && state.cages.length > 0) {
+    const wsData = state.cages.map(cage => ({
+      ID: cage.id,
+      Nombre: cage.name,
+      'Cant. Animales': cage.headcount || 0,
+      Tratamiento: cage.treatment || '',
+      'Últ. Tratamiento': cage.lastTreatmentDate || '',
+      'Fecha Inicio': cage.startDate || ''
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(wsData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Jaulas");
+    const xlsxBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    zip.file("Jaulas.xlsx", xlsxBuffer);
+  }
+
+  // 6. Build ZIP and Download
   const content = await zip.generateAsync({ type: 'blob' });
   saveAs(content, `Backup_${safeLabName}_${dateStr}.zip`);
 }
