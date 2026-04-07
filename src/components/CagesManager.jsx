@@ -5,6 +5,14 @@ import { Plus, Trash2, Calendar, Pill, CheckSquare, Square, Save, Activity, X, S
 export default function CagesManager({ state, updateState }) {
   const cages = state.cages || [];
 
+  // Extract all existing unique group/treatment names to populate the dropdown
+  const allGroups = new Set(['Control']);
+  if (state.subjects) {
+    state.subjects.forEach(s => { if (s.group) allGroups.add(s.group); });
+  }
+  cages.forEach(c => { if (c.treatment) allGroups.add(c.treatment); });
+  const treatmentOptions = Array.from(allGroups).sort();
+
   const addCage = () => {
     const newCage = {
       id: uuidv4(),
@@ -83,7 +91,7 @@ export default function CagesManager({ state, updateState }) {
         newSubjects.push({
           id: uuidv4(),
           name: `${cage.name}, Rata ${i}`,
-          group: cage.name,
+          group: cage.treatment || cage.name,
           measurements: {},
           images: []
         });
@@ -165,12 +173,18 @@ export default function CagesManager({ state, updateState }) {
               </label>
               <input 
                 type="text"
+                list="treatment-options"
                 className="input-field"
                 style={{ width: '100%', padding: '6px', marginTop: '4px' }}
-                placeholder="Ej. Estatinas 5mg/kg"
+                placeholder="Selecciona o escribe..."
                 value={cage.treatment || ''}
                 onChange={e => updateCage(cage.id, { treatment: e.target.value })}
               />
+              <datalist id="treatment-options">
+                {treatmentOptions.map(opt => (
+                  <option key={opt} value={opt} />
+                ))}
+              </datalist>
             </div>
 
             <div>
