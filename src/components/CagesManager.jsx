@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, Calendar, Pill, CheckSquare, Square, Save, Activity, X } from 'lucide-react';
+import { Plus, Trash2, Calendar, Pill, CheckSquare, Square, Save, Activity, X, Share2 } from 'lucide-react';
 
 export default function CagesManager({ state, updateState }) {
   const cages = state.cages || [];
@@ -70,6 +70,29 @@ export default function CagesManager({ state, updateState }) {
     }
   };
 
+  const exportToSubjects = (cage) => {
+    const num = parseInt(cage.headcount) || 0;
+    if(num <= 0) {
+      alert('La jaula no tiene animales para exportar.');
+      return;
+    }
+    
+    if(confirm(`¿Estás seguro de que deseas exportar y crear ${num} sujetos individuales para "${cage.name}"?`)) {
+      const newSubjects = [];
+      for(let i = 1; i <= num; i++) {
+        newSubjects.push({
+          id: uuidv4(),
+          name: `${cage.name}, Rata ${i}`,
+          group: cage.name,
+          measurements: {},
+          images: []
+        });
+      }
+      updateState({ subjects: [...(state.subjects || []), ...newSubjects] });
+      alert(`Se han creado ${num} sujetos exitosamente en la pestaña "Sujetos Individuales".`);
+    }
+  };
+
   return (
     <div style={{ padding: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -99,7 +122,10 @@ export default function CagesManager({ state, updateState }) {
                 onChange={e => updateCage(cage.id, { name: e.target.value })}
                 placeholder="Nombre de Jaula"
               />
-              <button className="btn-icon" onClick={() => removeCage(cage.id)} style={{ color: 'var(--danger)' }}><Trash2 size={16} /></button>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button className="btn-icon" onClick={() => exportToSubjects(cage)} style={{ color: 'var(--accent)' }} title="Exportar a Sujetos Individuales"><Share2 size={16} /></button>
+                <button className="btn-icon" onClick={() => removeCage(cage.id)} style={{ color: 'var(--danger)' }} title="Eliminar Jaula"><Trash2 size={16} /></button>
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
