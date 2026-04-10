@@ -1,13 +1,13 @@
 export function exportCSV(state) {
   // Crear las cabeceras
-  const headers = ['#', 'Nombre Sujeto'];
+  const headers = ['#', 'Nombre Sujeto', 'Grupo'];
   state.variables.forEach(v => {
     headers.push(`${v.name}${v.unit ? ` (${v.unit})` : ''}`);
   });
 
   // Filas por cada sujeto (número secuencial en vez del UUID interno)
   const rows = state.subjects.map((subject, index) => {
-    const row = [index + 1, `"${subject.name}"`];
+    const row = [index + 1, `"${subject.name}"`, `"${(subject.group || '').replace(/"/g, '""')}"`];
     state.variables.forEach(v => {
       let val = subject.measurements?.[v.id];
       if (val === undefined || val === null) val = '';
