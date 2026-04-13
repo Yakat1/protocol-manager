@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, X, Download, ClipboardPaste, Printer } from 'lucide-react';
+import { Plus, X, Download, ClipboardPaste, Printer, Save } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import './PlateMapper.css';
 
@@ -114,6 +114,36 @@ export default function PlateMapper({ state, updateState }) {
     setWells(newWells);
     setShowImport(false);
     setPasteData('');
+  };
+
+  const plateLayouts = state?.plateLayouts || [];
+
+  const saveLayout = () => {
+    if (!updateState) return alert("Editor inactivo.");
+    const layoutName = prompt("Nombre para este Layout de microplaca (ej. ELISA Citoquinas):");
+    if (!layoutName) return;
+    // Creamos la copia limpia sin los valores "measurements" para el layout
+    const cleanWells = {};
+    Object.keys(wells).forEach(k => {
+      cleanWells[k] = { groupId: wells[k].groupId, value: null };
+    });
+    const newLayout = { id: uuidv4(), name: layoutName, groups, wells: cleanWells };
+    updateState({ plateLayouts: [...plateLayouts, newLayout] });
+    alert("Plantilla de placa guardada exitosamente.");
+  };
+
+  const loadLayout = (e) => {
+    const layoutId = e.target.value;
+    if (!layoutId) return;
+    const layout = plateLayouts.find(l => l.id === layoutId);
+    if (layout) {
+      if (confirm(`¿Cargar plantilla "${layout.name}"? Esto sobrescribirá el diseño actual.`)) {
+        setGroups(layout.groups);
+        setWells(layout.wells);
+        if (layout.groups && layout.groups.length > 0) setActiveGroupId(layout.groups[0].id);
+      }
+    }
+    e.target.value = "";
   };
 
   const getGroupStats = () => {
@@ -262,6 +292,19 @@ export default function PlateMapper({ state, updateState }) {
         <button className="btn btn-danger" onClick={() => setWells({})}>
           <X size={16}/> Limpiar Placa
         </button>
+      </div>
+
+      <div className="no-print" style={{display: 'flex', gap: '8px', marginBottom: '20px', alignItems: 'center', background: 'rgba(59, 130, 246, 0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.3)'}}>
+        <strong style={{color: 'var(--text-primary)', fontSize: '0.85rem'}}>Plantillas:</strong>
+        <button className="btn" onClick={saveLayout}>
+          <Save size={16}/> Guardar Plantilla Actual
+        </button>
+        {plateLayouts.length > 0 && (
+          <select className="input-field" onChange={loadLayout} style={{padding: '6px', fontSize: '0.85rem', maxWidth: '250px'}}>
+            <option value="">Cargar plantilla guardada...</option>
+            {plateLayouts.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        )}
       </div>
 
       {/* Paste Import */}
