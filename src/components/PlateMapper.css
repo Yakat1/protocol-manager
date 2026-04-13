@@ -189,6 +189,10 @@
 
 /* Print Styles */
 @media print {
+  @page {
+    size: landscape;
+    margin: 1cm;
+  }
   .plate-mapper-container {
     padding: 0;
   }
@@ -197,7 +201,8 @@
   .no-print,
   .mobile-topbar,
   .sidebar,
-  .sidebar-overlay {
+  .sidebar-overlay,
+  .plate-legend {
     display: none !important;
   }
   

@@ -238,7 +238,7 @@ export default function PlateMapper({ state, updateState }) {
                     onClick={() => handleWellClick(r, c)}
                     title={`${r}${c}${group ? ` — ${group.name}` : ''}${w?.value != null ? ` = ${w.value}` : ''}`}
                   >
-                    <span className="print-only-text">{group ? group.name.substring(0,3).toUpperCase() : ''}</span>
+                    <span className="print-only-text">{group ? group.name.substring(0,4).toUpperCase() : ''}</span>
                     <span className="well-value">{w?.value != null ? (typeof w.value === 'number' ? w.value.toFixed(1) : '') : ''}</span>
                   </div>
                 );
