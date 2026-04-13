@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, X, Download, ClipboardPaste } from 'lucide-react';
+import { Plus, X, Download, ClipboardPaste, Printer } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import './PlateMapper.css';
 
@@ -238,7 +238,8 @@ export default function PlateMapper({ state, updateState }) {
                     onClick={() => handleWellClick(r, c)}
                     title={`${r}${c}${group ? ` — ${group.name}` : ''}${w?.value != null ? ` = ${w.value}` : ''}`}
                   >
-                    {w?.value != null ? (typeof w.value === 'number' ? w.value.toFixed(1) : '') : ''}
+                    <span className="print-only-text">{group ? group.name.substring(0,3).toUpperCase() : ''}</span>
+                    <span className="well-value">{w?.value != null ? (typeof w.value === 'number' ? w.value.toFixed(1) : '') : ''}</span>
                   </div>
                 );
               })}
@@ -248,12 +249,15 @@ export default function PlateMapper({ state, updateState }) {
       </div>
 
       {/* Toolbar */}
-      <div style={{display: 'flex', gap: '8px', marginBottom: '20px'}}>
+      <div className="no-print" style={{display: 'flex', gap: '8px', marginBottom: '20px'}}>
         <button className="btn" onClick={() => setShowImport(!showImport)}>
           <ClipboardPaste size={16}/> Importar Lecturas
         </button>
         <button className="btn" onClick={exportPlateCSV}>
           <Download size={16}/> Exportar Placa CSV
+        </button>
+        <button className="btn" onClick={() => window.print()}>
+          <Printer size={16}/> Imprimir Layout
         </button>
         <button className="btn btn-danger" onClick={() => setWells({})}>
           <X size={16}/> Limpiar Placa
