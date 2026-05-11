@@ -274,5 +274,28 @@
   .plate-results-table th, .plate-results-table td {
     border-color: #000 !important;
   }
-}
 
+  /* Impresión Blanco y Negro */
+  .print-bw .plate-well {
+    background: #fff !important;
+    border: 2px solid #000 !important;
+    color: #000 !important;
+    text-shadow: none !important;
+  }
+
+  .print-bw .print-only-text {
+    color: #000 !important;
+    text-shadow: none !important;
+    font-weight: 900;
+  }
+
+  .print-bw .well-value {
+    color: #000 !important;
+    font-weight: 900;
+  }
+
+  .print-bw .legend-swatch {
+    background: #fff !important;
+    border: 2px solid #000 !important;
+  }
+}

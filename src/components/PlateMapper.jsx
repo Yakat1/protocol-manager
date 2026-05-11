@@ -24,6 +24,7 @@ export default function PlateMapper({ state, updateState }) {
   const [pasteData, setPasteData] = useState('');
   const [showImport, setShowImport] = useState(false);
   const [selectedExports, setSelectedExports] = useState({});
+  const [isBWPrint, setIsBWPrint] = useState(false);
 
   const handleExportGroup = (statItem) => {
     if (!state || !updateState) return alert("Editor inactivo. Guarda el protocolo primero.");
@@ -187,7 +188,7 @@ export default function PlateMapper({ state, updateState }) {
   const stats = getGroupStats();
 
   return (
-    <div className="plate-mapper-container">
+    <div className={`plate-mapper-container ${isBWPrint ? 'print-bw' : ''}`}>
       {/* Group Chips */}
       <div className="plate-mapper-toolbar">
         <span style={{fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600}}>Grupo Activo:</span>
@@ -289,6 +290,15 @@ export default function PlateMapper({ state, updateState }) {
         <button className="btn" onClick={() => window.print()}>
           <Printer size={16}/> Imprimir Layout
         </button>
+        <label className="btn" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--panel-border)' }}>
+          <input 
+            type="checkbox" 
+            checked={isBWPrint} 
+            onChange={(e) => setIsBWPrint(e.target.checked)} 
+            style={{ cursor: 'pointer' }}
+          />
+          Blanco y Negro
+        </label>
         <button className="btn btn-danger" onClick={() => setWells({})}>
           <X size={16}/> Limpiar Placa
         </button>
