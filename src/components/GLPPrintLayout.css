@@ -1,0 +1,148 @@
+/* Oculto en pantalla por defecto */
+.glp-print-wrapper {
+  display: contents; /* No afecta el layout en pantalla */
+}
+
+/* Los elementos de cabecera y pie están en la tabla, los escondemos en pantalla */
+@media screen {
+  .glp-header, .glp-footer {
+    display: none !important;
+  }
+}
+
+/* Reglas Globales de Impresión GLP */
+@media print {
+  /* Ocultar elementos UI globales */
+  .sidebar, .mobile-topbar, .toaster, .no-print, .btn, .btn-primary, .btn-icon, .hamburger-btn {
+    display: none !important;
+  }
+
+  /* Resetear el Workspace para que use toda la hoja */
+  .workspace {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    width: 100% !important;
+    height: auto !important;
+    flex: none !important;
+  }
+
+  .app-container {
+    display: block !important;
+    height: auto !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Márgenes y Tamaño de Página */
+  @page {
+    size: A4 portrait;
+    margin: 15mm 20mm;
+  }
+
+  /* Wrapper GLP Table */
+  .glp-print-wrapper {
+    display: block;
+    width: 100%;
+    background: white;
+    color: black;
+  }
+
+  table.glp-print-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  /* Header GLP */
+  .glp-header {
+    display: block !important;
+    border-bottom: 2px solid #000;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+  }
+
+  .glp-header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .glp-brand h2 {
+    margin: 0 0 5px 0;
+    font-size: 18pt;
+    color: #000;
+    text-transform: uppercase;
+  }
+
+  .glp-brand p {
+    margin: 0;
+    font-size: 10pt;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .glp-meta {
+    text-align: right;
+    font-size: 9pt;
+  }
+
+  .glp-meta p {
+    margin: 2px 0;
+  }
+
+  .glp-header-bottom {
+    margin-top: 15px;
+    background-color: #f3f4f6 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    padding: 8px 12px;
+    border-left: 4px solid #000;
+  }
+
+  .glp-header-bottom h3 {
+    margin: 0;
+    font-size: 12pt;
+    color: #000;
+  }
+
+  /* Footer GLP */
+  .glp-footer {
+    display: block !important;
+    margin-top: 40px;
+    padding-top: 20px;
+    page-break-inside: avoid;
+  }
+
+  .glp-signature-line {
+    width: 300px;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .glp-signature-line .line {
+    border-bottom: 1px solid #000;
+    height: 40px;
+    margin-bottom: 5px;
+  }
+
+  .glp-signature-line span {
+    font-size: 9pt;
+    color: #333;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* Resetear componentes internos (Paneles de Cristal) para impresión limpia */
+  .glass-panel {
+    background: transparent !important;
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    color: black !important;
+    break-inside: avoid;
+  }
+
+  .text-primary, .text-secondary {
+    color: black !important;
+  }
+}

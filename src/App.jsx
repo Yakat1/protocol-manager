@@ -8,6 +8,7 @@ import AuthGate from './components/AuthGate';
 import LabSetup from './components/LabSetup';
 import Sidebar from './components/Sidebar';
 import ProfileSettings from './components/ProfileSettings';
+import GLPPrintLayout from './components/GLPPrintLayout';
 import './index.css';
 
 // ── Lazy-loaded modules ──
@@ -413,7 +414,9 @@ export default function App() {
             Cargando módulo…
           </div>
         }>
-          {renderMainContent()}
+          <GLPPrintLayout state={state} user={user} labProfile={labProfile} activeLabId={activeLabId}>
+            {renderMainContent()}
+          </GLPPrintLayout>
         </Suspense>
       </div>
       {toast && <div className="toaster">{toast}</div>}
