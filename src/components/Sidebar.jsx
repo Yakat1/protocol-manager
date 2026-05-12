@@ -64,7 +64,7 @@ export default function Sidebar({ state, updateState, activeSubjectId, setActive
       <div className="sidebar-nav">
         {[
           { label: 'Visión General', items: ['home', 'charts', 'journal'] },
-          { label: 'Gestión Principal', items: ['subjects', 'culture', 'inventory', 'protocols'] },
+          { label: 'Gestión Principal', items: ['subjects', 'culture', 'scheduler', 'inventory', 'protocols'] },
           { label: 'Herramientas', items: ['plate', 'calculator', 'timers', 'counter'] },
           { label: 'Reportes WB', items: ['western', 'wbreport'] },
           { label: 'Ajustes', items: ['admin'] } // admin tab is conditional
