@@ -266,6 +266,9 @@ export default function PersonalLog({ labId, user, can }) {
             <button className="btn" onClick={exportCSV} title="Exportar CSV">
               <Download size={14} /> CSV
             </button>
+            <button className="btn btn-primary no-print" onClick={() => window.print()} title="Imprimir PDF (GLP)" style={{ background: 'var(--accent)', color: 'white' }}>
+              🖨️ PDF (GLP)
+            </button>
           </div>
         </div>
 

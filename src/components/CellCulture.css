@@ -348,6 +348,24 @@
     padding: 2cm !important;
   }
 
+  .culture-container {
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .culture-split-view {
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .culture-timeline-view {
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
   .culture-print-section {
     page-break-after: always; /* Saltos de página entre lotes */
   }
