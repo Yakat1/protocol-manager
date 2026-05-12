@@ -144,6 +144,27 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
       audit('culture_log_delete', culture?.cellLine || 'Evento', { note: `Evento ${log?.action} eliminado` });
     }
   };
+
+  const scheduleFutureAction = () => {
+    if (!activeCultureId) return;
+    const culture = cultures.find(c => c.id === activeCultureId);
+    const dateStr = prompt("¿Para qué fecha quieres agendar la próxima tarea? (YYYY-MM-DD)", new Date().toISOString().split('T')[0]);
+    if (!dateStr) return;
+    const actionDesc = prompt("Describe la tarea (Ej. 'Cambio de Medio' o 'Pasaje 4'):");
+    if (!actionDesc) return;
+
+    const newEvent = {
+      id: uuidv4(),
+      title: `${actionDesc} - ${culture.cellLine}`,
+      date: dateStr,
+      type: 'culture',
+      referenceId: activeCultureId,
+      status: 'pending'
+    };
+    
+    updateState({ calendarEvents: [...(state.calendarEvents || []), newEvent] });
+    alert(`Tarea agendada exitosamente para el ${dateStr} en el Cronograma.`);
+  };
   const handleImageUpload = async (e, logId) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -244,9 +265,14 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
                     </button>
                   </div>
                 </div>
-                <button className="btn btn-primary no-print" onClick={addLogToActive} style={{background: 'var(--success)', border: 'none', color: '#fff'}}>
-                  <Plus size={16} /> Añadir Evento
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button className="btn btn-primary no-print" onClick={addLogToActive} style={{background: 'var(--success)', border: 'none', color: '#fff'}}>
+                    <Plus size={16} /> Registrar Pasado
+                  </button>
+                  <button className="btn no-print" onClick={scheduleFutureAction} style={{background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent)', border: '1px solid var(--accent)'}}>
+                    <Clock size={16} /> Agendar Tarea
+                  </button>
+                </div>
               </div>
 
               <div className="timeline-vertical">

@@ -21,6 +21,7 @@ export default function CagesManager({ state, updateState }) {
       treatment: '',
       lastTreatmentDate: '',
       startDate: new Date().toISOString().split('T')[0],
+      recurrencePattern: 'none',
       checklist: [
         { id: uuidv4(), text: 'Agua y Alimento verificado', done: false },
         { id: uuidv4(), text: 'Limpieza de cama', done: false }
@@ -187,17 +188,37 @@ export default function CagesManager({ state, updateState }) {
               </datalist>
             </div>
 
-            <div>
-              <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Calendar size={12} /> Último Tratamiento o Chequeo
-              </label>
-              <input 
-                type="date"
-                className="input-field"
-                style={{ width: '100%', padding: '6px', marginTop: '4px', fontSize: '0.8rem' }}
-                value={cage.lastTreatmentDate || ''}
-                onChange={e => updateCage(cage.id, { lastTreatmentDate: e.target.value })}
-              />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
+              <div>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Calendar size={12} /> Último Tratamiento
+                </label>
+                <input 
+                  type="date"
+                  className="input-field"
+                  style={{ width: '100%', padding: '6px', marginTop: '4px', fontSize: '0.8rem' }}
+                  value={cage.lastTreatmentDate || ''}
+                  onChange={e => updateCage(cage.id, { lastTreatmentDate: e.target.value })}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Activity size={12} /> Regla de Cronograma
+                </label>
+                <select 
+                  className="input-field"
+                  style={{ width: '100%', padding: '6px', marginTop: '4px', fontSize: '0.8rem' }}
+                  value={cage.recurrencePattern || 'none'}
+                  onChange={e => updateCage(cage.id, { recurrencePattern: e.target.value })}
+                  title="Esto auto-generará eventos en la pestaña Cronograma a partir de la Fecha de Inicio."
+                >
+                  <option value="none">Sin programar</option>
+                  <option value="daily">Todos los días</option>
+                  <option value="every_2_days">Cada 2 días</option>
+                  <option value="every_3_days">Cada 3 días</option>
+                  <option value="weekly">Semanal</option>
+                </select>
+              </div>
             </div>
 
             <div style={{ marginTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '10px' }}>
