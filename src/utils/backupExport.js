@@ -110,6 +110,25 @@ export async function exportLocalBackup(labName, state, personalLogs) {
         });
       }
 
+      let samplesHtml = '';
+      if (subj.samples && subj.samples.length > 0) {
+        samplesHtml += `<div style="margin-top:15px; border-top:1px solid #ccc; padding-top:10px;"><span class="bold">Muestras Biológicas:</span><ul>`;
+        subj.samples.forEach(sample => {
+          const type = sample.type === 'Otro...' ? sample.customType : sample.type;
+          samplesHtml += `<li><b>${type}</b> (Extracción: ${sample.extractionDate}, Vol: ${sample.volume_amount || 'N/A'}) - Ubicación: ${sample.storageLocation || 'N/A'}`;
+          if (sample.assays && sample.assays.length > 0) {
+            samplesHtml += `<ul>`;
+            sample.assays.forEach(assay => {
+              const aType = assay.type === 'Otro...' ? assay.customType : assay.type;
+              samplesHtml += `<li><i>${aType}</i> [${assay.target}]: ${assay.result || 'Sin resultado'} (${assay.date})</li>`;
+            });
+            samplesHtml += `</ul>`;
+          }
+          samplesHtml += `</li>`;
+        });
+        samplesHtml += `</ul></div>`;
+      }
+
       subjectsHtml += `
         <div class="entry">
           <div><span class="bold">Identificador:</span> ${subj.id}</div>
@@ -118,6 +137,7 @@ export async function exportLocalBackup(labName, state, personalLogs) {
           <div><span class="bold">Notas Clínicas:</span> ${(subj.clinicalNotes || '').replace(/\\n/g, '<br/>')}</div>
           <div style="margin-top:10px;"><span class="bold">Imágenes adjuntas:</span> ${subj.images?.length || 0} fotos</div>
           ${imageTags}
+          ${samplesHtml}
         </div>
       `;
     });

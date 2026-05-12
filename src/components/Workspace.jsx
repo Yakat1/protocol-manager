@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import VariablesManager from "./VariablesManager";
 import ImageGallery from "./ImageGallery";
 import CagesManager from "./CagesManager";
-import { Download, Upload, Save, Plus, Users, Box, Trash2 } from "lucide-react";
+import SubjectSamples from "./SubjectSamples";
+import { Download, Save, Plus, Users, Box, Trash2, TestTube, Activity, ImageIcon } from "lucide-react";
 import "./CellCulture.css";
 
 export default function Workspace({
@@ -16,7 +17,8 @@ export default function Workspace({
   onExportBackup,
   onImportBackup,
 }) {
-  const [activeMainTab, setActiveMainTab] = React.useState("subjects");
+  const [activeMainTab, setActiveMainTab] = useState("subjects");
+  const [dossierTab, setDossierTab] = useState("clinical");
 
   const addSubject = () => {
     const newSubject = {
@@ -298,58 +300,105 @@ export default function Workspace({
                   </div>
                 </div>
 
-                <VariablesManager state={state} setState={setState} />
-
-                <h3 className="section-title">Registro de Datos</h3>
-                <div
-                  className="glass-panel"
-                  style={{ padding: "24px", marginBottom: "40px" }}
-                >
-                  <div className="data-grid">
-                    {state.variables.map((v) => (
-                      <div key={v.id} className="input-group">
-                        <label className="input-label">
-                          {v.name}{" "}
-                          {v.unit && (
-                            <span style={{ color: "var(--text-secondary)" }}>
-                              ({v.unit})
-                            </span>
-                          )}
-                        </label>
-                        <input
-                          className="input-field"
-                          type={v.type === "number" ? "number" : "text"}
-                          value={subject.measurements[v.id] ?? ""}
-                          onChange={(e) =>
-                            updateMeasurement(v.id, e.target.value)
-                          }
-                          placeholder={`Ingresa ${v.name.toLowerCase()}`}
-                        />
-                      </div>
-                    ))}
-                    {state.variables.length === 0 && (
-                      <div
-                        style={{
-                          color: "var(--text-secondary)",
-                          gridColumn: "1 / -1",
-                        }}
-                      >
-                        No hay variables definidas. Créalas en el Gestor de
-                        Variables arriba.
-                      </div>
-                    )}
-                  </div>
+                {/* --- Pestañas del Dossier --- */}
+                <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid var(--panel-border)', paddingBottom: '0', marginBottom: '20px' }}>
+                  <button 
+                    className={`tab-btn ${dossierTab === 'clinical' ? 'active' : ''}`} 
+                    onClick={() => setDossierTab('clinical')}
+                    style={{ background: 'transparent', border: 'none', padding: '10px 16px', cursor: 'pointer', borderBottom: dossierTab === 'clinical' ? '2px solid var(--accent)' : 'none', fontWeight: dossierTab === 'clinical' ? 'bold' : 'normal', color: dossierTab === 'clinical' ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                  >
+                    <Activity size={16} style={{display: 'inline', marginRight: '6px', verticalAlign: 'text-bottom'}}/> 
+                    Ficha Clínica
+                  </button>
+                  <button 
+                    className={`tab-btn ${dossierTab === 'samples' ? 'active' : ''}`} 
+                    onClick={() => setDossierTab('samples')}
+                    style={{ background: 'transparent', border: 'none', padding: '10px 16px', cursor: 'pointer', borderBottom: dossierTab === 'samples' ? '2px solid var(--accent)' : 'none', fontWeight: dossierTab === 'samples' ? 'bold' : 'normal', color: dossierTab === 'samples' ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                  >
+                    <TestTube size={16} style={{display: 'inline', marginRight: '6px', verticalAlign: 'text-bottom'}}/> 
+                    Repositorio de Muestras
+                  </button>
+                  <button 
+                    className={`tab-btn ${dossierTab === 'gallery' ? 'active' : ''}`} 
+                    onClick={() => setDossierTab('gallery')}
+                    style={{ background: 'transparent', border: 'none', padding: '10px 16px', cursor: 'pointer', borderBottom: dossierTab === 'gallery' ? '2px solid var(--accent)' : 'none', fontWeight: dossierTab === 'gallery' ? 'bold' : 'normal', color: dossierTab === 'gallery' ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                  >
+                    <ImageIcon size={16} style={{display: 'inline', marginRight: '6px', verticalAlign: 'text-bottom'}}/> 
+                    Galería Visual
+                  </button>
                 </div>
 
-                <h3 className="section-title">Carga de Evidencia</h3>
-                <ImageGallery
-                  subject={subject}
-                  onUpdateImages={(images) => {
-                    const newSubjects = [...state.subjects];
-                    newSubjects[subjectIndex] = { ...subject, images };
-                    updateState({ subjects: newSubjects });
-                  }}
-                />
+                {dossierTab === 'clinical' && (
+                  <>
+                    <VariablesManager state={state} setState={setState} />
+
+                    <h3 className="section-title">Registro de Datos</h3>
+                    <div
+                      className="glass-panel"
+                      style={{ padding: "24px", marginBottom: "40px" }}
+                    >
+                      <div className="data-grid">
+                        {state.variables.map((v) => (
+                          <div key={v.id} className="input-group">
+                            <label className="input-label">
+                              {v.name}{" "}
+                              {v.unit && (
+                                <span style={{ color: "var(--text-secondary)" }}>
+                                  ({v.unit})
+                                </span>
+                              )}
+                            </label>
+                            <input
+                              className="input-field"
+                              type={v.type === "number" ? "number" : "text"}
+                              value={subject.measurements[v.id] ?? ""}
+                              onChange={(e) =>
+                                updateMeasurement(v.id, e.target.value)
+                              }
+                              placeholder={`Ingresa ${v.name.toLowerCase()}`}
+                            />
+                          </div>
+                        ))}
+                        {state.variables.length === 0 && (
+                          <div
+                            style={{
+                              color: "var(--text-secondary)",
+                              gridColumn: "1 / -1",
+                            }}
+                          >
+                            No hay variables definidas. Créalas en el Gestor de
+                            Variables arriba.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {dossierTab === 'samples' && (
+                  <SubjectSamples 
+                    subject={subject} 
+                    updateSubject={(updatedSubject) => {
+                      const newSubjects = [...state.subjects];
+                      newSubjects[subjectIndex] = updatedSubject;
+                      updateState({ subjects: newSubjects });
+                    }} 
+                  />
+                )}
+
+                {dossierTab === 'gallery' && (
+                  <>
+                    <h3 className="section-title">Carga de Evidencia</h3>
+                    <ImageGallery
+                      subject={subject}
+                      onUpdateImages={(images) => {
+                        const newSubjects = [...state.subjects];
+                        newSubjects[subjectIndex] = { ...subject, images };
+                        updateState({ subjects: newSubjects });
+                      }}
+                    />
+                  </>
+                )}
               </div>
             )}
           </div>
