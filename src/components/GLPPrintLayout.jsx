@@ -1,7 +1,9 @@
 import React from 'react';
 import './GLPPrintLayout.css';
 
-export default function GLPPrintLayout({ children, state, user, labProfile, activeLabId }) {
+export default function GLPPrintLayout({ children, state, user, labProfile, activeLabId, disabled }) {
+  if (disabled) return <>{children}</>;
+
   // Configuración para el GLP Header
   const activeLabName = labProfile?.labs?.find(l => l.labId === activeLabId)?.labName || 'Laboratorio LIMS';
   const protocolName = state?.protocolName || 'Protocolo General';

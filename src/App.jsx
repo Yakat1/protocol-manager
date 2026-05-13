@@ -414,7 +414,7 @@ export default function App() {
             Cargando módulo…
           </div>
         }>
-          <GLPPrintLayout state={state} user={user} labProfile={labProfile} activeLabId={activeLabId}>
+          <GLPPrintLayout state={state} user={user} labProfile={labProfile} activeLabId={activeLabId} disabled={activeTab === 'plate'}>
             {renderMainContent()}
           </GLPPrintLayout>
         </Suspense>
