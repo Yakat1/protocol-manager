@@ -229,8 +229,8 @@
     print-color-adjust: exact !important;
     border: 2px solid rgba(0,0,0,0.8) !important;
     color: #fff !important;
-    font-size: 0.65rem;
-    font-weight: 800;
+    font-size: 0.9rem;
+    font-weight: 900;
     text-shadow: 1px 1px 3px rgba(0,0,0,1) !important;
     flex-direction: column;
     gap: 2px;
@@ -238,14 +238,16 @@
 
   .print-only-text {
     display: block !important;
-    font-size: 0.5rem;
-    opacity: 0.9;
+    font-size: 0.75rem;
+    font-weight: 900;
+    opacity: 1;
     letter-spacing: 0.5px;
     text-shadow: 1px 1px 2px rgba(0,0,0,1) !important;
   }
 
   .well-value {
-    font-size: 0.75rem;
+    font-size: 0.95rem;
+    font-weight: 900;
   }
 
   .plate-col-header, .plate-row-header {
