@@ -1,260 +1,238 @@
-import React, { useState } from 'react';
-import { Plus, X, Download, ClipboardPaste, Printer, Save } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Plus, X, Download, ClipboardPaste, Printer, Save, Upload, Shuffle, AlertTriangle, Copy } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { ROWS, COLS, WELL_TYPES, wellKey, getGroupStats, validateLayout, applySerialDilution, applyReplicates, randomizeInner, exportBioTekCSV, exportSoftMaxPro, exportPlateCSV, importSampleList } from './PlateMapperHelpers';
 import './PlateMapper.css';
 
-const ROWS = ['A','B','C','D','E','F','G','H'];
-const COLS = Array.from({length: 12}, (_, i) => i + 1);
-
-const DEFAULT_GROUPS = [
-  { id: 'g1', name: 'Control Negativo', color: '#6b7280' },
-  { id: 'g2', name: 'H₂O₂ 50µM', color: '#3b82f6' },
-  { id: 'g3', name: 'H₂O₂ 150µM', color: '#8b5cf6' },
-  { id: 'g4', name: 'H₂O₂ 300µM', color: '#ec4899' },
-  { id: 'g5', name: 'Fenton Baja', color: '#f59e0b' },
-  { id: 'g6', name: 'Fenton Media', color: '#f97316' },
-  { id: 'g7', name: 'Fenton Alta', color: '#ef4444' },
-  { id: 'g8', name: 'NAC + H₂O₂', color: '#10b981' },
-];
+function downloadFile(content, filename, type='text/csv') {
+  const blob = new Blob([content], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
 
 export default function PlateMapper({ state, updateState }) {
-  const [groups, setGroups] = useState(DEFAULT_GROUPS);
-  const [activeGroupId, setActiveGroupId] = useState(groups[0].id);
-  const [wells, setWells] = useState({}); // { "A1": { groupId, value } }
+  const [groups, setGroups] = useState([]);
+  const [activeGroupId, setActiveGroupId] = useState(null);
+  const [wells, setWells] = useState({});
   const [pasteData, setPasteData] = useState('');
   const [showImport, setShowImport] = useState(false);
   const [selectedExports, setSelectedExports] = useState({});
   const [isBWPrint, setIsBWPrint] = useState(false);
+  const [tooltip, setTooltip] = useState(null);
+  const [lastClicked, setLastClicked] = useState(null);
+  const [showDilution, setShowDilution] = useState(false);
+  const [dilution, setDilution] = useState({ startWell:'A1', startConc:100, unit:'µM', factor:2, steps:8, direction:'horizontal' });
+  const [showRep, setShowRep] = useState(false);
+  const [repCount, setRepCount] = useState(3);
+  const [repDir, setRepDir] = useState('vertical');
+  const [showSampleImport, setShowSampleImport] = useState(false);
+  const [sampleText, setSampleText] = useState('');
+  const [sampleRepCount, setSampleRepCount] = useState(2);
+  const [sampleDir, setSampleDir] = useState('horizontal');
+  const [warnings, setWarnings] = useState([]);
 
-  const handleExportGroup = (statItem) => {
-    if (!state || !updateState) return alert("Editor inactivo. Guarda el protocolo primero.");
-    const targetSubjId = selectedExports[statItem.group.id] || 'NEW';
+  const plateLayouts = state?.plateLayouts || [];
 
-    const hasAbs = state.variables.find(v => v.id === 'var_plate_signal');
-    let finalVars = state.variables;
-    if (!hasAbs) {
-        finalVars = [...state.variables, { id: 'var_plate_signal', name: 'Señal Microplaca', unit: 'OD/RFU', type: 'number' }];
-    }
-
-    if (targetSubjId === 'NEW') {
-        const newSubj = {
-          id: uuidv4(),
-          name: `${statItem.group.name} (Media Placa)`,
-          group: 'Microplaca',
-          measurements: { var_plate_signal: statItem.mean.toFixed(4) },
-          images: []
-        };
-        updateState({ variables: finalVars, subjects: [...state.subjects, newSubj]});
-        alert(`Muestra genérica "${newSubj.name}" creada exitosamente.`);
-    } else {
-        const tgt = state.subjects.find(s => s.id === targetSubjId);
-        setState({
-          ...state, 
-          variables: finalVars, 
-          subjects: state.subjects.map(s => s.id === targetSubjId ? { ...s, measurements: { ...s.measurements, var_plate_signal: statItem.mean.toFixed(4) } } : s)
-        });
-        alert(`Señal estadística asignada exitosamente a la muestra: ${tgt?.name}`);
-    }
+  const addGroupByType = (type) => {
+    const t = WELL_TYPES[type];
+    const n = groups.filter(g => g.wellType === type).length + 1;
+    const ng = { id: uuidv4(), name: `${t.label} ${n}`, color: t.color, wellType: type };
+    setGroups(prev => [...prev, ng]);
+    setActiveGroupId(ng.id);
   };
 
-  const wellKey = (row, col) => `${row}${col}`;
-
-  const handleWellClick = (row, col) => {
-    const key = wellKey(row, col);
-    const current = wells[key];
-    if (current && current.groupId === activeGroupId) {
-      const next = { ...wells };
-      delete next[key];
-      setWells(next);
-    } else {
-      setWells({ ...wells, [key]: { groupId: activeGroupId, value: current?.value ?? null } });
-    }
-  };
-
-  const getGroupForWell = (row, col) => {
-    const w = wells[wellKey(row, col)];
-    if (!w) return null;
-    return groups.find(g => g.id === w.groupId);
-  };
-
-  const addGroup = () => {
-    const num = groups.length + 1;
-    const hue = (num * 47) % 360;
-    setGroups([...groups, { id: uuidv4(), name: `Grupo ${num}`, color: `hsl(${hue}, 70%, 55%)` }]);
+  const addFreeGroup = () => {
+    const n = groups.length + 1;
+    const hue = (n * 47) % 360;
+    const ng = { id: uuidv4(), name: `Grupo ${n}`, color: `hsl(${hue},70%,55%)`, wellType: 'unknown' };
+    setGroups(prev => [...prev, ng]);
+    setActiveGroupId(ng.id);
   };
 
   const removeGroup = (id) => {
-    setGroups(groups.filter(g => g.id !== id));
-    const next = { ...wells };
-    Object.keys(next).forEach(k => { if (next[k].groupId === id) delete next[k]; });
-    setWells(next);
-    if (activeGroupId === id && groups.length > 1) setActiveGroupId(groups[0].id);
+    setGroups(prev => prev.filter(g => g.id !== id));
+    setWells(prev => {
+      const next = { ...prev };
+      Object.keys(next).forEach(k => { if (next[k].groupId === id) delete next[k]; });
+      return next;
+    });
+    if (activeGroupId === id) setActiveGroupId(groups.length > 1 ? groups.find(g => g.id !== id)?.id : null);
   };
 
-  const renameGroup = (id, newName) => {
-    setGroups(groups.map(g => g.id === id ? { ...g, name: newName } : g));
+  const renameGroup = (id, name) => setGroups(prev => prev.map(g => g.id === id ? { ...g, name } : g));
+
+  const handleWellClick = (e, row, col) => {
+    const ri = ROWS.indexOf(row), ci = COLS.indexOf(col);
+    if (e.shiftKey && lastClicked && activeGroupId) {
+      const r1 = Math.min(lastClicked.ri, ri), r2 = Math.max(lastClicked.ri, ri);
+      const c1 = Math.min(lastClicked.ci, ci), c2 = Math.max(lastClicked.ci, ci);
+      setWells(prev => {
+        const nw = { ...prev };
+        for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) {
+          const k = wellKey(ROWS[r], COLS[c]);
+          nw[k] = { ...nw[k], groupId: activeGroupId };
+        }
+        return nw;
+      });
+    } else {
+      const key = wellKey(row, col);
+      setWells(prev => {
+        if (prev[key]?.groupId === activeGroupId) {
+          const nw = { ...prev }; delete nw[key]; return nw;
+        }
+        return { ...prev, [key]: { ...prev[key], groupId: activeGroupId, value: prev[key]?.value ?? null } };
+      });
+    }
+    setLastClicked({ ri, ci });
   };
 
   const handleImportPaste = () => {
     if (!pasteData.trim()) return;
     const rows_data = pasteData.trim().split('\n');
-    const newWells = { ...wells };
+    const nw = { ...wells };
     rows_data.forEach((line, ri) => {
       if (ri >= ROWS.length) return;
-      const vals = line.split(/[\t,;]+/);
-      vals.forEach((val, ci) => {
+      line.split(/[\t,;]+/).forEach((val, ci) => {
         if (ci >= COLS.length) return;
         const key = wellKey(ROWS[ri], COLS[ci]);
-        if (newWells[key]) {
-          newWells[key] = { ...newWells[key], value: parseFloat(val) || val.trim() };
-        } else {
-          newWells[key] = { groupId: null, value: parseFloat(val) || val.trim() };
-        }
+        nw[key] = { ...nw[key], groupId: nw[key]?.groupId || null, value: parseFloat(val) || val.trim() };
       });
     });
-    setWells(newWells);
-    setShowImport(false);
-    setPasteData('');
+    setWells(nw); setShowImport(false); setPasteData('');
   };
 
-  const plateLayouts = state?.plateLayouts || [];
+  const handleDilution = () => {
+    if (!activeGroupId) return alert('Selecciona un grupo primero.');
+    const result = applySerialDilution(wells, activeGroupId, dilution);
+    if (!result) return alert('Pocillo de inicio inválido (ej. A1).');
+    setWells(result); setShowDilution(false);
+  };
+
+  const handleReplicates = () => {
+    const result = applyReplicates(wells, groups, repCount, repDir);
+    if (!result) return alert('No hay pocillos asignados.');
+    setWells(result); setShowRep(false);
+  };
+
+  const handleRandomize = () => {
+    if (!confirm('¿Redistribuir aleatoriamente todas las muestras en los 60 pocillos internos (B2-G11)?')) return;
+    const result = randomizeInner(wells);
+    if (!result) return alert('No hay muestras asignadas.');
+    setWells(result);
+  };
+
+  const handleSampleImport = () => {
+    const result = importSampleList(sampleText, groups, wells, sampleRepCount, sampleDir);
+    if (!result) return alert('Lista vacía.');
+    setGroups(result.groups); setWells(result.wells);
+    setShowSampleImport(false); setSampleText('');
+  };
 
   const saveLayout = () => {
-    if (!updateState) return alert("Editor inactivo.");
-    const layoutName = prompt("Nombre para este Layout de microplaca (ej. ELISA Citoquinas):");
-    if (!layoutName) return;
-    // Creamos la copia limpia sin los valores "measurements" para el layout
+    if (!updateState) return alert('Editor inactivo.');
+    const name = prompt('Nombre para este Layout:');
+    if (!name) return;
+    const w = validateLayout(groups, wells);
+    if (w.length > 0 && !confirm(`Advertencias:\n• ${w.join('\n• ')}\n\n¿Guardar de todas formas?`)) return;
     const cleanWells = {};
-    Object.keys(wells).forEach(k => {
-      cleanWells[k] = { groupId: wells[k].groupId, value: null };
-    });
-    const newLayout = { id: uuidv4(), name: layoutName, groups, wells: cleanWells };
-    updateState({ plateLayouts: [...plateLayouts, newLayout] });
-    alert("Plantilla de placa guardada exitosamente.");
+    Object.keys(wells).forEach(k => { cleanWells[k] = { ...wells[k], value: null }; });
+    updateState({ plateLayouts: [...plateLayouts, { id: uuidv4(), name, groups, wells: cleanWells }] });
+    alert('Plantilla guardada.');
   };
 
   const loadLayout = (e) => {
-    const layoutId = e.target.value;
-    if (!layoutId) return;
-    const layout = plateLayouts.find(l => l.id === layoutId);
-    if (layout) {
-      if (confirm(`¿Cargar plantilla "${layout.name}"? Esto sobrescribirá el diseño actual.`)) {
-        setGroups(layout.groups);
-        setWells(layout.wells);
-        if (layout.groups && layout.groups.length > 0) setActiveGroupId(layout.groups[0].id);
-      }
+    const id = e.target.value; if (!id) return;
+    const layout = plateLayouts.find(l => l.id === id);
+    if (layout && confirm(`¿Cargar "${layout.name}"?`)) {
+      setGroups(layout.groups); setWells(layout.wells);
+      if (layout.groups.length) setActiveGroupId(layout.groups[0].id);
     }
-    e.target.value = "";
+    e.target.value = '';
   };
 
-  const getGroupStats = () => {
-    const stats = {};
-    groups.forEach(g => { stats[g.id] = { group: g, values: [] }; });
-    Object.entries(wells).forEach(([, w]) => {
-      if (w.groupId && w.value !== null && w.value !== undefined && stats[w.groupId]) {
-        stats[w.groupId].values.push(typeof w.value === 'number' ? w.value : parseFloat(w.value));
-      }
-    });
-    return Object.values(stats).filter(s => s.values.length > 0).map(s => {
-      const nums = s.values.filter(v => !isNaN(v));
-      const mean = nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : NaN;
-      const sd = nums.length > 1 ? Math.sqrt(nums.map(v => (v - mean) ** 2).reduce((a, b) => a + b, 0) / (nums.length - 1)) : 0;
-      return { ...s, mean, sd, n: nums.length };
-    });
+  const handleExportGroup = (statItem) => {
+    if (!state || !updateState) return alert('Editor inactivo.');
+    const targetSubjId = selectedExports[statItem.group.id] || 'NEW';
+    const hasAbs = state.variables.find(v => v.id === 'var_plate_signal');
+    let finalVars = state.variables;
+    if (!hasAbs) finalVars = [...state.variables, { id: 'var_plate_signal', name: 'Señal Microplaca', unit: 'OD/RFU', type: 'number' }];
+    if (targetSubjId === 'NEW') {
+      const newSubj = { id: uuidv4(), name: `${statItem.group.name} (Media Placa)`, group: 'Microplaca', measurements: { var_plate_signal: statItem.mean.toFixed(4) }, images: [] };
+      updateState({ variables: finalVars, subjects: [...state.subjects, newSubj] });
+      alert(`Muestra "${newSubj.name}" creada.`);
+    } else {
+      updateState({ variables: finalVars, subjects: state.subjects.map(s => s.id === targetSubjId ? { ...s, measurements: { ...s.measurements, var_plate_signal: statItem.mean.toFixed(4) } } : s) });
+      alert('Señal asignada.');
+    }
   };
 
-  const exportPlateCSV = () => {
-    const lines = ['Pocillo,Grupo,Valor'];
-    ROWS.forEach(r => {
-      COLS.forEach(c => {
-        const key = wellKey(r, c);
-        const w = wells[key];
-        if (w) {
-          const gName = groups.find(g => g.id === w.groupId)?.name || 'Sin Grupo';
-          lines.push(`${key},"${gName}",${w.value ?? ''}`);
-        }
-      });
-    });
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'plate_results.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const stats = getGroupStats();
+  const getGroupForWell = (r, c) => { const w = wells[wellKey(r, c)]; return w ? groups.find(g => g.id === w.groupId) : null; };
+  const stats = getGroupStats(groups, wells);
 
   return (
     <div className={`plate-mapper-container ${isBWPrint ? 'print-bw' : ''}`}>
-      {/* Group Chips */}
+      {/* Well Type Buttons */}
+      <div className="well-type-buttons no-print">
+        {Object.entries(WELL_TYPES).map(([key, t]) => (
+          <button key={key} className="well-type-btn" onClick={() => addGroupByType(key)}>
+            <span className="wt-dot" style={{background: t.color}}></span>
+            + {t.label}
+          </button>
+        ))}
+        <button className="well-type-btn" onClick={addFreeGroup}><Plus size={14}/> Grupo Libre</button>
+        {state?.subjects && (
+          <select className="input-field" style={{padding:'4px',fontSize:'0.8rem',width:'auto'}}
+            onChange={(e) => {
+              if (!e.target.value) return;
+              const s = state.subjects.find(subj => subj.id === e.target.value);
+              if (s) { const nId = uuidv4(); const n = groups.length+1; setGroups(prev => [...prev, {id:nId,name:s.name,color:`hsl(${(n*47)%360},70%,55%)`,wellType:'unknown'}]); setSelectedExports(prev => ({...prev,[nId]:s.id})); setActiveGroupId(nId); }
+              e.target.value = '';
+            }}>
+            <option value="">+ Desde Sujeto LIMS</option>
+            {state.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        )}
+      </div>
+
+      {/* Active Group Toolbar */}
       <div className="plate-mapper-toolbar">
-        <span style={{fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600}}>Grupo Activo:</span>
+        <span style={{fontSize:'0.85rem',color:'var(--text-secondary)',fontWeight:600}}>Grupo Activo:</span>
         <div className="group-selector">
           {groups.map(g => (
-            <div key={g.id} style={{display: 'flex', alignItems: 'center', gap: '2px'}}>
-              <div 
-                className={`group-chip ${activeGroupId === g.id ? 'active' : ''}`}
-                style={{ background: g.color }}
-                onClick={() => setActiveGroupId(g.id)}
-              >
+            <div key={g.id} style={{display:'flex',alignItems:'center',gap:'2px'}}>
+              <div className={`group-chip ${activeGroupId===g.id?'active':''}`} style={{background:g.color}} onClick={() => setActiveGroupId(g.id)}>
                 {g.name}
               </div>
-              <button className="btn-icon" style={{padding: '2px'}} onClick={() => removeGroup(g.id)} title="Eliminar grupo">
-                <X size={12}/>
-              </button>
+              <button className="btn-icon" style={{padding:'2px'}} onClick={() => removeGroup(g.id)}><X size={12}/></button>
             </div>
           ))}
-          <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
-            <button className="btn-icon" onClick={addGroup} title="Añadir grupo libre"><Plus size={16}/></button>
-            {state?.subjects && (
-              <select 
-                className="input-field" 
-                style={{padding: '2px', fontSize: '0.8rem', width: 'auto'}}
-                onChange={(e) => {
-                  if(e.target.value) {
-                    const s = state.subjects.find(subj => subj.id === e.target.value);
-                    if (s) {
-                      const num = groups.length + 1;
-                      const hue = (num * 47) % 360;
-                      const newId = uuidv4();
-                      setGroups([...groups, { id: newId, name: s.name, color: `hsl(${hue}, 70%, 55%)` }]);
-                      setSelectedExports({...selectedExports, [newId]: s.id});
-                    }
-                    e.target.value = "";
-                  }
-                }}
-              >
-                <option value="">+ Desde Sujeto LIMS</option>
-                {state.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            )}
-          </div>
         </div>
       </div>
 
-      {/* Legend with editable names */}
+      {/* Legend */}
       <div className="plate-legend">
         {groups.map(g => (
           <div key={g.id} className="legend-item">
-            <div className="legend-swatch" style={{background: g.color}}></div>
-            <input 
-              className="group-name-input"
-              value={g.name}
-              onChange={(e) => renameGroup(g.id, e.target.value)}
-            />
+            <div className="legend-swatch" style={{background:g.color}}></div>
+            <input className="group-name-input" value={g.name} onChange={(e) => renameGroup(g.id,e.target.value)}/>
+            <span className="well-type-badge" style={{color:WELL_TYPES[g.wellType]?.color}}>{WELL_TYPES[g.wellType]?.abbr}</span>
           </div>
         ))}
+        {!groups.length && <span style={{color:'var(--text-secondary)',fontSize:'0.8rem'}}>Usa los botones de arriba para crear grupos</span>}
       </div>
+
+      {/* Shift+Click hint */}
+      {activeGroupId && <p className="no-print" style={{fontSize:'0.75rem',color:'var(--text-secondary)',margin:'0 0 8px'}}>💡 Shift+Click para seleccionar un rango rectangular de pocillos</p>}
 
       {/* 96-well Grid */}
       <div className="plate-grid-wrapper">
         <div className="plate-grid">
           <div></div>
           {COLS.map(c => <div key={c} className="plate-col-header">{c}</div>)}
-
           {ROWS.map(r => (
             <React.Fragment key={r}>
               <div className="plate-row-header">{r}</div>
@@ -262,12 +240,15 @@ export default function PlateMapper({ state, updateState }) {
                 const group = getGroupForWell(r, c);
                 const w = wells[wellKey(r, c)];
                 return (
-                  <div 
-                    key={c}
+                  <div key={c}
                     className={`plate-well ${w?.value != null ? 'has-value' : ''}`}
-                    style={group ? { background: group.color, borderColor: group.color } : {}}
-                    onClick={() => handleWellClick(r, c)}
-                    title={`${r}${c}${group ? ` — ${group.name}` : ''}${w?.value != null ? ` = ${w.value}` : ''}`}
+                    style={group ? {background:group.color, borderColor:group.color} : {}}
+                    onClick={(e) => handleWellClick(e, r, c)}
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setTooltip({key:wellKey(r,c), x:rect.left+rect.width/2, y:rect.top-8, r, c});
+                    }}
+                    onMouseLeave={() => setTooltip(null)}
                   >
                     <span className="print-only-text">{group ? group.name.substring(0,4).toUpperCase() : ''}</span>
                     <span className="well-value">{w?.value != null ? (typeof w.value === 'number' ? w.value.toFixed(1) : '') : ''}</span>
@@ -279,97 +260,174 @@ export default function PlateMapper({ state, updateState }) {
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="no-print" style={{display: 'flex', gap: '8px', marginBottom: '20px'}}>
-        <button className="btn" onClick={() => setShowImport(!showImport)}>
-          <ClipboardPaste size={16}/> Importar Lecturas
-        </button>
-        <button className="btn" onClick={exportPlateCSV}>
-          <Download size={16}/> Exportar Placa CSV
-        </button>
-        <button className="btn" onClick={() => window.print()}>
-          <Printer size={16}/> Imprimir Layout
-        </button>
-        <label className="btn" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--panel-border)' }}>
-          <input 
-            type="checkbox" 
-            checked={isBWPrint} 
-            onChange={(e) => setIsBWPrint(e.target.checked)} 
-            style={{ cursor: 'pointer' }}
-          />
-          Blanco y Negro
+      {/* Tooltip */}
+      {tooltip && (() => {
+        const w = wells[tooltip.key]; const g = w ? groups.find(gr => gr.id === w.groupId) : null;
+        const ti = g ? WELL_TYPES[g.wellType] : null;
+        return (
+          <div className="well-tooltip" style={{left:tooltip.x, top:tooltip.y}}>
+            <div className="tt-header">{g && <span className="tt-swatch" style={{background:g.color}}></span>}{tooltip.key}</div>
+            {g && <div className="tt-row"><span>Grupo</span><span>{g.name}</span></div>}
+            {ti && <div className="tt-row"><span>Tipo</span><span>{ti.label}</span></div>}
+            {w?.concentration != null && <div className="tt-row"><span>Conc.</span><span>{w.concentration} {w.concUnit||''}</span></div>}
+            {w?.replicateNum && <div className="tt-row"><span>Réplica</span><span>#{w.replicateNum}</span></div>}
+            {w?.value != null && <div className="tt-row"><span>Valor</span><span>{w.value}</span></div>}
+            {!g && <div className="tt-row"><span style={{color:'var(--text-secondary)'}}>Vacío</span><span></span></div>}
+          </div>
+        );
+      })()}
+
+      {/* Action Toolbar */}
+      <div className="no-print" style={{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}}>
+        <button className="btn" onClick={() => setShowDilution(!showDilution)}>🧪 Dilución Seriada</button>
+        <button className="btn" onClick={() => setShowRep(!showRep)}><Copy size={16}/> Replicados</button>
+        <button className="btn" onClick={handleRandomize}><Shuffle size={16}/> Aleatorizar (Inner 60)</button>
+        <button className="btn" onClick={() => setShowImport(!showImport)}><ClipboardPaste size={16}/> Importar Lecturas</button>
+        <button className="btn" onClick={() => setShowSampleImport(!showSampleImport)}><Upload size={16}/> Importar Lista Muestras</button>
+        <button className="btn" onClick={() => window.print()}><Printer size={16}/> Imprimir</button>
+        <label className="btn" style={{display:'flex',alignItems:'center',gap:'8px',cursor:'pointer',background:'transparent',border:'1px solid var(--panel-border)'}}>
+          <input type="checkbox" checked={isBWPrint} onChange={e => setIsBWPrint(e.target.checked)} style={{cursor:'pointer'}}/>B/N
         </label>
-        <button className="btn btn-danger" onClick={() => setWells({})}>
-          <X size={16}/> Limpiar Placa
-        </button>
+        <button className="btn btn-danger" onClick={() => {setWells({}); setWarnings([]);}}><X size={16}/> Limpiar</button>
       </div>
 
-      <div className="no-print" style={{display: 'flex', gap: '8px', marginBottom: '20px', alignItems: 'center', background: 'rgba(59, 130, 246, 0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.3)'}}>
-        <strong style={{color: 'var(--text-primary)', fontSize: '0.85rem'}}>Plantillas:</strong>
-        <button className="btn" onClick={saveLayout}>
-          <Save size={16}/> Guardar Plantilla Actual
-        </button>
+      {/* Export Toolbar */}
+      <div className="no-print" style={{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}}>
+        <button className="btn" onClick={() => downloadFile(exportPlateCSV(wells,groups),'plate_results.csv')}><Download size={16}/> CSV Genérico</button>
+        <button className="btn" onClick={() => downloadFile(exportBioTekCSV(wells,groups),'plate_biotek.csv')}><Download size={16}/> BioTek Gen5</button>
+        <button className="btn" onClick={() => downloadFile(exportSoftMaxPro(wells,groups),'plate_softmax.txt','text/plain')}><Download size={16}/> SoftMax Pro</button>
+      </div>
+
+      {/* Templates */}
+      <div className="no-print" style={{display:'flex',gap:'8px',marginBottom:'16px',alignItems:'center',background:'rgba(59,130,246,0.1)',padding:'12px',borderRadius:'8px',border:'1px solid rgba(59,130,246,0.3)'}}>
+        <strong style={{color:'var(--text-primary)',fontSize:'0.85rem'}}>Plantillas:</strong>
+        <button className="btn" onClick={saveLayout}><Save size={16}/> Guardar</button>
         {plateLayouts.length > 0 && (
-          <select className="input-field" onChange={loadLayout} style={{padding: '6px', fontSize: '0.85rem', maxWidth: '250px'}}>
-            <option value="">Cargar plantilla guardada...</option>
+          <select className="input-field" onChange={loadLayout} style={{padding:'6px',fontSize:'0.85rem',maxWidth:'250px'}}>
+            <option value="">Cargar plantilla...</option>
             {plateLayouts.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
         )}
       </div>
 
+      {/* Dilution Builder */}
+      {showDilution && (
+        <div className="plate-tools-panel no-print">
+          <h4>🧪 Constructor de Dilución Seriada</h4>
+          <div className="plate-tools-row">
+            <div className="field"><label>Pocillo Inicio</label><input value={dilution.startWell} onChange={e => setDilution({...dilution,startWell:e.target.value})} placeholder="A1"/></div>
+            <div className="field"><label>Concentración</label><input type="number" value={dilution.startConc} onChange={e => setDilution({...dilution,startConc:parseFloat(e.target.value)||0})}/></div>
+            <div className="field"><label>Unidad</label><input value={dilution.unit} onChange={e => setDilution({...dilution,unit:e.target.value})} style={{width:'60px'}}/></div>
+            <div className="field"><label>Factor (1:N)</label>
+              <select value={dilution.factor} onChange={e => setDilution({...dilution,factor:parseFloat(e.target.value)})}>
+                <option value={2}>1:2</option><option value={3}>1:3</option><option value={5}>1:5</option><option value={10}>1:10</option>
+              </select>
+            </div>
+            <div className="field"><label>Pasos</label><input type="number" min={2} max={12} value={dilution.steps} onChange={e => setDilution({...dilution,steps:parseInt(e.target.value)||2})}/></div>
+            <div className="field"><label>Dirección</label>
+              <select value={dilution.direction} onChange={e => setDilution({...dilution,direction:e.target.value})}>
+                <option value="horizontal">→ Horizontal</option><option value="vertical">↓ Vertical</option>
+              </select>
+            </div>
+            <button className="btn btn-primary" onClick={handleDilution}>Aplicar</button>
+          </div>
+        </div>
+      )}
+
+      {/* Replicate Tool */}
+      {showRep && (
+        <div className="plate-tools-panel no-print">
+          <h4><Copy size={16}/> Herramienta de Replicados</h4>
+          <div className="plate-tools-row">
+            <div className="field"><label>Réplicas</label>
+              <select value={repCount} onChange={e => setRepCount(parseInt(e.target.value))}>
+                <option value={2}>Duplicado</option><option value={3}>Triplicado</option>
+              </select>
+            </div>
+            <div className="field"><label>Dirección</label>
+              <select value={repDir} onChange={e => setRepDir(e.target.value)}>
+                <option value="vertical">↓ Vertical</option><option value="horizontal">→ Horizontal</option>
+              </select>
+            </div>
+            <button className="btn btn-primary" onClick={handleReplicates}>Aplicar</button>
+          </div>
+          <p style={{fontSize:'0.75rem',color:'var(--text-secondary)',marginTop:'8px'}}>Expande cada pocillo asignado en N réplicas adyacentes.</p>
+        </div>
+      )}
+
       {/* Paste Import */}
       {showImport && (
-        <div className="glass-panel plate-data-import" style={{padding: '16px', marginBottom: '20px'}}>
-          <h4 style={{marginBottom: '8px'}}>Pegar Matriz de Resultados</h4>
-          <p style={{fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px'}}>
-            Copia las lecturas del lector de microplaca (8 filas × 12 columnas, separadas por tabulador o coma) y pégalas aquí. Se asignarán a las posiciones A1→H12.
-          </p>
-          <textarea 
-            className="input-field"
-            value={pasteData}
-            onChange={e => setPasteData(e.target.value)}
-            placeholder={"0.45\t0.52\t0.48\t...\n0.31\t0.29\t0.33\t..."}
-          />
-          <button className="btn btn-primary" style={{marginTop: '8px'}} onClick={handleImportPaste}>
-            Aplicar Lecturas
-          </button>
+        <div className="glass-panel plate-data-import" style={{padding:'16px',marginBottom:'16px'}}>
+          <h4>Pegar Matriz de Resultados</h4>
+          <p style={{fontSize:'0.8rem',color:'var(--text-secondary)',marginBottom:'12px'}}>8 filas × 12 columnas separadas por tabulador o coma.</p>
+          <textarea className="input-field" value={pasteData} onChange={e => setPasteData(e.target.value)} placeholder={"0.45\t0.52\t0.48\t...\n0.31\t0.29\t0.33\t..."}/>
+          <button className="btn btn-primary" style={{marginTop:'8px'}} onClick={handleImportPaste}>Aplicar Lecturas</button>
+        </div>
+      )}
+
+      {/* Sample List Import */}
+      {showSampleImport && (
+        <div className="plate-tools-panel no-print">
+          <h4><Upload size={16}/> Importar Lista de Muestras</h4>
+          <p style={{fontSize:'0.78rem',color:'var(--text-secondary)',marginBottom:'8px'}}>Pega una lista de nombres (uno por línea) o carga un CSV de una columna.</p>
+          <div className="plate-tools-row" style={{marginBottom:'8px'}}>
+            <div className="field"><label>Réplicas</label>
+              <select value={sampleRepCount} onChange={e => setSampleRepCount(parseInt(e.target.value))}>
+                <option value={1}>Singlete</option><option value={2}>Duplicado</option><option value={3}>Triplicado</option>
+              </select>
+            </div>
+            <div className="field"><label>Llenado</label>
+              <select value={sampleDir} onChange={e => setSampleDir(e.target.value)}>
+                <option value="horizontal">→ Por filas</option><option value="vertical">↓ Por columnas</option>
+              </select>
+            </div>
+          </div>
+          <textarea className="input-field" value={sampleText} onChange={e => setSampleText(e.target.value)} placeholder={"Muestra 1\nMuestra 2\nMuestra 3"} style={{width:'100%',minHeight:'100px',resize:'vertical',marginBottom:'8px'}}/>
+          <div style={{display:'flex',gap:'8px'}}>
+            <button className="btn btn-primary" onClick={handleSampleImport}>Poblar Placa</button>
+            <label className="btn" style={{cursor:'pointer'}}>
+              📂 Cargar CSV
+              <input type="file" accept=".csv,.txt" style={{display:'none'}} onChange={e => {
+                const f = e.target.files[0]; if (!f) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => setSampleText(ev.target.result);
+                reader.readAsText(f);
+              }}/>
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* Validation Warnings */}
+      {warnings.length > 0 && (
+        <div className="validation-banner no-print">
+          <AlertTriangle size={18}/>
+          <div><strong>Advertencias de Diseño</strong><ul>{warnings.map((w,i) => <li key={i}>{w}</li>)}</ul></div>
         </div>
       )}
 
       {/* Summary Statistics */}
       {stats.length > 0 && (
-        <div className="glass-panel" style={{padding: '16px'}}>
-          <h4 style={{marginBottom: '12px'}}>Resumen Estadístico por Grupo</h4>
+        <div className="glass-panel" style={{padding:'16px'}}>
+          <h4 style={{marginBottom:'12px'}}>Resumen Estadístico por Grupo</h4>
           <table className="plate-results-table">
-            <thead>
-              <tr>
-                <th></th>
-                <th>Grupo</th>
-                <th>n</th>
-                <th>Media</th>
-                <th>DE</th>
-              </tr>
-            </thead>
+            <thead><tr><th></th><th>Grupo</th><th>Tipo</th><th>n</th><th>Media</th><th>DE</th>{state && <th>Acción</th>}</tr></thead>
             <tbody>
               {stats.map(s => (
                 <tr key={s.group.id}>
-                  <td><div className="legend-swatch" style={{background: s.group.color}}></div></td>
+                  <td><div className="legend-swatch" style={{background:s.group.color}}></div></td>
                   <td>{s.group.name}</td>
+                  <td><span className="well-type-badge" style={{color:WELL_TYPES[s.group.wellType]?.color}}>{WELL_TYPES[s.group.wellType]?.abbr}</span></td>
                   <td>{s.n}</td>
                   <td>{isNaN(s.mean) ? '—' : s.mean.toFixed(4)}</td>
                   <td>{s.sd.toFixed(4)}</td>
                   {state && (
-                    <td style={{display: 'flex', gap: '8px'}}>
-                      <select 
-                        className="input-field" 
-                        style={{padding: '2px', fontSize: '0.8rem', width: '150px'}}
-                        value={selectedExports[s.group.id] || 'NEW'}
-                        onChange={(e) => setSelectedExports({...selectedExports, [s.group.id]: e.target.value})}
-                      >
-                        <option value="NEW">Crear Nueva Muestra (Media)</option>
+                    <td style={{display:'flex',gap:'8px'}}>
+                      <select className="input-field" style={{padding:'2px',fontSize:'0.8rem',width:'150px'}} value={selectedExports[s.group.id]||'NEW'} onChange={e => setSelectedExports({...selectedExports,[s.group.id]:e.target.value})}>
+                        <option value="NEW">Crear Nueva Muestra</option>
                         {state.subjects.map(subj => <option key={subj.id} value={subj.id}>Vincular: {subj.name}</option>)}
                       </select>
-                      <button className="btn" style={{padding: '2px 8px', fontSize: '0.8rem'}} onClick={() => handleExportGroup(s)} disabled={isNaN(s.mean)}>Exportar</button>
+                      <button className="btn" style={{padding:'2px 8px',fontSize:'0.8rem'}} onClick={() => handleExportGroup(s)} disabled={isNaN(s.mean)}>Exportar</button>
                     </td>
                   )}
                 </tr>
