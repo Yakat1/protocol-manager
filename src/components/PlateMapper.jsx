@@ -125,10 +125,11 @@ export default function PlateMapper({ state, updateState }) {
     setWells(result);
   };
 
-  const handleSampleImport = () => {
-    const result = importSampleList(sampleText, groups, wells, sampleRepCount, sampleDir);
+  const handleSampleImport = (populatePlate = true) => {
+    const result = importSampleList(sampleText, groups, wells, sampleRepCount, sampleDir, populatePlate);
     if (!result) return alert('Lista vacía.');
-    setGroups(result.groups); setWells(result.wells);
+    setGroups(result.groups); 
+    if (populatePlate) setWells(result.wells);
     setShowSampleImport(false); setSampleText('');
   };
 
@@ -384,7 +385,8 @@ export default function PlateMapper({ state, updateState }) {
           </div>
           <textarea className="input-field" value={sampleText} onChange={e => setSampleText(e.target.value)} placeholder={"Muestra 1\nMuestra 2\nMuestra 3"} style={{width:'100%',minHeight:'100px',resize:'vertical',marginBottom:'8px'}}/>
           <div style={{display:'flex',gap:'8px'}}>
-            <button className="btn btn-primary" onClick={handleSampleImport}>Poblar Placa</button>
+            <button className="btn btn-primary" onClick={() => handleSampleImport(true)}>Poblar Placa</button>
+            <button className="btn" onClick={() => handleSampleImport(false)}>Solo Crear Grupos</button>
             <label className="btn" style={{cursor:'pointer'}}>
               📂 Cargar CSV
               <input type="file" accept=".csv,.txt" style={{display:'none'}} onChange={e => {

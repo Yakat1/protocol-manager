@@ -169,30 +169,43 @@ export function exportPlateCSV(wells, groups) {
   return lines.join('\n');
 }
 
-export function importSampleList(text, groups, wells, replicateCount, direction) {
+export function importSampleList(text, groups, wells, replicateCount, direction, populatePlate = true) {
   const names = text.trim().split('\n').map(l => l.trim()).filter(Boolean);
   if (!names.length) return null;
   const newGroups = [...groups];
   const newWells = { ...wells };
-  let wellIdx = 0;
+  
   names.forEach((name, i) => {
     const gId = `imported_${Date.now()}_${i}`;
     const g = { id: gId, name, color: WELL_TYPES.unknown.color, wellType: 'unknown' };
     newGroups.push(g);
-    for (let rep = 0; rep < replicateCount; rep++) {
-      let ri, ci;
+    
+    if (populatePlate) {
       if (direction === 'horizontal') {
-        ri = Math.floor(wellIdx / COLS.length);
-        ci = wellIdx % COLS.length;
+        // Replicas horizontales: las muestras avanzan hacia abajo por filas (A, B, C...) y las réplicas se extienden en columnas (1, 2, 3...)
+        const blockIndex = Math.floor(i / ROWS.length);
+        const ri = i % ROWS.length;
+        const startCi = blockIndex * replicateCount;
+        for (let rep = 0; rep < replicateCount; rep++) {
+          const ci = startCi + rep;
+          if (ri < ROWS.length && ci < COLS.length) {
+            newWells[wellKey(ROWS[ri], COLS[ci])] = { groupId: gId, value: null, replicateNum: rep + 1 };
+          }
+        }
       } else {
-        ci = Math.floor(wellIdx / ROWS.length);
-        ri = wellIdx % ROWS.length;
+        // Replicas verticales: las muestras avanzan hacia la derecha por columnas (1, 2, 3...) y las réplicas se extienden en filas (A, B, C...)
+        const samplesPerCol = Math.floor(ROWS.length / replicateCount);
+        if (samplesPerCol > 0) {
+          const ci = Math.floor(i / samplesPerCol);
+          const startRi = (i % samplesPerCol) * replicateCount;
+          for (let rep = 0; rep < replicateCount; rep++) {
+            const ri = startRi + rep;
+            if (ri < ROWS.length && ci < COLS.length) {
+              newWells[wellKey(ROWS[ri], COLS[ci])] = { groupId: gId, value: null, replicateNum: rep + 1 };
+            }
+          }
+        }
       }
-      if (ri < ROWS.length && ci < COLS.length) {
-        const key = wellKey(ROWS[ri], COLS[ci]);
-        newWells[key] = { groupId: gId, value: null, replicateNum: rep + 1 };
-      }
-      wellIdx++;
     }
   });
   return { groups: newGroups, wells: newWells };
