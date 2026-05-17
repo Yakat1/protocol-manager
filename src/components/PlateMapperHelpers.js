@@ -94,27 +94,43 @@ export function applyReplicates(wells, groups, count, direction) {
   return newWells;
 }
 
-export function randomizeInner(wells) {
-  const entries = [];
-  Object.entries(wells).forEach(([, w]) => {
-    if (w.groupId) entries.push({ ...w });
+export function randomizeInner(wells, groups) {
+  const lockedGroupIds = new Set(groups.filter(g => g.locked).map(g => g.id));
+  const entriesToShuffle = [];
+  const lockedWells = {};
+
+  Object.entries(wells).forEach(([key, w]) => {
+    if (w.groupId) {
+      if (lockedGroupIds.has(w.groupId)) {
+        lockedWells[key] = w;
+      } else {
+        entriesToShuffle.push({ ...w });
+      }
+    }
   });
-  if (!entries.length) return null;
+
+  if (!entriesToShuffle.length) return null;
+
   // Shuffle
-  for (let i = entries.length - 1; i > 0; i--) {
+  for (let i = entriesToShuffle.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [entries[i], entries[j]] = [entries[j], entries[i]];
+    [entriesToShuffle[i], entriesToShuffle[j]] = [entriesToShuffle[j], entriesToShuffle[i]];
   }
-  const innerKeys = [];
+
+  const availableInnerKeys = [];
   INNER_ROWS_IDX.forEach(ri => {
     INNER_COLS_IDX.forEach(ci => {
-      innerKeys.push(wellKey(ROWS[ri], COLS[ci]));
+      const key = wellKey(ROWS[ri], COLS[ci]);
+      if (!lockedWells[key]) {
+        availableInnerKeys.push(key);
+      }
     });
   });
-  const newWells = {};
-  entries.forEach((entry, i) => {
-    if (i < innerKeys.length) {
-      newWells[innerKeys[i]] = entry;
+
+  const newWells = { ...lockedWells };
+  entriesToShuffle.forEach((entry, i) => {
+    if (i < availableInnerKeys.length) {
+      newWells[availableInnerKeys[i]] = entry;
     }
   });
   return newWells;
@@ -175,36 +191,58 @@ export function importSampleList(text, groups, wells, replicateCount, direction,
   const newGroups = [...groups];
   const newWells = { ...wells };
   
+  const lockedGroupIds = new Set(groups.filter(g => g.locked).map(g => g.id));
+  const isLocked = (r, c) => {
+    const w = wells[wellKey(ROWS[r], COLS[c])];
+    return w && lockedGroupIds.has(w.groupId);
+  };
+
+  let currRi = 0;
+  let currCi = 0;
+
+  const advancePointer = () => {
+    if (direction === 'horizontal') {
+      currRi++;
+      if (currRi >= ROWS.length) {
+        currRi = 0;
+        currCi += replicateCount;
+      }
+    } else {
+      currCi++;
+      if (currCi >= COLS.length) {
+        currCi = 0;
+        currRi += replicateCount;
+      }
+    }
+  };
+
+  const isSlotFree = (r, c) => {
+    for (let rep = 0; rep < replicateCount; rep++) {
+      let ri = direction === 'vertical' ? r + rep : r;
+      let ci = direction === 'horizontal' ? c + rep : c;
+      if (ri >= ROWS.length || ci >= COLS.length) return false;
+      if (isLocked(ri, ci)) return false;
+    }
+    return true;
+  };
+  
   names.forEach((name, i) => {
     const gId = `imported_${Date.now()}_${i}`;
     const g = { id: gId, name, color: WELL_TYPES.unknown.color, wellType: 'unknown' };
     newGroups.push(g);
     
     if (populatePlate) {
-      if (direction === 'horizontal') {
-        // Replicas horizontales: las muestras avanzan hacia abajo por filas (A, B, C...) y las réplicas se extienden en columnas (1, 2, 3...)
-        const blockIndex = Math.floor(i / ROWS.length);
-        const ri = i % ROWS.length;
-        const startCi = blockIndex * replicateCount;
-        for (let rep = 0; rep < replicateCount; rep++) {
-          const ci = startCi + rep;
-          if (ri < ROWS.length && ci < COLS.length) {
+      while (currRi < ROWS.length && currCi < COLS.length) {
+        if (isSlotFree(currRi, currCi)) {
+          for (let rep = 0; rep < replicateCount; rep++) {
+            let ri = direction === 'vertical' ? currRi + rep : currRi;
+            let ci = direction === 'horizontal' ? currCi + rep : currCi;
             newWells[wellKey(ROWS[ri], COLS[ci])] = { groupId: gId, value: null, replicateNum: rep + 1 };
           }
+          advancePointer();
+          break;
         }
-      } else {
-        // Replicas verticales: las muestras avanzan hacia la derecha por columnas (1, 2, 3...) y las réplicas se extienden en filas (A, B, C...)
-        const samplesPerCol = Math.floor(ROWS.length / replicateCount);
-        if (samplesPerCol > 0) {
-          const ci = Math.floor(i / samplesPerCol);
-          const startRi = (i % samplesPerCol) * replicateCount;
-          for (let rep = 0; rep < replicateCount; rep++) {
-            const ri = startRi + rep;
-            if (ri < ROWS.length && ci < COLS.length) {
-              newWells[wellKey(ROWS[ri], COLS[ci])] = { groupId: gId, value: null, replicateNum: rep + 1 };
-            }
-          }
-        }
+        advancePointer();
       }
     }
   });

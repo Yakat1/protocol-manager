@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Plus, X, Download, ClipboardPaste, Printer, Save, Upload, Shuffle, AlertTriangle, Copy } from 'lucide-react';
+import { Plus, X, Download, ClipboardPaste, Printer, Save, Upload, Shuffle, AlertTriangle, Copy, Lock, Unlock } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { ROWS, COLS, WELL_TYPES, wellKey, getGroupStats, validateLayout, applySerialDilution, applyReplicates, randomizeInner, exportBioTekCSV, exportSoftMaxPro, exportPlateCSV, importSampleList } from './PlateMapperHelpers';
 import './PlateMapper.css';
@@ -65,7 +65,14 @@ export default function PlateMapper({ state, updateState }) {
 
   const renameGroup = (id, name) => setGroups(prev => prev.map(g => g.id === id ? { ...g, name } : g));
 
+  const toggleGroupLock = (id) => {
+    setGroups(prev => prev.map(g => g.id === id ? { ...g, locked: !g.locked } : g));
+  };
+
   const handleWellClick = (e, row, col) => {
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    if (activeGroup?.locked) return; // Cannot modify locked groups
+
     const ri = ROWS.indexOf(row), ci = COLS.indexOf(col);
     if (e.shiftKey && lastClicked && activeGroupId) {
       const r1 = Math.min(lastClicked.ri, ri), r2 = Math.max(lastClicked.ri, ri);
@@ -74,6 +81,8 @@ export default function PlateMapper({ state, updateState }) {
         const nw = { ...prev };
         for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) {
           const k = wellKey(ROWS[r], COLS[c]);
+          const existingGroup = prev[k]?.groupId ? groups.find(g => g.id === prev[k].groupId) : null;
+          if (existingGroup?.locked) continue; // Skip locked wells
           nw[k] = { ...nw[k], groupId: activeGroupId };
         }
         return nw;
@@ -81,6 +90,9 @@ export default function PlateMapper({ state, updateState }) {
     } else {
       const key = wellKey(row, col);
       setWells(prev => {
+        const existingGroup = prev[key]?.groupId ? groups.find(g => g.id === prev[key].groupId) : null;
+        if (existingGroup?.locked) return prev; // Cannot override locked well
+
         if (prev[key]?.groupId === activeGroupId) {
           const nw = { ...prev }; delete nw[key]; return nw;
         }
@@ -120,7 +132,7 @@ export default function PlateMapper({ state, updateState }) {
 
   const handleRandomize = () => {
     if (!confirm('¿Redistribuir aleatoriamente todas las muestras en los 60 pocillos internos (B2-G11)?')) return;
-    const result = randomizeInner(wells);
+    const result = randomizeInner(wells, groups);
     if (!result) return alert('No hay muestras asignadas.');
     setWells(result);
   };
@@ -220,6 +232,9 @@ export default function PlateMapper({ state, updateState }) {
           <div key={g.id} className="legend-item">
             <div className="legend-swatch" style={{background:g.color}}></div>
             <input className="group-name-input" value={g.name} onChange={(e) => renameGroup(g.id,e.target.value)}/>
+            <button className="btn-icon" onClick={() => toggleGroupLock(g.id)} title={g.locked ? "Desbloquear pocillos" : "Bloquear pocillos"}>
+              {g.locked ? <Lock size={14} color="#f87171"/> : <Unlock size={14} color="var(--text-secondary)"/>}
+            </button>
             <span className="well-type-badge" style={{color:WELL_TYPES[g.wellType]?.color}}>{WELL_TYPES[g.wellType]?.abbr}</span>
           </div>
         ))}
@@ -242,7 +257,7 @@ export default function PlateMapper({ state, updateState }) {
                 const w = wells[wellKey(r, c)];
                 return (
                   <div key={c}
-                    className={`plate-well ${w?.value != null ? 'has-value' : ''}`}
+                    className={`plate-well ${w?.value != null ? 'has-value' : ''} ${group?.locked ? 'locked' : ''}`}
                     style={group ? {background:group.color, borderColor:group.color} : {}}
                     onClick={(e) => handleWellClick(e, r, c)}
                     onMouseEnter={(e) => {
@@ -289,7 +304,17 @@ export default function PlateMapper({ state, updateState }) {
         <label className="btn" style={{display:'flex',alignItems:'center',gap:'8px',cursor:'pointer',background:'transparent',border:'1px solid var(--panel-border)'}}>
           <input type="checkbox" checked={isBWPrint} onChange={e => setIsBWPrint(e.target.checked)} style={{cursor:'pointer'}}/>B/N
         </label>
-        <button className="btn btn-danger" onClick={() => {setWells({}); setWarnings([]);}}><X size={16}/> Limpiar</button>
+        <button className="btn btn-danger" onClick={() => {
+          setWells(prev => {
+            const nw = {};
+            Object.keys(prev).forEach(k => {
+              const g = groups.find(gr => gr.id === prev[k].groupId);
+              if (g?.locked) nw[k] = prev[k];
+            });
+            return nw;
+          });
+          setWarnings([]);
+        }}><X size={16}/> Limpiar Placa</button>
       </div>
 
       {/* Export Toolbar */}
