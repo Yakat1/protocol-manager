@@ -200,22 +200,6 @@ export function importSampleList(text, groups, wells, replicateCount, direction,
   let currRi = 0;
   let currCi = 0;
 
-  const advancePointer = () => {
-    if (direction === 'horizontal') {
-      currRi++;
-      if (currRi >= ROWS.length) {
-        currRi = 0;
-        currCi += replicateCount;
-      }
-    } else {
-      currCi++;
-      if (currCi >= COLS.length) {
-        currCi = 0;
-        currRi += replicateCount;
-      }
-    }
-  };
-
   const isSlotFree = (r, c) => {
     for (let rep = 0; rep < replicateCount; rep++) {
       let ri = direction === 'vertical' ? r + rep : r;
@@ -233,16 +217,32 @@ export function importSampleList(text, groups, wells, replicateCount, direction,
     
     if (populatePlate) {
       while (currRi < ROWS.length && currCi < COLS.length) {
+        if (direction === 'horizontal' && currCi + replicateCount > COLS.length) {
+          currRi++;
+          currCi = 0;
+          continue;
+        }
+        if (direction === 'vertical' && currRi + replicateCount > ROWS.length) {
+          currCi++;
+          currRi = 0;
+          continue;
+        }
+
         if (isSlotFree(currRi, currCi)) {
           for (let rep = 0; rep < replicateCount; rep++) {
             let ri = direction === 'vertical' ? currRi + rep : currRi;
             let ci = direction === 'horizontal' ? currCi + rep : currCi;
             newWells[wellKey(ROWS[ri], COLS[ci])] = { groupId: gId, value: null, replicateNum: rep + 1 };
           }
-          advancePointer();
+          
+          if (direction === 'horizontal') currCi += replicateCount;
+          else currRi += replicateCount;
+          
           break;
         }
-        advancePointer();
+        
+        if (direction === 'horizontal') currCi++;
+        else currRi++;
       }
     }
   });

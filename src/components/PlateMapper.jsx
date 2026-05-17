@@ -403,6 +403,15 @@ export default function PlateMapper({ state, updateState }) {
       {showDilution && (
         <div className="plate-tools-panel no-print">
           <h4>🧪 Constructor de Dilución Seriada</h4>
+          <div style={{fontSize:'0.8rem',color:'var(--text-secondary)',marginBottom:'12px',background:'rgba(0,0,0,0.03)',padding:'8px',borderRadius:'4px'}}>
+            <strong>Instrucciones:</strong>
+            <ol style={{margin:'4px 0 0 16px',padding:0}}>
+              <li>Selecciona arriba el grupo que deseas diluir (ej. <em>Estándar</em>).</li>
+              <li>Ingresa el <strong>Pocillo Inicio</strong> y la <strong>Concentración</strong> inicial (la más alta).</li>
+              <li>Elige el <strong>Factor</strong> (Ej. 1:2 significa que cada paso tendrá la mitad de concentración).</li>
+              <li>Indica los <strong>Pasos</strong> (número de pocillos totales a llenar) y la <strong>Dirección</strong>.</li>
+            </ol>
+          </div>
           <div className="plate-tools-row">
             <div className="field"><label>Pocillo Inicio</label><input value={dilution.startWell} onChange={e => setDilution({...dilution,startWell:e.target.value})} placeholder="A1"/></div>
             <div className="field"><label>Concentración</label><input type="number" value={dilution.startConc} onChange={e => setDilution({...dilution,startConc:parseFloat(e.target.value)||0})}/></div>
