@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { Plus, X, Download, ClipboardPaste, Printer, Save, Upload, Shuffle, AlertTriangle, Copy, Lock, Unlock } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { ROWS, COLS, WELL_TYPES, wellKey, getGroupStats, validateLayout, applySerialDilution, applyReplicates, randomizeInner, exportBioTekCSV, exportSoftMaxPro, exportPlateCSV, importSampleList } from './PlateMapperHelpers';
-import { ASSAY_KITS, runAssayAnalysis, generateAnalysisCSV } from './AssayAnalysisEngine';
+import { ROWS, COLS, WELL_TYPES, wellKey, parseWellId, getGroupStats, validateLayout, applySerialDilution, applyReplicates, randomizeInner, exportBioTekCSV, exportSoftMaxPro, exportPlateCSV, importSampleList } from './PlateMapperHelpers';
+import { ASSAY_KITS, runAssayAnalysis, generateAnalysisCSV, applyCustomConcentrations } from './AssayAnalysisEngine';
 import './PlateMapper.css';
 
 function downloadFile(content, filename, type='text/csv') {
@@ -153,10 +153,31 @@ export default function PlateMapper({ state, updateState }) {
       const { results, curveParams } = runAssayAnalysis(selectedKitId, wells, groups, kitInputs);
       const csv = generateAnalysisCSV(selectedKitId, results, groups, curveParams);
       downloadFile(csv, `analisis_${selectedKitId}.csv`);
-      alert('Análisis exitoso. El archivo ha sido descargado.');
+      alert('Analisis exitoso. El archivo ha sido descargado.');
     } catch (e) {
-      alert(`Error en el análisis: ${e.message}`);
+      alert(`Error en el analisis: ${e.message}`);
     }
+  };
+
+  const handleAutoConfigureStandard = () => {
+    const kit = ASSAY_KITS.find(k => k.id === selectedKitId);
+    const setup = kit?.standardCurveSetup?.dilutionParams;
+    if (!setup) return;
+    const { customConcentrations, direction, startWell, unit } = setup;
+    let stdGroup = groups.find(g => g.wellType === 'standard');
+    let newGroups = groups;
+    if (!stdGroup) {
+      stdGroup = { id: uuidv4(), name: 'Estandar', color: WELL_TYPES.standard.color, wellType: 'standard' };
+      newGroups = [...groups, stdGroup];
+      setGroups(newGroups);
+    }
+    setActiveGroupId(stdGroup.id);
+    const result = applyCustomConcentrations(
+      wells, stdGroup.id, startWell, customConcentrations,
+      direction, ROWS, COLS, wellKey, parseWellId
+    );
+    if (result) setWells(result);
+    alert(`Curva estandar configurada:\n- ${customConcentrations.length} pocillos asignados al grupo "Estandar" desde ${startWell}\n- Concentraciones: ${customConcentrations.join(', ')} ${unit}\n- Direccion: ${direction === 'vertical' ? 'Vertical' : 'Horizontal'}\n\nAhora crea un grupo "Blanco" y asigna el pocillo de tu estandar A (0 uM).`);
   };
 
   const saveLayout = () => {
@@ -334,56 +355,99 @@ export default function PlateMapper({ state, updateState }) {
       {/* Assay Analysis Engine Panel */}
       <div className="glass-panel no-print" style={{padding:'16px', marginBottom:'16px', borderLeft:'4px solid #8b5cf6'}}>
         <h4 style={{marginBottom:'12px', display:'flex', alignItems:'center', gap:'8px'}}>
-          🔬 Análisis Automático (Kits LIMS)
+          {'🔬'} Análisis Automático (Kits LIMS)
         </h4>
-        <div style={{display:'flex', gap:'16px', alignItems:'flex-start', flexWrap:'wrap'}}>
-          <div className="field">
-            <label>Seleccionar Kit</label>
-            <select className="input-field" value={selectedKitId} onChange={e => {
-              setSelectedKitId(e.target.value);
-              setKitInputs({});
-            }}>
-              <option value="">-- Sin Módulo de Análisis --</option>
-              {ASSAY_KITS.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
-            </select>
-          </div>
-          
-          {selectedKitId && (() => {
-            const kit = ASSAY_KITS.find(k => k.id === selectedKitId);
-            return (
-              <div style={{display:'flex', gap:'12px', flexWrap:'wrap', flex:1}}>
-                {kit?.standardCurveSetup?.instructions && (
-                  <div style={{width:'100%', marginBottom:'8px', background:'rgba(59,130,246,0.1)', padding:'8px', borderRadius:'4px', fontSize:'0.8rem', color:'var(--text-primary)'}}>
-                    <strong>Instrucciones del Kit:</strong> {kit.standardCurveSetup.instructions}
+
+        <div className="field" style={{marginBottom:'14px'}}>
+          <label>Seleccionar Kit</label>
+          <select className="input-field" value={selectedKitId} style={{maxWidth:'380px'}} onChange={e => {
+            setSelectedKitId(e.target.value);
+            setKitInputs({});
+          }}>
+            <option value="">-- Sin Módulo de Análisis --</option>
+            {ASSAY_KITS.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
+          </select>
+        </div>
+
+        {selectedKitId && (() => {
+          const kit = ASSAY_KITS.find(k => k.id === selectedKitId);
+          const setup = kit?.standardCurveSetup;
+          const dp = setup?.dilutionParams;
+          return (
+            <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
+
+              {/* Step cards */}
+              {setup && (
+                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(210px, 1fr))', gap:'10px'}}>
+
+                  {/* STEP 1 – Blank */}
+                  <div style={{background:'rgba(107,114,128,0.12)', borderRadius:'8px', padding:'10px', borderLeft:'3px solid #6b7280'}}>
+                    <div style={{fontWeight:700, fontSize:'0.8rem', marginBottom:'4px', color:'var(--text-primary)'}}>
+                      {'🥛'} Paso 1 — Blanco
+                    </div>
+                    <div style={{fontSize:'0.78rem', color:'var(--text-secondary)'}}>
+                      Usa el botón <strong>+ Blanco</strong> de arriba para crear un grupo de tipo Blanco.
+                      Luego haz clic en el pocillo donde irá el <strong>Estándar A (0 μM)</strong>.
+                    </div>
                   </div>
-                )}
+
+                  {/* STEP 2 – Standard curve */}
+                  <div style={{background:'rgba(59,130,246,0.1)', borderRadius:'8px', padding:'10px', borderLeft:'3px solid #3b82f6'}}>
+                    <div style={{fontWeight:700, fontSize:'0.8rem', marginBottom:'6px', color:'var(--text-primary)'}}>
+                      {'🧪'} Paso 2 — Curva Estándar Automática
+                    </div>
+                    {dp && (
+                      <div style={{fontSize:'0.78rem', color:'var(--text-secondary)', marginBottom:'8px'}}>
+                        El kit requiere <strong>{dp.customConcentrations?.length} pocillos</strong> con concentraciones {dp.customConcentrations?.join(' → ')} {dp.unit},
+                        en dirección <strong>{dp.direction === 'vertical' ? '↓ vertical' : '→ horizontal'}</strong>
+                        {' '}desde <strong>{dp.startWell}</strong>.
+                        El botón de abajo crea el grupo Estándar y asigna todo automáticamente.
+                      </div>
+                    )}
+                    <button className="btn btn-primary" style={{fontSize:'0.8rem', padding:'4px 10px'}} onClick={handleAutoConfigureStandard}>
+                      {'⚗️'} Configurar Curva Estándar
+                    </button>
+                  </div>
+
+                  {/* STEP 3 – Samples */}
+                  <div style={{background:'rgba(245,158,11,0.1)', borderRadius:'8px', padding:'10px', borderLeft:'3px solid #f59e0b'}}>
+                    <div style={{fontWeight:700, fontSize:'0.8rem', marginBottom:'4px', color:'var(--text-primary)'}}>
+                      {'🔬'} Paso 3 — Muestras y Cálculo
+                    </div>
+                    <div style={{fontSize:'0.78rem', color:'var(--text-secondary)'}}>
+                      Crea grupos <strong>Desconocido</strong> y/o <strong>Ctrl (+)</strong> para tus muestras.
+                      Importa las lecturas de absorbancia con <em>"Importar Lecturas"</em>.
+                      Luego ingresa el factor de dilución de tu muestra y haz clic en <strong>Calcular y Exportar</strong>.
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+              {/* Inputs + export */}
+              <div style={{display:'flex', gap:'12px', flexWrap:'wrap', alignItems:'flex-end'}}>
                 {kit?.requiredInputs?.map(inp => (
                   <div className="field" key={inp.id}>
                     <label>{inp.label}</label>
-                    <input 
-                      type={inp.type} 
-                      className="input-field" 
+                    <input
+                      type={inp.type}
+                      className="input-field"
                       style={{width:'150px'}}
                       value={kitInputs[inp.id] ?? inp.default}
                       onChange={e => setKitInputs({...kitInputs, [inp.id]: e.target.value})}
                     />
                   </div>
                 ))}
-                <div style={{alignSelf:'flex-end'}}>
-                  <button className="btn btn-primary" onClick={handleRunAnalysis}>
-                    <Download size={16}/> Calcular y Exportar
-                  </button>
-                </div>
+                <button className="btn btn-primary" onClick={handleRunAnalysis}>
+                  <Download size={16}/> Calcular y Exportar
+                </button>
               </div>
-            );
-          })()}
-        </div>
-        {selectedKitId && (
-          <p style={{fontSize:'0.8rem', color:'var(--text-secondary)', marginTop:'12px', fontStyle:'italic'}}>
-            {ASSAY_KITS.find(k => k.id === selectedKitId)?.description}
-          </p>
-        )}
+
+            </div>
+          );
+        })()}
       </div>
+
 
       {/* Export Toolbar */}
       <div className="no-print" style={{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}}>

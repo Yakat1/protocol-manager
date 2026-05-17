@@ -6,7 +6,18 @@ export const ASSAY_KITS = [
     name: 'Catalase Assay Kit (Cayman 707002)',
     description: 'Asegúrate de definir tus blancos y concentraciones estándar usando la herramienta de Dilución Seriada antes de analizar.',
     standardCurveSetup: {
-      instructions: 'Curva Estándar: Comienza con 75 μM, realiza diluciones de -15 μM por paso (75, 60, 45, 30, 10 μM) y usa 0 μM como Blanco.'
+      // Human-readable instructions shown in the UI
+      blankGroupNote: 'Crea un grupo tipo "Blanco" y pinta el pocillo donde pondrás el estándar A (0 μM, sin formaldehído).',
+      standardGroupNote: 'El sistema creará un grupo "Estándar" y pre-configurará la dilución seriada con los valores exactos del kit. Solo debes seleccionar el pocillo de inicio (primer estándar con mayor concentración) y aplicar.',
+      // Exact dilution parameters from the kit manual
+      dilutionParams: {
+        startConc: 75,
+        unit: 'μM',
+        // This kit uses linear steps, not a factor. We represent it as custom concentrations.
+        customConcentrations: [75, 60, 45, 30, 10],
+        direction: 'vertical',
+        startWell: 'A1'
+      }
     },
     requiredInputs: [
       { id: 'user_sample_dilution', label: 'Factor de Dilución de Muestra', type: 'number', default: 1 }
@@ -58,6 +69,24 @@ export const ASSAY_KITS = [
     ]
   }
 ];
+
+/**
+ * Applies a list of custom concentrations to consecutive wells of a group.
+ * Used for kits with linear step dilutions (not factor-based).
+ */
+export function applyCustomConcentrations(wells, groupId, startWell, concentrations, direction, ROWS, COLS, wellKey, parseWellId) {
+  const pos = parseWellId(startWell);
+  if (!pos) return null;
+  const newWells = { ...wells };
+  concentrations.forEach((conc, i) => {
+    const r = direction === 'vertical' ? pos.ri + i : pos.ri;
+    const c = direction === 'horizontal' ? pos.ci + i : pos.ci;
+    if (r >= ROWS.length || c >= COLS.length) return;
+    const key = wellKey(ROWS[r], COLS[c]);
+    newWells[key] = { ...newWells[key], groupId, concentration: conc, concUnit: 'μM' };
+  });
+  return newWells;
+}
 
 function linearRegression(pts) {
   const n = pts.length;
