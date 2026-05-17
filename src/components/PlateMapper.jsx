@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Plus, X, Download, ClipboardPaste, Printer, Save, Upload, Shuffle, AlertTriangle, Copy, Lock, Unlock } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { ROWS, COLS, WELL_TYPES, wellKey, getGroupStats, validateLayout, applySerialDilution, applyReplicates, randomizeInner, exportBioTekCSV, exportSoftMaxPro, exportPlateCSV, importSampleList } from './PlateMapperHelpers';
+import { ASSAY_KITS, runAssayAnalysis, generateAnalysisCSV } from './AssayAnalysisEngine';
 import './PlateMapper.css';
 
 function downloadFile(content, filename, type='text/csv') {
@@ -34,6 +35,8 @@ export default function PlateMapper({ state, updateState }) {
   const [sampleRepCount, setSampleRepCount] = useState(2);
   const [sampleDir, setSampleDir] = useState('horizontal');
   const [warnings, setWarnings] = useState([]);
+  const [selectedKitId, setSelectedKitId] = useState('');
+  const [kitInputs, setKitInputs] = useState({});
 
   const plateLayouts = state?.plateLayouts || [];
 
@@ -143,6 +146,17 @@ export default function PlateMapper({ state, updateState }) {
     setGroups(result.groups); 
     if (populatePlate) setWells(result.wells);
     setShowSampleImport(false); setSampleText('');
+  };
+
+  const handleRunAnalysis = () => {
+    try {
+      const { results, curveParams } = runAssayAnalysis(selectedKitId, wells, groups, kitInputs);
+      const csv = generateAnalysisCSV(selectedKitId, results, groups, curveParams);
+      downloadFile(csv, `analisis_${selectedKitId}.csv`);
+      alert('Análisis exitoso. El archivo ha sido descargado.');
+    } catch (e) {
+      alert(`Error en el análisis: ${e.message}`);
+    }
   };
 
   const saveLayout = () => {
@@ -315,6 +329,55 @@ export default function PlateMapper({ state, updateState }) {
           });
           setWarnings([]);
         }}><X size={16}/> Limpiar Placa</button>
+      </div>
+
+      {/* Assay Analysis Engine Panel */}
+      <div className="glass-panel no-print" style={{padding:'16px', marginBottom:'16px', borderLeft:'4px solid #8b5cf6'}}>
+        <h4 style={{marginBottom:'12px', display:'flex', alignItems:'center', gap:'8px'}}>
+          🔬 Análisis Automático (Kits LIMS)
+        </h4>
+        <div style={{display:'flex', gap:'16px', alignItems:'flex-start', flexWrap:'wrap'}}>
+          <div className="field">
+            <label>Seleccionar Kit</label>
+            <select className="input-field" value={selectedKitId} onChange={e => {
+              setSelectedKitId(e.target.value);
+              setKitInputs({});
+            }}>
+              <option value="">-- Sin Módulo de Análisis --</option>
+              {ASSAY_KITS.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
+            </select>
+          </div>
+          
+          {selectedKitId && (() => {
+            const kit = ASSAY_KITS.find(k => k.id === selectedKitId);
+            return (
+              <div style={{display:'flex', gap:'12px', flexWrap:'wrap', flex:1}}>
+                {kit?.requiredInputs?.map(inp => (
+                  <div className="field" key={inp.id}>
+                    <label>{inp.label}</label>
+                    <input 
+                      type={inp.type} 
+                      className="input-field" 
+                      style={{width:'150px'}}
+                      value={kitInputs[inp.id] ?? inp.default}
+                      onChange={e => setKitInputs({...kitInputs, [inp.id]: e.target.value})}
+                    />
+                  </div>
+                ))}
+                <div style={{alignSelf:'flex-end'}}>
+                  <button className="btn btn-primary" onClick={handleRunAnalysis}>
+                    <Download size={16}/> Calcular y Exportar
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+        {selectedKitId && (
+          <p style={{fontSize:'0.8rem', color:'var(--text-secondary)', marginTop:'12px', fontStyle:'italic'}}>
+            {ASSAY_KITS.find(k => k.id === selectedKitId)?.description}
+          </p>
+        )}
       </div>
 
       {/* Export Toolbar */}
