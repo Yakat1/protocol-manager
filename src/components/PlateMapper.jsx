@@ -352,6 +352,11 @@ export default function PlateMapper({ state, updateState }) {
             const kit = ASSAY_KITS.find(k => k.id === selectedKitId);
             return (
               <div style={{display:'flex', gap:'12px', flexWrap:'wrap', flex:1}}>
+                {kit?.standardCurveSetup?.instructions && (
+                  <div style={{width:'100%', marginBottom:'8px', background:'rgba(59,130,246,0.1)', padding:'8px', borderRadius:'4px', fontSize:'0.8rem', color:'var(--text-primary)'}}>
+                    <strong>Instrucciones del Kit:</strong> {kit.standardCurveSetup.instructions}
+                  </div>
+                )}
                 {kit?.requiredInputs?.map(inp => (
                   <div className="field" key={inp.id}>
                     <label>{inp.label}</label>

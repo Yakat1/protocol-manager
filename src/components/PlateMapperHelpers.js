@@ -197,10 +197,22 @@ export function importSampleList(text, groups, wells, replicateCount, direction,
     return w && lockedGroupIds.has(w.groupId);
   };
 
-  let currRi = 0;
-  let currCi = 0;
+  const slots = [];
+  if (direction === 'horizontal') {
+    for (let r = 0; r < ROWS.length; r++) {
+      for (let c = 0; c < COLS.length; c += replicateCount) {
+        slots.push({ r, c });
+      }
+    }
+  } else {
+    for (let c = 0; c < COLS.length; c++) {
+      for (let r = 0; r < ROWS.length; r += replicateCount) {
+        slots.push({ r, c });
+      }
+    }
+  }
 
-  const isSlotFree = (r, c) => {
+  const validSlots = slots.filter(({ r, c }) => {
     for (let rep = 0; rep < replicateCount; rep++) {
       let ri = direction === 'vertical' ? r + rep : r;
       let ci = direction === 'horizontal' ? c + rep : c;
@@ -208,42 +220,23 @@ export function importSampleList(text, groups, wells, replicateCount, direction,
       if (isLocked(ri, ci)) return false;
     }
     return true;
-  };
+  });
+
+  let slotIndex = 0;
   
   names.forEach((name, i) => {
     const gId = `imported_${Date.now()}_${i}`;
     const g = { id: gId, name, color: WELL_TYPES.unknown.color, wellType: 'unknown' };
     newGroups.push(g);
     
-    if (populatePlate) {
-      while (currRi < ROWS.length && currCi < COLS.length) {
-        if (direction === 'horizontal' && currCi + replicateCount > COLS.length) {
-          currRi++;
-          currCi = 0;
-          continue;
-        }
-        if (direction === 'vertical' && currRi + replicateCount > ROWS.length) {
-          currCi++;
-          currRi = 0;
-          continue;
-        }
-
-        if (isSlotFree(currRi, currCi)) {
-          for (let rep = 0; rep < replicateCount; rep++) {
-            let ri = direction === 'vertical' ? currRi + rep : currRi;
-            let ci = direction === 'horizontal' ? currCi + rep : currCi;
-            newWells[wellKey(ROWS[ri], COLS[ci])] = { groupId: gId, value: null, replicateNum: rep + 1 };
-          }
-          
-          if (direction === 'horizontal') currCi += replicateCount;
-          else currRi += replicateCount;
-          
-          break;
-        }
-        
-        if (direction === 'horizontal') currCi++;
-        else currRi++;
+    if (populatePlate && slotIndex < validSlots.length) {
+      const { r: currRi, c: currCi } = validSlots[slotIndex];
+      for (let rep = 0; rep < replicateCount; rep++) {
+        let ri = direction === 'vertical' ? currRi + rep : currRi;
+        let ci = direction === 'horizontal' ? currCi + rep : currCi;
+        newWells[wellKey(ROWS[ri], COLS[ci])] = { groupId: gId, value: null, replicateNum: rep + 1 };
       }
+      slotIndex++;
     }
   });
   return { groups: newGroups, wells: newWells };

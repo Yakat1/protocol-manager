@@ -4,7 +4,10 @@ export const ASSAY_KITS = [
   {
     id: 'cayman_707002',
     name: 'Catalase Assay Kit (Cayman 707002)',
-    description: 'Asegúrate de definir tus blancos y concentraciones estándar (0 a 75 μM) usando la herramienta de Dilución Seriada antes de analizar.',
+    description: 'Asegúrate de definir tus blancos y concentraciones estándar usando la herramienta de Dilución Seriada antes de analizar.',
+    standardCurveSetup: {
+      instructions: 'Curva Estándar: Comienza con 75 μM, realiza diluciones de -15 μM por paso (75, 60, 45, 30, 10 μM) y usa 0 μM como Blanco.'
+    },
     requiredInputs: [
       { id: 'user_sample_dilution', label: 'Factor de Dilución de Muestra', type: 'number', default: 1 }
     ],
