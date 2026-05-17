@@ -161,24 +161,46 @@ export default function PlateMapper({ state, updateState }) {
 
   const handleAutoConfigureStandard = () => {
     const kit = ASSAY_KITS.find(k => k.id === selectedKitId);
-    const setup = kit?.standardCurveSetup?.dilutionParams;
+    const setup = kit?.standardCurveSetup;
     if (!setup) return;
-    const { customConcentrations, direction, startWell, unit } = setup;
-    let stdGroup = groups.find(g => g.wellType === 'standard');
-    let newGroups = groups;
-    if (!stdGroup) {
-      stdGroup = { id: uuidv4(), name: 'Estandar', color: WELL_TYPES.standard.color, wellType: 'standard' };
-      newGroups = [...groups, stdGroup];
-      setGroups(newGroups);
+
+    let newWells = { ...wells };
+    let newGroups = [...groups];
+
+    // Create or reuse Blank group and assign blankWells (A1, A2)
+    if (setup.blankWells?.length) {
+      let blkGroup = newGroups.find(g => g.wellType === 'blank');
+      if (!blkGroup) {
+        blkGroup = { id: uuidv4(), name: 'Blanco (A)', color: WELL_TYPES.blank.color, wellType: 'blank' };
+        newGroups = [...newGroups, blkGroup];
+      }
+      setup.blankWells.forEach((wk, i) => {
+        newWells[wk] = { ...newWells[wk], groupId: blkGroup.id, concentration: 0, concUnit: 'uM', replicateNum: i + 1 };
+      });
     }
-    setActiveGroupId(stdGroup.id);
-    const result = applyCustomConcentrations(
-      wells, stdGroup.id, startWell, customConcentrations,
-      direction, ROWS, COLS, wellKey, parseWellId
-    );
-    if (result) setWells(result);
-    alert(`Curva estandar configurada:\n- ${customConcentrations.length} pocillos asignados al grupo "Estandar" desde ${startWell}\n- Concentraciones: ${customConcentrations.join(', ')} ${unit}\n- Direccion: ${direction === 'vertical' ? 'Vertical' : 'Horizontal'}\n\nAhora crea un grupo "Blanco" y asigna el pocillo de tu estandar A (0 uM).`);
+
+    // Create or reuse Standard group and assign each standard pair
+    if (setup.standards?.length) {
+      let stdGroup = newGroups.find(g => g.wellType === 'standard');
+      if (!stdGroup) {
+        stdGroup = { id: uuidv4(), name: 'Estandar', color: WELL_TYPES.standard.color, wellType: 'standard' };
+        newGroups = [...newGroups, stdGroup];
+      }
+      setup.standards.forEach(({ conc, unit, wells: stdWells }) => {
+        stdWells.forEach((wk, i) => {
+          newWells[wk] = { ...newWells[wk], groupId: stdGroup.id, concentration: conc, concUnit: unit, replicateNum: i + 1 };
+        });
+      });
+      setActiveGroupId(stdGroup.id);
+    }
+
+    setGroups(newGroups);
+    setWells(newWells);
+
+    const stdSummary = setup.standards?.map(s => `${s.wells.join('/')} = ${s.conc} ${s.unit}`).join(', ');
+    alert(`Curva estandar configurada:\n- Blanco: ${setup.blankWells?.join(', ')} (0 uM)\n- Estandares: ${stdSummary}`);
   };
+
 
   const saveLayout = () => {
     if (!updateState) return alert('Editor inactivo.');
@@ -386,8 +408,8 @@ export default function PlateMapper({ state, updateState }) {
                       {'🥛'} Paso 1 — Blanco
                     </div>
                     <div style={{fontSize:'0.78rem', color:'var(--text-secondary)'}}>
-                      Usa el botón <strong>+ Blanco</strong> de arriba para crear un grupo de tipo Blanco.
-                      Luego haz clic en el pocillo donde irá el <strong>Estándar A (0 μM)</strong>.
+                      El sistema asignará el blanco en los pocillos <strong>{setup.blankWells?.join(' y ')}</strong> (0 μM, duplicado).
+                      Estos quedarán marcados automáticamente al hacer clic en el botón del Paso 2.
                     </div>
                   </div>
 
@@ -396,14 +418,15 @@ export default function PlateMapper({ state, updateState }) {
                     <div style={{fontWeight:700, fontSize:'0.8rem', marginBottom:'6px', color:'var(--text-primary)'}}>
                       {'🧪'} Paso 2 — Curva Estándar Automática
                     </div>
-                    {dp && (
-                      <div style={{fontSize:'0.78rem', color:'var(--text-secondary)', marginBottom:'8px'}}>
-                        El kit requiere <strong>{dp.customConcentrations?.length} pocillos</strong> con concentraciones {dp.customConcentrations?.join(' → ')} {dp.unit},
-                        en dirección <strong>{dp.direction === 'vertical' ? '↓ vertical' : '→ horizontal'}</strong>
-                        {' '}desde <strong>{dp.startWell}</strong>.
-                        El botón de abajo crea el grupo Estándar y asigna todo automáticamente.
-                      </div>
-                    )}
+                    <div style={{fontSize:'0.78rem', color:'var(--text-secondary)', marginBottom:'8px'}}>
+                      El botón asignará automáticamente <strong>Blanco</strong> en {setup.blankWells?.join(', ')} (0 μM)
+                      y los siguientes <strong>{setup.standards?.length} estándares</strong> en duplicado:
+                      <ul style={{margin:'4px 0 0 14px', padding:0}}>
+                        {setup.standards?.map(s => (
+                          <li key={s.conc}>{s.wells.join(' y ')} → <strong>{s.conc} {s.unit}</strong></li>
+                        ))}
+                      </ul>
+                    </div>
                     <button className="btn btn-primary" style={{fontSize:'0.8rem', padding:'4px 10px'}} onClick={handleAutoConfigureStandard}>
                       {'⚗️'} Configurar Curva Estándar
                     </button>

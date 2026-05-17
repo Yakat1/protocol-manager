@@ -6,18 +6,18 @@ export const ASSAY_KITS = [
     name: 'Catalase Assay Kit (Cayman 707002)',
     description: 'Asegúrate de definir tus blancos y concentraciones estándar usando la herramienta de Dilución Seriada antes de analizar.',
     standardCurveSetup: {
-      // Human-readable instructions shown in the UI
-      blankGroupNote: 'Crea un grupo tipo "Blanco" y pinta el pocillo donde pondrás el estándar A (0 μM, sin formaldehído).',
-      standardGroupNote: 'El sistema creará un grupo "Estándar" y pre-configurará la dilución seriada con los valores exactos del kit. Solo debes seleccionar el pocillo de inicio (primer estándar con mayor concentración) y aplicar.',
-      // Exact dilution parameters from the kit manual
-      dilutionParams: {
-        startConc: 75,
-        unit: 'μM',
-        // This kit uses linear steps, not a factor. We represent it as custom concentrations.
-        customConcentrations: [75, 60, 45, 30, 10],
-        direction: 'vertical',
-        startWell: 'A1'
-      }
+      blankGroupNote: 'Crea un grupo tipo "Blanco" — el sistema lo asignará automáticamente en A1 y A2 (duplicado).',
+      standardGroupNote: 'Crea un grupo "Estándar" — el sistema asignará los 6 estándares (0–75 μM) en pares de columnas 1-2, de la fila B a la G.',
+      // Exact layout per kit manual (Table 1). Each entry is {conc, wells:[dup1, dup2]}
+      blankWells: ['A1', 'A2'],
+      standards: [
+        { conc: 5,  unit: 'μM', wells: ['B1', 'B2'] },
+        { conc: 15, unit: 'μM', wells: ['C1', 'C2'] },
+        { conc: 30, unit: 'μM', wells: ['D1', 'D2'] },
+        { conc: 45, unit: 'μM', wells: ['E1', 'E2'] },
+        { conc: 60, unit: 'μM', wells: ['F1', 'F2'] },
+        { conc: 75, unit: 'μM', wells: ['G1', 'G2'] }
+      ]
     },
     requiredInputs: [
       { id: 'user_sample_dilution', label: 'Factor de Dilución de Muestra', type: 'number', default: 1 }
