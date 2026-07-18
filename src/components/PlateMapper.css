@@ -350,12 +350,21 @@
 
 /* Print Styles */
 @media print {
-  @page {
+  @page plate {
     size: landscape;
     margin: 1cm;
   }
+  html, body, #root, .app-container {
+    display: block !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+  }
   .plate-mapper-container {
+    page: plate;
     padding: 0;
+    display: block !important;
   }
   .plate-mapper-toolbar,
   .plate-data-import,
@@ -372,8 +381,12 @@
   }
   
   .workspace {
-    margin-left: 0 !important;
+    margin: 0 !important;
     padding: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    height: auto !important;
+    flex: none !important;
   }
 
   .plate-grid-wrapper {
