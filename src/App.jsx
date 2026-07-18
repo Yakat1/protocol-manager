@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react';
 import { loadState, saveState, saveStateLocal, loadStateLocal, getDefaultState } from './utils/storage';
 import { exportCSV, exportBackup } from './utils/export';
-import { onUserChange, logoutUser, subscribeToLabState, saveLabState, getUserProfile, setUserProfile, getLabMembers } from './utils/firebase';
+import { onUserChange, logoutUser, subscribeToLabState, saveLabState, getUserProfile, setUserProfile, getLabMembers, getLabMemberRole, sendVerificationEmail, writeAuditEntry, auth } from './utils/firebase';
 import { v4 as uuidv4 } from 'uuid';
 import usePermissions from './hooks/usePermissions';
 import AuthGate from './components/AuthGate';
@@ -60,6 +60,7 @@ export default function App() {
   const sessionIdRef = useRef(uuidv4());
   const [isSuspended, setIsSuspended] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(true);
 
   // ── Lab Context ─────────────────────────────────────────────────────────────
   const [labProfile, setLabProfile] = useState(null); // full user profile with labs[]
@@ -108,12 +109,11 @@ export default function App() {
   // ── 1) Auth listener ──────────────────────────────────────────────────────
   useEffect(() => {
     const unsubAuth = onUserChange(async (firebaseUser) => {
-      setUser((current) => {
-        if (current?.isGuest) return current;
-        return firebaseUser ?? null;
-      });
+      setUser(firebaseUser ?? null);
 
       if (firebaseUser) {
+        const isGoogle = firebaseUser.providerData?.some(p => p.providerId === 'google.com');
+        setEmailVerified(isGoogle || firebaseUser.emailVerified);
         // Check if user has a lab profile
         try {
           const profile = await getUserProfile(firebaseUser.uid);
@@ -121,9 +121,9 @@ export default function App() {
             setLabProfile(profile);
             const labId = profile.activeLab || profile.labs[0].labId;
             setActiveLabId(labId);
-            // Get user role from lab membership
-            const lab = profile.labs.find(l => l.labId === labId);
-            setUserRole(lab?.role || 'student');
+            // Read authoritative role from lab members (not profile cache)
+            const role = await getLabMemberRole(labId, firebaseUser.uid);
+            setUserRole(role || 'student');
             setNeedsLabSetup(false);
           } else {
             setNeedsLabSetup(true);
@@ -214,17 +214,44 @@ export default function App() {
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
   const handleLogout = async () => {
-    if (user?.isGuest) { setUser(null); } else { await logoutUser(); }
+    await logoutUser();
     setLabProfile(null); setActiveLabId(null); setUserRole(null);
     showToast('Sesión cerrada.');
   };
+
+  const handleLogoutRef = useRef(handleLogout);
+  useEffect(() => { handleLogoutRef.current = handleLogout; });
+
+  const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes
+  const inactivityTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const resetTimer = () => {
+      clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = setTimeout(() => {
+        handleLogoutRef.current();
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    const events = ['mousedown', 'keydown', 'touchstart', 'scroll', 'mousemove'];
+    events.forEach(evt => window.addEventListener(evt, resetTimer, { passive: true }));
+    resetTimer();
+
+    return () => {
+      events.forEach(evt => window.removeEventListener(evt, resetTimer));
+      clearTimeout(inactivityTimerRef.current);
+    };
+  }, [user]);
 
   // ── Lab switching ──────────────────────────────────────────────────────────
   const switchLab = async (labId) => {
     if (labId === activeLabId) return;
     setActiveLabId(labId);
-    const lab = labProfile?.labs?.find(l => l.labId === labId);
-    setUserRole(lab?.role || 'student');
+    // Read authoritative role from members
+    const role = await getLabMemberRole(labId, user.uid);
+    setUserRole(role || 'student');
     setState(null); // triggers loading state
     // Update user profile with active lab
     if (user?.uid) {
@@ -232,12 +259,12 @@ export default function App() {
     }
   };
 
-  const handleLabReady = (profile) => {
+  const handleLabReady = async (profile) => {
     setLabProfile(profile);
     const labId = profile.activeLab || profile.labs[0]?.labId;
     setActiveLabId(labId);
-    const lab = profile.labs.find(l => l.labId === labId);
-    setUserRole(lab?.role || 'student');
+    const role = await getLabMemberRole(labId, user.uid);
+    setUserRole(role || 'student');
     setNeedsLabSetup(false);
   };
 
@@ -272,9 +299,55 @@ export default function App() {
     );
   }
 
-  const isElectron = !!window.electronAPI;
-  if (!user && state) {
-    return <AuthGate onAuthenticated={(u) => setUser(u)} isElectron={isElectron} />;
+  if (!user) {
+    return <AuthGate onAuthenticated={(u) => setUser(u)} />;
+  }
+
+  // Email verification gate
+  if (user && !emailVerified) {
+    return (
+      <div className="app-container">
+        <div style={{ margin: 'auto', maxWidth: '420px', padding: '24px', textAlign: 'center' }}>
+          <div className="glass-panel" style={{ padding: '32px' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📧</div>
+            <h2 style={{ marginBottom: '8px' }}>Verifica tu correo electrónico</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '24px' }}>
+              Hemos enviado un enlace de verificación a <strong>{user.email}</strong>.
+              Revisa tu bandeja de entrada (y spam) y haz clic en el enlace.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
+                onClick={async () => {
+                  await user.reload();
+                  if (auth.currentUser?.emailVerified) {
+                    setEmailVerified(true);
+                  } else {
+                    showToast('Aún no se ha verificado. Revisa tu correo.');
+                  }
+                }}
+              >
+                ✅ Ya verifiqué mi correo
+              </button>
+              <button className="btn" style={{ width: '100%', justifyContent: 'center' }}
+                onClick={async () => {
+                  try {
+                    await sendVerificationEmail(user);
+                    showToast('Correo de verificación reenviado.');
+                  } catch { showToast('Espera un momento antes de reenviar.'); }
+                }}
+              >
+                📩 Reenviar correo de verificación
+              </button>
+              <button className="btn" style={{ width: '100%', justifyContent: 'center', color: 'var(--danger)' }}
+                onClick={handleLogout}
+              >
+                Cerrar sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Lab setup gate (for authenticated users without a lab)
@@ -312,7 +385,7 @@ export default function App() {
       case 'inventory':
         return <Inventory inventory={state.inventory} setInventory={setInventory} can={can} user={user} labId={activeLabId} />;
       case 'protocols':
-        return <ProtocolsManager protocols={state.cultureProtocols} inventory={state.inventory} setCultureProtocols={setCultureProtocols} can={can} />;
+        return <ProtocolsManager protocols={state.cultureProtocols} inventory={state.inventory} bufferRecipes={state.bufferRecipes} setCultureProtocols={setCultureProtocols} can={can} user={user} labId={activeLabId} />;
       case 'culture':
         return <CellCulture state={state} updateState={updateState} can={can} user={user} labId={activeLabId} />;
       case 'scheduler':
@@ -331,6 +404,7 @@ export default function App() {
             onExportCSV={handleExportCSV}
             onExportBackup={handleExportBackup}
             onImportBackup={handleImportBackup}
+            userRole={userRole}
           />
         );
     }

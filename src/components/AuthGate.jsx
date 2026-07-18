@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { loginUser, registerUser, loginWithGoogle } from '../utils/firebase';
+import { loginUser, registerUser, loginWithGoogle, validatePassword, sendVerificationEmail } from '../utils/firebase';
 import './AuthGate.css';
 
 export default function AuthGate({ onAuthenticated, isElectron = false }) {
@@ -13,10 +13,25 @@ export default function AuthGate({ onAuthenticated, isElectron = false }) {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    if (mode === 'register') {
+      const pwErrors = validatePassword(password);
+      if (pwErrors.length > 0) {
+        setError('Contraseña insegura: ' + pwErrors.join(', '));
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       const cred = mode === 'login'
         ? await loginUser(email, password)
         : await registerUser(email, password);
+
+      if (mode === 'register') {
+        await sendVerificationEmail(cred.user);
+      }
+
       onAuthenticated(cred.user);
     } catch (err) {
       const msgs = {
@@ -103,7 +118,7 @@ export default function AuthGate({ onAuthenticated, isElectron = false }) {
               className="input-field"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder={mode === 'register' ? 'Mínimo 6 caracteres' : '••••••••'}
+              placeholder={mode === 'register' ? 'Mínimo 8 caracteres (mayúscula, número, símbolo)' : '••••••••'}
               required
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
             />
@@ -146,16 +161,6 @@ export default function AuthGate({ onAuthenticated, isElectron = false }) {
             </button>
           </>
         )}
-
-        <div className="auth-divider"><span>o</span></div>
-        <button
-          type="button"
-          className="btn"
-          style={{ width: '100%', marginTop: '8px', opacity: 0.8 }}
-          onClick={() => onAuthenticated({ isGuest: true, email: 'Modo Local' })}
-        >
-          Continuar como Invitado (Modo Local)
-        </button>
 
         {isElectron && (
           <div style={{textAlign: 'center', fontSize: '0.78rem', color: 'rgba(255,255,255,0.3)', padding: '4px 0'}}>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { updateUserPassword, getMyInvitations, acceptInvitation, declineInvitation, getUserProfile, createLab, getPersonalLogs } from '../utils/firebase';
+import { updateUserPassword, getMyInvitations, acceptInvitation, declineInvitation, getUserProfile, createLab, getPersonalLogs, validatePassword, writeAuditEntry } from '../utils/firebase';
 import { exportLocalBackup } from '../utils/backupExport';
 import { X, Lock, LogOut, Code, User, Inbox, Check, Plus, HardDriveDownload } from 'lucide-react';
 import './AuthGate.css'; // Reuse glass-panel and overlay styles
@@ -23,7 +23,7 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
   const [creatingLab, setCreatingLab] = useState(false);
 
   useEffect(() => {
-    if (user?.email && !user.isGuest) {
+    if (user?.email) {
       getMyInvitations(user.email).then(setInvitations).catch(console.error);
     }
   }, [user]);
@@ -73,7 +73,7 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
   };
   
   const handleExportBackup = async () => {
-    if (!activeLabId || user.isGuest) {
+    if (!activeLabId) {
       if (showToast) showToast('Funcionalidad no disponible en el modo actual.', 'error');
       return;
     }
@@ -97,14 +97,24 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
     setError('');
     setSuccess('');
     
-    if (newPassword.length < 6) {
-      return setError('La nueva contraseña debe tener al menos 6 caracteres.');
+    const pwErrors = validatePassword(newPassword);
+    if (pwErrors.length > 0) {
+      return setError('Contraseña insegura: ' + pwErrors.join(', '));
     }
 
     setLoading(true);
     try {
       await updateUserPassword(currentPassword, newPassword);
       setSuccess('Contraseña actualizada correctamente.');
+      if (activeLabId) {
+        writeAuditEntry(activeLabId, {
+          userId: user.uid,
+          displayName: user.displayName || user.email,
+          action: 'password_changed',
+          target: user.email,
+          details: {}
+        }).catch(console.error);
+      }
       setCurrentPassword('');
       setNewPassword('');
     } catch (err) {
@@ -141,12 +151,12 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
           </div>
           <h2 style={{ marginBottom: '5px' }}>Perfil de Usuario</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', wordBreak: 'break-all' }}>
-            {user.isGuest ? 'Modo Invitado (Sin guardado en nube)' : user.email}
+            {user.email}
           </p>
         </div>
 
         {/* Pending Invitations Section */}
-        {!user.isGuest && invitations.length > 0 && (
+        {invitations.length > 0 && (
           <div style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
             <h3 style={{ fontSize: '1rem', color: 'var(--accent)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Inbox size={18} /> Invitaciones a Laboratorios
@@ -176,9 +186,8 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
         )}
 
         {/* Create New Lab Section */}
-        {!user.isGuest && (
-          <div style={{ background: 'rgba(0,0,0,0.1)', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
-            <h3 style={{ fontSize: '1rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ background: 'rgba(0,0,0,0.1)', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+          <h3 style={{ fontSize: '1rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Plus size={16} /> Crear Nuevo Laboratorio
             </h3>
             <form onSubmit={handleCreateLab} style={{ display: 'flex', gap: '8px' }}>
@@ -199,12 +208,10 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
               </button>
             </form>
           </div>
-        )}
 
         {/* Change Password Section */}
-        {!user.isGuest && (
-          <div style={{ background: 'rgba(0,0,0,0.1)', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
-            <h3 style={{ fontSize: '1rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ background: 'rgba(0,0,0,0.1)', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+          <h3 style={{ fontSize: '1rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Lock size={16} /> Seguridad
             </h3>
             
@@ -250,8 +257,7 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
                 </button>
               </form>
             )}
-          </div>
-        )}
+        </div>
 
         {/* Generic Profile Settings */}
         <div style={{ background: 'rgba(0,0,0,0.1)', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
@@ -282,7 +288,7 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
               className="btn btn-primary" 
               style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)' }}
               onClick={handleExportBackup}
-              disabled={exporting || user.isGuest}
+              disabled={exporting}
             >
               <HardDriveDownload size={16} /> 
               {exporting ? 'Comprimiendo...' : 'Generar .zip'}

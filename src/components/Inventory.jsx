@@ -200,6 +200,10 @@ const renderDynamicFields = (item, updateItem, isExpired, isLowStock) => {
           <label>Lote</label>
           <input className="input-field" value={item.batch || item.concentration || ''} onChange={e => updateItem(item.id, 'batch', e.target.value)} placeholder="Número de lote" />
         </div>
+        <div className="inv-field-group">
+          <label>Diluyente / Solvente</label>
+          <input className="input-field" value={item.diluent || ''} onChange={e => updateItem(item.id, 'diluent', e.target.value)} placeholder="Ej. PBS, Glicerol 50%" />
+        </div>
         <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
           <label>Cantidad Disponible {(isLowStock && item.quantity > 0) && <span style={{color: 'var(--warning)', fontSize: '0.75rem', marginLeft:'4px'}}>(Stock Bajo)</span>}</label>
           <div style={{display: 'flex', gap: '8px', width: '100%'}}>
@@ -228,6 +232,10 @@ const renderDynamicFields = (item, updateItem, isExpired, isLowStock) => {
         <div className="inv-field-group">
           <label>Fecha Elaboración</label>
           <input type="date" className="input-field" value={item.creationDate || ''} onChange={e => updateItem(item.id, 'creationDate', e.target.value)} />
+        </div>
+        <div className="inv-field-group">
+          <label>Diluyente / Solvente</label>
+          <input className="input-field" value={item.diluent || ''} onChange={e => updateItem(item.id, 'diluent', e.target.value)} placeholder="Ej. Agua Milli-Q" />
         </div>
         <div className="inv-field-group" style={{gridColumn: '1 / -1'}}>
           <label>Cantidad Disponible {(isLowStock && item.quantity > 0) && <span style={{color: 'var(--warning)', fontSize: '0.75rem', marginLeft:'4px'}}>(Stock Bajo)</span>}</label>
@@ -304,6 +312,10 @@ const renderDynamicFields = (item, updateItem, isExpired, isLowStock) => {
       <div className="inv-field-group">
         <label>Número de Catálogo</label>
         <input className="input-field" value={item.catalog || ''} onChange={e => updateItem(item.id, 'catalog', e.target.value)} placeholder="Ej. M4659" />
+      </div>
+      <div className="inv-field-group">
+        <label>Diluyente de Trabajo</label>
+        <input className="input-field" value={item.diluent || ''} onChange={e => updateItem(item.id, 'diluent', e.target.value)} placeholder="Ej. Agua, DMSO" />
       </div>
       <div className="inv-field-group">
         <label>Peso Molecular</label>

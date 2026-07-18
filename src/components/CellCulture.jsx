@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, Microscope, Image as ImageIcon, Archive, Clock, Search, Box, ExternalLink } from 'lucide-react';
 import { compressImage } from '../utils/imageCompressor';
 import { writeAuditEntry } from '../utils/firebase';
+import DOMPurify from 'dompurify';
 import './CellCulture.css';
 
 const DEFAULT_ACTIONS = ['Descongelar', 'Pasaje / Split', 'Congelar', 'Cambio de Medio', 'Adición de Tratamiento', 'Observación'];
@@ -339,7 +340,7 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
                                     <div 
                                       className="protocol-rich-text"
                                       style={{fontSize: '0.85rem', color: 'var(--text-primary)', background: 'rgba(0,0,0,0.2)', padding:'12px', borderRadius: '4px', overflowX: 'auto'}}
-                                      dangerouslySetInnerHTML={{__html: protocols.find(p => p.id === log.protocolUsed).description}}
+                                      dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(protocols.find(p => p.id === log.protocolUsed).description)}}
                                     />
                                   </div>
                                 )}

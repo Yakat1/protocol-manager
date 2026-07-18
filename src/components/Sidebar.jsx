@@ -132,7 +132,7 @@ export default function Sidebar({ state, updateState, activeSubjectId, setActive
                 Mi Perfil
               </div>
               <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                {user.isGuest ? 'Invitado' : user.email}
+                {user.email}
               </div>
             </div>
             <div style={{ color: 'rgba(255,255,255,0.8)' }}>

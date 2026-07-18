@@ -12,10 +12,10 @@ export default function Workspace({
   setState,
   updateState,
   activeSubjectId,
-  setActiveSubjectId,
   onExportCSV,
   onExportBackup,
   onImportBackup,
+  userRole
 }) {
   const [activeMainTab, setActiveMainTab] = useState("subjects");
   const [dossierTab, setDossierTab] = useState("clinical");
@@ -25,6 +25,7 @@ export default function Workspace({
       id: uuidv4(),
       name: `Muestra ${state.subjects.length + 1}`,
       group: "Control",
+      modelTypeId: "",
       measurements: {},
       images: [],
     };
@@ -64,6 +65,13 @@ export default function Workspace({
       ...subject,
       measurements: { ...subject.measurements, [varId]: val },
     };
+    updateState({ subjects: newSubjects });
+  };
+
+  const updateSubjectModelType = (e) => {
+    if (!subject) return;
+    const newSubjects = [...state.subjects];
+    newSubjects[subjectIndex] = { ...subject, modelTypeId: e.target.value };
     updateState({ subjects: newSubjects });
   };
 
@@ -254,13 +262,31 @@ export default function Workspace({
                         background: "transparent",
                         border: "none",
                         padding: 0,
-                        marginBottom: "4px",
+                        marginBottom: "12px",
                         color: "var(--text-primary)",
+                        width: "100%",
                       }}
                       value={subject.name}
                       onChange={updateSubjectName}
-                      placeholder="Nombre del Sujeto (ej. Ratón 1)"
                     />
+
+                    {state.modelTypes && state.modelTypes.length > 0 && (
+                      <div style={{marginBottom: '16px'}}>
+                        <label style={{fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px'}}>Línea / Tipo de Muestra</label>
+                        <select 
+                          className="input-field" 
+                          style={{width: '100%'}}
+                          value={subject.modelTypeId || ""}
+                          onChange={updateSubjectModelType}
+                        >
+                          <option value="">-- Seleccionar Tipo --</option>
+                          {state.modelTypes.map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     <div
                       style={{
                         display: "flex",
@@ -272,7 +298,7 @@ export default function Workspace({
                       <span
                         style={{
                           color: "var(--text-secondary)",
-                          fontSize: "0.9rem",
+                          fontSize: "0.85rem",
                           fontWeight: 500,
                         }}
                       >
@@ -330,7 +356,9 @@ export default function Workspace({
 
                 {dossierTab === 'clinical' && (
                   <>
-                    <VariablesManager state={state} setState={setState} />
+                    {userRole === 'admin' && (
+                      <VariablesManager state={state} updateState={updateState} />
+                    )}
 
                     <h3 className="section-title">Registro de Datos</h3>
                     <div
@@ -338,7 +366,9 @@ export default function Workspace({
                       style={{ padding: "24px", marginBottom: "40px" }}
                     >
                       <div className="data-grid">
-                        {state.variables.map((v) => (
+                        {state.variables
+                          .filter(v => !v.appliesTo || v.appliesTo.length === 0 || v.appliesTo.includes(subject.modelTypeId))
+                          .map((v) => (
                           <div key={v.id} className="input-group">
                             <label className="input-label">
                               {v.name}{" "}
@@ -359,15 +389,16 @@ export default function Workspace({
                             />
                           </div>
                         ))}
-                        {state.variables.length === 0 && (
+                        {state.variables.filter(v => !v.appliesTo || v.appliesTo.length === 0 || v.appliesTo.includes(subject.modelTypeId)).length === 0 && (
                           <div
                             style={{
-                              color: "var(--text-secondary)",
                               gridColumn: "1 / -1",
+                              textAlign: "center",
+                              padding: "40px",
+                              color: "var(--text-secondary)",
                             }}
                           >
-                            No hay variables definidas. Créalas en el Gestor de
-                            Variables arriba.
+                            No hay variables configuradas para este tipo de muestra. Contacta al Administrador.
                           </div>
                         )}
                       </div>

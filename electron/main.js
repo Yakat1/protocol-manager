@@ -17,8 +17,7 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
-      contextIsolation: true, // Seguridad obligatoria
-      webSecurity: false // Para permitir acceso local a archivos IndexedDB en caso de migraciones
+      contextIsolation: true // Seguridad obligatoria
     },
     show: false // previene flashes blancos
   });

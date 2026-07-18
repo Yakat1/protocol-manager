@@ -9,7 +9,8 @@ import {
   signInWithPopup,
   EmailAuthProvider,
   reauthenticateWithCredential,
-  updatePassword
+  updatePassword,
+  sendEmailVerification
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -55,6 +56,18 @@ export const loginWithGoogle = () =>
   signInWithPopup(auth, googleProvider);
 
 export const logoutUser = () => signOut(auth);
+
+export const sendVerificationEmail = (user) => sendEmailVerification(user);
+
+export function validatePassword(password) {
+  const errors = [];
+  if (password.length < 8) errors.push('Mínimo 8 caracteres');
+  if (!/[A-Z]/.test(password)) errors.push('Al menos una letra mayúscula');
+  if (!/[a-z]/.test(password)) errors.push('Al menos una letra minúscula');
+  if (!/[0-9]/.test(password)) errors.push('Al menos un número');
+  if (!/[^A-Za-z0-9]/.test(password)) errors.push('Al menos un carácter especial (!@#$...)');
+  return errors;
+}
 
 export const onUserChange = (callback) =>
   onAuthStateChanged(auth, callback);
@@ -167,22 +180,35 @@ export async function getLabMembers(labId) {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+export async function getLabMemberRole(labId, userId) {
+  const snap = await getDoc(doc(db, 'labs', labId, 'members', userId));
+  return snap.exists() ? snap.data().role : null;
+}
+
 export async function updateMemberRole(labId, userId, newRole) {
   await setDoc(doc(db, 'labs', labId, 'members', userId), { role: newRole }, { merge: true });
-  // Also update the user's own profile cache
-  const profile = await getUserProfile(userId);
-  if (profile?.labs) {
-    const labs = profile.labs.map(l => l.labId === labId ? { ...l, role: newRole } : l);
-    await setUserProfile(userId, { labs });
+  // Profile cache update may fail if the caller isn't the profile owner (Firestore rules)
+  try {
+    const profile = await getUserProfile(userId);
+    if (profile?.labs) {
+      const labs = profile.labs.map(l => l.labId === labId ? { ...l, role: newRole } : l);
+      await setUserProfile(userId, { labs });
+    }
+  } catch (err) {
+    console.warn('Profile cache update skipped (permission denied). Role is saved in lab members.', err);
   }
 }
 
 export async function removeMember(labId, userId) {
   await deleteDoc(doc(db, 'labs', labId, 'members', userId));
-  const profile = await getUserProfile(userId);
-  if (profile?.labs) {
-    const labs = profile.labs.filter(l => l.labId !== labId);
-    await setUserProfile(userId, { labs, activeLab: labs[0]?.labId || null });
+  try {
+    const profile = await getUserProfile(userId);
+    if (profile?.labs) {
+      const labs = profile.labs.filter(l => l.labId !== labId);
+      await setUserProfile(userId, { labs, activeLab: labs[0]?.labId || null });
+    }
+  } catch (err) {
+    console.warn('Profile cache update skipped (permission denied).', err);
   }
 }
 
@@ -248,6 +274,7 @@ export async function inviteMember(labId, labName, email, role, invitedByName) {
     role,
     invitedBy: invitedByName,
     createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   });
   await setDoc(ref, { pending: existing });
 }
@@ -256,7 +283,8 @@ export async function getMyInvitations(email) {
   const key = encodeEmail(email);
   const snap = await getDoc(doc(db, 'invitations', key));
   if (snap.exists()) {
-    return snap.data().pending || [];
+    const now = new Date().toISOString();
+    return (snap.data().pending || []).filter(inv => !inv.expiresAt || inv.expiresAt > now);
   }
   return [];
 }
@@ -316,7 +344,7 @@ export async function writeAuditEntry(labId, { userId, displayName, action, targ
     action,
     target,
     details: details || {},
-    timestamp: new Date().toISOString(),
+    timestamp: serverTimestamp(),
   });
 }
 

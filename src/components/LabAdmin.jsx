@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getLabMembers, inviteMember, updateMemberRole, removeMember, subscribeToAuditLog, getLabInfo } from '../utils/firebase';
+import { getLabMembers, inviteMember, updateMemberRole, removeMember, subscribeToAuditLog, getLabInfo, writeAuditEntry } from '../utils/firebase';
 import { Shield, Users, FileText, Trash2, Download } from 'lucide-react';
 
 const ACTION_LABELS = {
@@ -11,6 +11,12 @@ const ACTION_LABELS = {
   culture_log_delete: '🦠 Evento de cultivo eliminado',
   culture_add: '🦠 Cultivo creado',
   culture_delete: '🦠 Cultivo eliminado',
+  member_role_change: '👤 Cambio de rol',
+  member_invited: '📩 Miembro invitado',
+  member_removed: '🚫 Miembro removido',
+  password_changed: '🔒 Contraseña cambiada',
+  protocol_created: '📜 Protocolo creado',
+  protocol_deleted: '📜 Protocolo eliminado',
 };
 
 export default function LabAdmin({ labId, user }) {
@@ -45,6 +51,7 @@ export default function LabAdmin({ labId, user }) {
     setInviteLoading(true); setInviteMsg('');
     try {
       await inviteMember(labId, labInfo?.name || 'Lab', inviteEmail.trim(), inviteRole, user.displayName || user.email);
+      writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action: 'member_invited', target: inviteEmail.trim(), details: { role: inviteRole } }).catch(console.error);
       setInviteMsg(`✅ Invitación enviada a ${inviteEmail}`);
       setInviteEmail('');
     } catch (err) {
@@ -57,6 +64,7 @@ export default function LabAdmin({ labId, user }) {
     if (!confirm(`¿Cambiar rol a "${newRole === 'admin' ? 'Administrador' : 'Estudiante'}"?`)) return;
     try {
       await updateMemberRole(labId, memberId, newRole);
+      writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action: 'member_role_change', target: memberId, details: { newRole } }).catch(console.error);
       loadMembers();
     } catch (err) {
       alert('Error: ' + err.message);
@@ -68,6 +76,7 @@ export default function LabAdmin({ labId, user }) {
     if (!confirm(`¿Remover a "${member.displayName || member.email}" del laboratorio? Esta acción es irreversible.`)) return;
     try {
       await removeMember(labId, member.id);
+      writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action: 'member_removed', target: member.displayName || member.email, details: {} }).catch(console.error);
       loadMembers();
     } catch (err) {
       alert('Error: ' + err.message);
@@ -81,6 +90,13 @@ export default function LabAdmin({ labId, user }) {
            (e.target || '').toLowerCase().includes(q) ||
            (e.action || '').toLowerCase().includes(q);
   });
+
+  const fmtTs = (ts) => {
+    if (!ts) return { date: '', time: '' };
+    if (ts.toDate) { const d = ts.toDate(); const iso = d.toISOString(); return { date: iso.split('T')[0], time: iso.split('T')[1]?.slice(0, 8) }; }
+    if (typeof ts === 'string') return { date: ts.split('T')[0], time: ts.split('T')[1]?.slice(0, 8) };
+    return { date: '', time: '' };
+  };
 
   const exportAuditCSV = () => {
     if (filteredAudit.length === 0) return;
@@ -201,8 +217,8 @@ export default function LabAdmin({ labId, user }) {
                   alignItems: 'flex-start'
                 }}>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', minWidth: '90px' }}>
-                    {e.timestamp?.split('T')[0]}<br />
-                    <span style={{ fontSize: '0.65rem' }}>{e.timestamp?.split('T')[1]?.slice(0, 8)}</span>
+                    {fmtTs(e.timestamp).date}<br />
+                    <span style={{ fontSize: '0.65rem' }}>{fmtTs(e.timestamp).time}</span>
                   </div>
                   <div style={{ flex: 1 }}>
                     <span style={{ fontWeight: 'bold' }}>👤 {e.displayName}</span>

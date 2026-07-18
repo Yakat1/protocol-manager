@@ -331,7 +331,26 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
           <div className="calc-row">
             <div className="input-group">
               <label className="input-label">Peso Molecular (g/mol)</label>
-              <input className="input-field" type="text" inputMode="decimal" value={molarity.mw} onChange={e => setMolarity({...molarity, mw: e.target.value})} />
+              <div style={{display: 'flex', gap: '4px'}}>
+                <select 
+                  className="input-field" 
+                  style={{flex: '0 0 auto', width: '32px', padding: '0 2px', textAlign: 'center', cursor: 'pointer'}} 
+                  title="Autocompletar PM desde inventario"
+                  onChange={e => {
+                    const invItem = inventory?.find(i => i.id === e.target.value);
+                    if (invItem && invItem.mw) {
+                      setMolarity({...molarity, mw: invItem.mw});
+                    }
+                    e.target.value = '';
+                  }}
+                >
+                  <option value="">▼</option>
+                  {inventory?.filter(i => i.type === 'Reactivo' && i.mw).map(i => (
+                    <option key={i.id} value={i.id}>{i.name}</option>
+                  ))}
+                </select>
+                <input className="input-field" type="text" inputMode="decimal" value={molarity.mw} onChange={e => setMolarity({...molarity, mw: e.target.value})} style={{flex: 1}}/>
+              </div>
             </div>
             <div className="input-group">
               <label className="input-label">Stock (%p/v)</label>
@@ -476,7 +495,27 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
               <div key={comp.id} style={{display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'flex-end', flexWrap: 'wrap'}}>
                 <div style={{flex: '1 1 120px', minWidth: '100px'}}>
                   {idx === 0 && <label className="input-label" style={{fontSize: '0.7rem'}}>Nombre</label>}
-                  <input className="input-field" type="text" placeholder="ej. NaCl" value={comp.name} onChange={e => updateBufferComponent(comp.id, 'name', e.target.value)} />
+                  <div style={{display: 'flex', gap: '4px'}}>
+                    <select 
+                      className="input-field" 
+                      style={{flex: '0 0 auto', width: '32px', padding: '0 2px', textAlign: 'center', cursor: 'pointer'}} 
+                      title="Seleccionar del inventario"
+                      onChange={e => {
+                        const invItem = inventory?.find(i => i.id === e.target.value);
+                        if (invItem) {
+                          updateBufferComponent(comp.id, 'name', invItem.name);
+                          if (invItem.mw) updateBufferComponent(comp.id, 'mw', invItem.mw);
+                        }
+                        e.target.value = '';
+                      }}
+                    >
+                      <option value="">▼</option>
+                      {inventory?.filter(i => i.type === 'Reactivo' || i.type === 'Solución Stock').map(i => (
+                        <option key={i.id} value={i.id}>{i.name}</option>
+                      ))}
+                    </select>
+                    <input className="input-field" type="text" placeholder="ej. NaCl" value={comp.name} onChange={e => updateBufferComponent(comp.id, 'name', e.target.value)} style={{flex: 1}}/>
+                  </div>
                 </div>
                 <div style={{flex: '0 1 100px', minWidth: '80px'}}>
                   {idx === 0 && <label className="input-label" style={{fontSize: '0.7rem'}}>PM (g/mol)</label>}
