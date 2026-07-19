@@ -366,7 +366,7 @@ export default function Workspace({
                       style={{ padding: "24px", marginBottom: "40px" }}
                     >
                       <div className="data-grid">
-                        {state.variables
+                        {(state.variables || [])
                           .filter(v => !v.appliesTo || v.appliesTo.length === 0 || v.appliesTo.includes(subject.modelTypeId))
                           .map((v) => (
                           <div key={v.id} className="input-group">
@@ -389,7 +389,7 @@ export default function Workspace({
                             />
                           </div>
                         ))}
-                        {state.variables.filter(v => !v.appliesTo || v.appliesTo.length === 0 || v.appliesTo.includes(subject.modelTypeId)).length === 0 && (
+                        {(state.variables || []).filter(v => !v.appliesTo || v.appliesTo.length === 0 || v.appliesTo.includes(subject.modelTypeId)).length === 0 && (
                           <div
                             style={{
                               gridColumn: "1 / -1",
