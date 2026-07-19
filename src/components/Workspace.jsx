@@ -12,6 +12,7 @@ export default function Workspace({
   setState,
   updateState,
   activeSubjectId,
+  setActiveSubjectId,
   onExportCSV,
   onExportBackup,
   onImportBackup,
