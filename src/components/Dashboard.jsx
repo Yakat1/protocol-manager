@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, AlertTriangle, Box, Clock, Microscope, TrendingUp, CloudUpload, HardDriveDownload } from 'lucide-react';
+import { Activity, AlertTriangle, Box, Clock, Microscope, TrendingUp, CloudUpload, HardDriveDownload, Calendar as CalendarIcon, CheckCircle2 } from 'lucide-react';
 import './Dashboard.css';
 
 function formatDuration(ms) {
@@ -80,6 +80,65 @@ export default function Dashboard({ state, setActiveTab, updateState, showToast 
 
   const runningTimers = timers.filter(t => !t.isPaused);
 
+  // 3. Tareas del Día (Cronograma)
+  const todayDateStr = new Date().toISOString().split('T')[0];
+  const todayEvents = [];
+  
+  // Jaulas
+  (state?.cages || []).forEach(cage => {
+    if (!cage.startDate || cage.recurrencePattern === 'none' || !cage.recurrencePattern) return;
+    const start = new Date(cage.startDate);
+    start.setHours(0,0,0,0);
+    const today = new Date(todayDateStr + "T00:00:00");
+    if (today < start) return;
+    
+    let shouldAdd = false;
+    if (cage.recurrencePattern === 'daily') shouldAdd = true;
+    if (cage.recurrencePattern === 'every_2_days') {
+      const diff = Math.floor((today - start) / (1000*60*60*24));
+      if (diff % 2 === 0) shouldAdd = true;
+    }
+    if (cage.recurrencePattern === 'every_3_days') {
+      const diff = Math.floor((today - start) / (1000*60*60*24));
+      if (diff % 3 === 0) shouldAdd = true;
+    }
+    if (cage.recurrencePattern === 'weekly' && today.getDay() === start.getDay()) shouldAdd = true;
+
+    if (shouldAdd) {
+      todayEvents.push({ id: cage.id, title: `Check: ${cage.name}`, type: 'cage', isDone: false });
+    }
+  });
+
+  // Manuales
+  (state?.calendarEvents || []).forEach(ev => {
+    if (!ev.isRecurring) {
+      if (ev.date === todayDateStr) {
+        todayEvents.push({ id: ev.id, title: ev.title, type: ev.type, isDone: ev.status === 'done' });
+      }
+      return;
+    }
+    const start = new Date(ev.startDate);
+    start.setHours(0,0,0,0);
+    const today = new Date(todayDateStr + "T00:00:00");
+    if (today < start) return;
+
+    let shouldAdd = false;
+    if (ev.recurrencePattern === 'daily') shouldAdd = true;
+    if (ev.recurrencePattern === 'weekdays' && today.getDay() >= 1 && today.getDay() <= 5) shouldAdd = true;
+    if (ev.recurrencePattern === 'every_3_days') {
+      const diff = Math.floor((today - start) / (1000*60*60*24));
+      if (diff % 3 === 0) shouldAdd = true;
+    }
+    if (ev.recurrencePattern === 'weekly' && today.getDay() === start.getDay()) shouldAdd = true;
+
+    if (shouldAdd) {
+      const isDone = ev.completedDates && ev.completedDates.includes(todayDateStr);
+      todayEvents.push({ id: ev.id, title: ev.title, type: ev.type, isDone });
+    }
+  });
+
+  const pendingEventsCount = todayEvents.filter(e => !e.isDone).length;
+
   // Módulo de Respaldo Híbrido OS
   const [backupLoading, setBackupLoading] = useState(false);
   const handleSelectFolder = async () => {
@@ -138,6 +197,14 @@ export default function Dashboard({ state, setActiveTab, updateState, showToast 
           <div className="kpi-info">
             <h3>{runningTimers.length}</h3>
             <p>Temporizadores Corriendo</p>
+          </div>
+        </div>
+
+        <div className="glass-panel kpi-card" onClick={() => setActiveTab('scheduler')} style={{cursor:'pointer'}}>
+          <div className="kpi-icon" style={{background: pendingEventsCount > 0 ? 'rgba(139, 92, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)', color: pendingEventsCount > 0 ? '#8b5cf6' : 'var(--success)'}}><CalendarIcon size={24}/></div>
+          <div className="kpi-info">
+            <h3 style={{color: pendingEventsCount > 0 ? '#8b5cf6' : 'inherit'}}>{pendingEventsCount}</h3>
+            <p>Tareas Pendientes Hoy</p>
           </div>
         </div>
       </div>
@@ -250,6 +317,31 @@ export default function Dashboard({ state, setActiveTab, updateState, showToast 
             >
               <HardDriveDownload size={16}/> {backupLoading ? "Escribiendo en disco..." : "Forzar Respaldo Ahora"}
             </button>
+          </div>
+        </div>
+
+        {/* Modulo 5: Agenda de Hoy */}
+        <div className="dash-module glass-panel">
+          <div className="module-header">
+            <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><CalendarIcon size={18} color="#8b5cf6"/> Agenda de Hoy</h3>
+          </div>
+          <div className="module-body">
+            {todayEvents.length === 0 ? (
+              <div className="empty-mini" style={{color: 'var(--success)'}}>Día libre. No hay eventos programados para hoy.</div>
+            ) : (
+              <div className="dash-list">
+                {todayEvents.map((ev, i) => (
+                  <div key={i} className={`dash-list-item ${ev.isDone ? 'warning-item' : ''}`} onClick={() => setActiveTab('scheduler')} title="Ir al Cronograma" style={{ opacity: ev.isDone ? 0.5 : 1 }}>
+                    <div style={{display:'flex', alignItems: 'center', gap: '10px'}}>
+                      {ev.isDone ? <CheckCircle2 size={16} color="var(--success)"/> : <Clock size={16} color="var(--text-secondary)"/>}
+                      <div style={{display:'flex', flexDirection:'column'}}>
+                        <span style={{fontWeight: 600, color: ev.isDone ? 'var(--success)' : 'var(--text-primary)', textDecoration: ev.isDone ? 'line-through' : 'none'}}>{ev.title}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
