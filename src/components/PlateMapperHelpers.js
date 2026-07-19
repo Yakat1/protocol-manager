@@ -73,24 +73,109 @@ export function applySerialDilution(wells, activeGroupId, config) {
 }
 
 export function applyReplicates(wells, groups, count, direction) {
-  const assigned = [];
-  ROWS.forEach((r, ri) => {
-    COLS.forEach((c, ci) => {
-      const key = wellKey(r, c);
-      if (wells[key]?.groupId) assigned.push({ ri, ci, data: wells[key] });
+  // Collect unique groups that are assigned to the plate (preserving first-seen order)
+  const lockedGroupIds = new Set(groups.filter(g => g.locked).map(g => g.id));
+  const seenGroupIds = [];
+  const seenSet = new Set();
+
+  // Scan row-major to get group assignment order
+  ROWS.forEach(r => {
+    COLS.forEach(c => {
+      const w = wells[wellKey(r, c)];
+      if (w?.groupId && !seenSet.has(w.groupId) && !lockedGroupIds.has(w.groupId)) {
+        seenGroupIds.push(w.groupId);
+        seenSet.add(w.groupId);
+      }
     });
   });
-  if (!assigned.length) return null;
-  const newWells = { ...wells };
-  assigned.forEach(({ ri, ci, data }) => {
-    for (let rep = 0; rep < count; rep++) {
-      const nr = direction === 'vertical' ? ri + rep : ri;
-      const nc = direction === 'horizontal' ? ci + rep : ci;
-      if (nr >= ROWS.length || nc >= COLS.length) continue;
-      const key = wellKey(ROWS[nr], COLS[nc]);
-      newWells[key] = { ...data, replicateNum: rep + 1 };
+  if (!seenGroupIds.length) return null;
+
+  // Start with only locked wells
+  const newWells = {};
+  Object.entries(wells).forEach(([key, w]) => {
+    if (w.groupId && lockedGroupIds.has(w.groupId)) {
+      newWells[key] = w;
     }
   });
+
+  // Collect the original data for each group (concentration, concUnit, etc.)
+  const groupData = {};
+  Object.values(wells).forEach(w => {
+    if (w.groupId && !groupData[w.groupId] && !lockedGroupIds.has(w.groupId)) {
+      groupData[w.groupId] = { ...w };
+    }
+  });
+
+  const isOccupied = (ri, ci) => {
+    const key = wellKey(ROWS[ri], COLS[ci]);
+    return !!newWells[key];
+  };
+
+  if (direction === 'vertical') {
+    // Vertical: each sample on its own row, replicas side-by-side
+    // M1: A1,A2  |  M2: B1,B2  |  M3: C1,C2
+    let currentRow = 0;
+    let currentCol = 0;
+    for (const gId of seenGroupIds) {
+      // Find a row/col position where all replicas fit side-by-side without overlap
+      let placed = false;
+      while (currentRow < ROWS.length && !placed) {
+        // Check if count replicas fit starting at (currentRow, currentCol)
+        let fits = true;
+        for (let rep = 0; rep < count; rep++) {
+          const ci = currentCol + rep;
+          if (ci >= COLS.length || isOccupied(currentRow, ci)) { fits = false; break; }
+        }
+        if (fits) {
+          for (let rep = 0; rep < count; rep++) {
+            const key = wellKey(ROWS[currentRow], COLS[currentCol + rep]);
+            newWells[key] = { ...groupData[gId], groupId: gId, replicateNum: rep + 1 };
+          }
+          placed = true;
+        }
+        currentRow++;
+      }
+      if (!placed) break;
+    }
+  } else {
+    // Horizontal: all samples across one row, replicas on subsequent rows
+    // Row 1: M1, M2, M3  |  Row 2: M1, M2, M3
+    let currentCol = 0;
+    let startRow = 0;
+    for (const gId of seenGroupIds) {
+      // Check if count replicas fit vertically at (startRow..startRow+count-1, currentCol)
+      let fits = true;
+      for (let rep = 0; rep < count; rep++) {
+        const ri = startRow + rep;
+        if (ri >= ROWS.length || isOccupied(ri, currentCol)) { fits = false; break; }
+      }
+      if (!fits) {
+        // Move to the next column block
+        currentCol++;
+        if (currentCol >= COLS.length) break;
+        // Re-check
+        fits = true;
+        for (let rep = 0; rep < count; rep++) {
+          const ri = startRow + rep;
+          if (ri >= ROWS.length || isOccupied(ri, currentCol)) { fits = false; break; }
+        }
+      }
+      if (fits) {
+        for (let rep = 0; rep < count; rep++) {
+          const ri = startRow + rep;
+          const key = wellKey(ROWS[ri], COLS[currentCol]);
+          newWells[key] = { ...groupData[gId], groupId: gId, replicateNum: rep + 1 };
+        }
+        currentCol++;
+        // Wrap to next row block if we run out of columns
+        if (currentCol >= COLS.length) {
+          currentCol = 0;
+          startRow += count;
+        }
+      }
+    }
+  }
+
   return newWells;
 }
 
@@ -192,52 +277,94 @@ export function importSampleList(text, groups, wells, replicateCount, direction,
   const newWells = { ...wells };
   
   const lockedGroupIds = new Set(groups.filter(g => g.locked).map(g => g.id));
-  const isLocked = (r, c) => {
-    const w = wells[wellKey(ROWS[r], COLS[c])];
+  const isLocked = (ri, ci) => {
+    const w = wells[wellKey(ROWS[ri], COLS[ci])];
     return w && lockedGroupIds.has(w.groupId);
   };
 
-  const slots = [];
-  if (direction === 'horizontal') {
-    for (let r = 0; r < ROWS.length; r++) {
-      for (let c = 0; c < COLS.length; c += replicateCount) {
-        slots.push({ r, c });
+  // Create all groups first
+  const createdGroupIds = names.map((name, i) => {
+    const gId = `imported_${Date.now()}_${i}`;
+    newGroups.push({ id: gId, name, color: WELL_TYPES.unknown.color, wellType: 'unknown' });
+    return gId;
+  });
+
+  if (populatePlate) {
+    if (direction === 'vertical') {
+      // Vertical: each sample gets its own row, replicas side-by-side
+      // M1: A1,A2  |  M2: B1,B2  |  M3: C1,C2
+      let currentRow = 0;
+      let colStart = 0;
+
+      for (let i = 0; i < createdGroupIds.length; i++) {
+        let placed = false;
+        while (currentRow < ROWS.length && !placed) {
+          let fits = true;
+          for (let rep = 0; rep < replicateCount; rep++) {
+            const ci = colStart + rep;
+            if (ci >= COLS.length || isLocked(currentRow, ci)) { fits = false; break; }
+            const key = wellKey(ROWS[currentRow], COLS[ci]);
+            if (newWells[key]?.groupId) { fits = false; break; }
+          }
+          if (fits) {
+            for (let rep = 0; rep < replicateCount; rep++) {
+              const key = wellKey(ROWS[currentRow], COLS[colStart + rep]);
+              newWells[key] = { groupId: createdGroupIds[i], value: null, replicateNum: rep + 1 };
+            }
+            placed = true;
+          }
+          currentRow++;
+        }
+        if (!placed) break;
       }
-    }
-  } else {
-    for (let c = 0; c < COLS.length; c++) {
-      for (let r = 0; r < ROWS.length; r += replicateCount) {
-        slots.push({ r, c });
+    } else {
+      // Horizontal: all samples across columns, replicas on subsequent rows
+      // Row A: M1, M2, M3  |  Row B: M1, M2, M3
+      let currentCol = 0;
+      let startRow = 0;
+
+      for (let i = 0; i < createdGroupIds.length; i++) {
+        // Check if replicas fit vertically at this position
+        let fits = true;
+        for (let rep = 0; rep < replicateCount; rep++) {
+          const ri = startRow + rep;
+          if (ri >= ROWS.length || isLocked(ri, currentCol)) { fits = false; break; }
+          const key = wellKey(ROWS[ri], COLS[currentCol]);
+          if (newWells[key]?.groupId) { fits = false; break; }
+        }
+
+        if (!fits) {
+          currentCol++;
+          if (currentCol >= COLS.length) {
+            currentCol = 0;
+            startRow += replicateCount;
+          }
+          if (startRow >= ROWS.length) break;
+          // Re-check at new position
+          fits = true;
+          for (let rep = 0; rep < replicateCount; rep++) {
+            const ri = startRow + rep;
+            if (ri >= ROWS.length || isLocked(ri, currentCol)) { fits = false; break; }
+            const key = wellKey(ROWS[ri], COLS[currentCol]);
+            if (newWells[key]?.groupId) { fits = false; break; }
+          }
+        }
+
+        if (fits) {
+          for (let rep = 0; rep < replicateCount; rep++) {
+            const ri = startRow + rep;
+            const key = wellKey(ROWS[ri], COLS[currentCol]);
+            newWells[key] = { groupId: createdGroupIds[i], value: null, replicateNum: rep + 1 };
+          }
+          currentCol++;
+          if (currentCol >= COLS.length) {
+            currentCol = 0;
+            startRow += replicateCount;
+          }
+        }
       }
     }
   }
 
-  const validSlots = slots.filter(({ r, c }) => {
-    for (let rep = 0; rep < replicateCount; rep++) {
-      let ri = direction === 'vertical' ? r + rep : r;
-      let ci = direction === 'horizontal' ? c + rep : c;
-      if (ri >= ROWS.length || ci >= COLS.length) return false;
-      if (isLocked(ri, ci)) return false;
-    }
-    return true;
-  });
-
-  let slotIndex = 0;
-  
-  names.forEach((name, i) => {
-    const gId = `imported_${Date.now()}_${i}`;
-    const g = { id: gId, name, color: WELL_TYPES.unknown.color, wellType: 'unknown' };
-    newGroups.push(g);
-    
-    if (populatePlate && slotIndex < validSlots.length) {
-      const { r: currRi, c: currCi } = validSlots[slotIndex];
-      for (let rep = 0; rep < replicateCount; rep++) {
-        let ri = direction === 'vertical' ? currRi + rep : currRi;
-        let ci = direction === 'horizontal' ? currCi + rep : currCi;
-        newWells[wellKey(ROWS[ri], COLS[ci])] = { groupId: gId, value: null, replicateNum: rep + 1 };
-      }
-      slotIndex++;
-    }
-  });
   return { groups: newGroups, wells: newWells };
 }

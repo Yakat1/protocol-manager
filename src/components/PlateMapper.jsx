@@ -528,6 +528,13 @@ export default function PlateMapper({ state, updateState }) {
       {showRep && (
         <div className="plate-tools-panel no-print">
           <h4><Copy size={16}/> Herramienta de Replicados</h4>
+          <div style={{fontSize:'0.78rem',color:'var(--text-secondary)',marginBottom:'10px',background:'rgba(0,0,0,0.03)',padding:'8px',borderRadius:'4px'}}>
+            <strong>Reorganiza automáticamente</strong> todas las muestras ya asignadas en la placa con la convención clásica de laboratorio:
+            <ul style={{margin:'4px 0 0 14px',padding:0}}>
+              <li><strong>↓ Vertical:</strong> Cada muestra en su propia fila, réplicas lado a lado → M1: A1,A2 | M2: B1,B2</li>
+              <li><strong>→ Horizontal:</strong> Todas las muestras en la misma fila, réplicas en filas debajo → Fila A: M1,M2,M3 | Fila B: M1,M2,M3</li>
+            </ul>
+          </div>
           <div className="plate-tools-row">
             <div className="field"><label>Réplicas</label>
               <select value={repCount} onChange={e => setRepCount(parseInt(e.target.value))}>
@@ -536,12 +543,12 @@ export default function PlateMapper({ state, updateState }) {
             </div>
             <div className="field"><label>Dirección</label>
               <select value={repDir} onChange={e => setRepDir(e.target.value)}>
-                <option value="vertical">↓ Vertical</option><option value="horizontal">→ Horizontal</option>
+                <option value="vertical">↓ Vertical (una muestra por fila)</option>
+                <option value="horizontal">→ Horizontal (muestras en fila, réplicas abajo)</option>
               </select>
             </div>
             <button className="btn btn-primary" onClick={handleReplicates}>Aplicar</button>
           </div>
-          <p style={{fontSize:'0.75rem',color:'var(--text-secondary)',marginTop:'8px'}}>Expande cada pocillo asignado en N réplicas adyacentes.</p>
         </div>
       )}
 
@@ -560,6 +567,13 @@ export default function PlateMapper({ state, updateState }) {
         <div className="plate-tools-panel no-print">
           <h4><Upload size={16}/> Importar Lista de Muestras</h4>
           <p style={{fontSize:'0.78rem',color:'var(--text-secondary)',marginBottom:'8px'}}>Pega una lista de nombres (uno por línea) o carga un CSV de una columna.</p>
+          <div style={{fontSize:'0.78rem',color:'var(--text-secondary)',marginBottom:'10px',background:'rgba(0,0,0,0.03)',padding:'8px',borderRadius:'4px'}}>
+            <strong>Convención de llenado:</strong>
+            <ul style={{margin:'4px 0 0 14px',padding:0}}>
+              <li><strong>↓ Vertical:</strong> Una muestra por fila, réplicas lado a lado → M1: A1,A2 | M2: B1,B2</li>
+              <li><strong>→ Horizontal:</strong> Muestras en la misma fila, réplicas en filas debajo → Fila A: M1,M2,M3 | Fila B: M1,M2,M3</li>
+            </ul>
+          </div>
           <div className="plate-tools-row" style={{marginBottom:'8px'}}>
             <div className="field"><label>Réplicas</label>
               <select value={sampleRepCount} onChange={e => setSampleRepCount(parseInt(e.target.value))}>
@@ -568,7 +582,8 @@ export default function PlateMapper({ state, updateState }) {
             </div>
             <div className="field"><label>Llenado</label>
               <select value={sampleDir} onChange={e => setSampleDir(e.target.value)}>
-                <option value="horizontal">→ Por filas</option><option value="vertical">↓ Por columnas</option>
+                <option value="vertical">↓ Vertical (una muestra por fila)</option>
+                <option value="horizontal">→ Horizontal (muestras en fila, réplicas abajo)</option>
               </select>
             </div>
           </div>
