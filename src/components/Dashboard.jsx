@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, AlertTriangle, Box, Clock, Microscope, TrendingUp, CloudUpload, HardDriveDownload, Calendar as CalendarIcon, CheckCircle2 } from 'lucide-react';
+import { Activity, AlertTriangle, Box, Clock, Microscope, TrendingUp, CloudUpload, HardDriveDownload, Calendar as CalendarIcon, CheckCircle2, Download } from 'lucide-react';
+import { exportBackup } from '../utils/export';
 import './Dashboard.css';
 
 function formatDuration(ms) {
@@ -291,32 +292,47 @@ export default function Dashboard({ state, setActiveTab, updateState, showToast 
           </div>
         </div>
 
-        {/* Modulo 4: Sistema de Respaldo Híbrido C++ */}
+        {/* Modulo 4: Sistema de Respaldo Híbrido */}
         <div className="dash-module glass-panel">
           <div className="module-header">
-            <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><CloudUpload size={18} color="var(--accent)"/> Respaldo Nativo</h3>
+            <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><CloudUpload size={18} color="var(--accent)"/> Respaldo de Base de Datos</h3>
           </div>
           <div className="module-body" style={{display: 'flex', flexDirection: 'column', gap: '16px'}}>
             <div style={{fontSize: '0.85rem', color: 'var(--text-secondary)'}}>
-              La LIMS de Escritorio puede exportar silenciosamente la totalidad de la base de datos y adjuntos directamente a sus discos duros locales o unidades de red.
+              Asegura tu trabajo exportando una copia local de toda la base de datos (Sujetos, Inventario, Cronogramas, y Logs).
             </div>
             
-            <div style={{background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', justifyContent: 'space-between'}}>
-              <div>
-                <strong style={{display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)'}}>Directorio de Sincronización Destino</strong>
-                <span style={{fontSize: '0.9rem', color: state?.backupPath ? 'var(--success)' : 'var(--danger)', wordBreak: 'break-all'}}>{state?.backupPath || "Ninguna ruta asignada."}</span>
-              </div>
-              <button className="btn" onClick={handleSelectFolder} style={{padding: '4px 8px', fontSize: '0.8rem'}}>Cambiar Carpeta</button>
-            </div>
+            {window.electronAPI ? (
+              <>
+                <div style={{background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', justifyContent: 'space-between'}}>
+                  <div>
+                    <strong style={{display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)'}}>Directorio de Sincronización Destino (App Escritorio)</strong>
+                    <span style={{fontSize: '0.9rem', color: state?.backupPath ? 'var(--success)' : 'var(--danger)', wordBreak: 'break-all'}}>{state?.backupPath || "Ninguna ruta asignada."}</span>
+                  </div>
+                  <button className="btn" onClick={handleSelectFolder} style={{padding: '4px 8px', fontSize: '0.8rem'}}>Cambiar Carpeta</button>
+                </div>
 
-            <button 
-              className="btn btn-primary" 
-              onClick={fireBackup} 
-              disabled={!state?.backupPath || backupLoading}
-              style={{width: '100%', display: 'flex', justifyContent: 'center', gap: '8px'}}
-            >
-              <HardDriveDownload size={16}/> {backupLoading ? "Escribiendo en disco..." : "Forzar Respaldo Ahora"}
-            </button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={fireBackup} 
+                  disabled={!state?.backupPath || backupLoading}
+                  style={{width: '100%', display: 'flex', justifyContent: 'center', gap: '8px'}}
+                >
+                  <HardDriveDownload size={16}/> {backupLoading ? "Escribiendo en disco..." : "Forzar Respaldo Local Ahora"}
+                </button>
+              </>
+            ) : (
+              <button 
+                className="btn btn-primary" 
+                onClick={() => {
+                  showToast("Iniciando descarga de respaldo JSON...");
+                  exportBackup(state);
+                }}
+                style={{width: '100%', display: 'flex', justifyContent: 'center', gap: '8px'}}
+              >
+                <Download size={16}/> Descargar Respaldo JSON (Web/PWA)
+              </button>
+            )}
           </div>
         </div>
 
