@@ -212,7 +212,7 @@ export default function Dashboard({ state, setActiveTab, updateState, showToast 
 
       {/* Grid Principal Modulos */}
       <div className="dash-modules-grid">
-        {/* Modulo 1: Estado de Cultivos (Semáforo) */}
+        {/* Fila 1, Col 1: Estado de Cultivos (Semáforo) */}
         <div className="dash-module glass-panel">
           <div className="module-header">
             <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><Activity size={18} color="var(--success)"/> Monitor de Cultivos</h3>
@@ -238,7 +238,60 @@ export default function Dashboard({ state, setActiveTab, updateState, showToast 
           </div>
         </div>
 
-        {/* Modulo 2: Inventario Crítico */}
+        {/* Fila 1, Col 2: Agenda de Hoy */}
+        <div className="dash-module glass-panel">
+          <div className="module-header">
+            <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><CalendarIcon size={18} color="#8b5cf6"/> Agenda de Hoy</h3>
+          </div>
+          <div className="module-body">
+            {todayEvents.length === 0 ? (
+              <div className="empty-mini" style={{color: 'var(--success)'}}>Día libre. No hay eventos programados para hoy.</div>
+            ) : (
+              <div className="dash-list">
+                {todayEvents.map((ev, i) => (
+                  <div key={i} className={`dash-list-item ${ev.isDone ? 'warning-item' : ''}`} onClick={() => setActiveTab('scheduler')} title="Ir al Cronograma" style={{ opacity: ev.isDone ? 0.5 : 1 }}>
+                    <div style={{display:'flex', alignItems: 'center', gap: '10px'}}>
+                      {ev.isDone ? <CheckCircle2 size={16} color="var(--success)"/> : <Clock size={16} color="var(--text-secondary)"/>}
+                      <div style={{display:'flex', flexDirection:'column'}}>
+                        <span style={{fontWeight: 600, color: ev.isDone ? 'var(--success)' : 'var(--text-primary)', textDecoration: ev.isDone ? 'line-through' : 'none'}}>{ev.title}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Fila 2, Col 1: Temporizadores Activos en Vivo */}
+        <div className="dash-module glass-panel">
+          <div className="module-header">
+            <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><TrendingUp size={18} color="#f59e0b"/> Temporizadores Activos</h3>
+          </div>
+          <div className="module-body">
+            {runningTimers.length === 0 ? (
+              <div className="empty-mini">No hay cronómetros activos actualmente.</div>
+            ) : (
+              <div className="dash-list">
+                {runningTimers.map(t => {
+                  const totalElapsed = t.accumulatedMs + (now - t.startedAt);
+                  return (
+                    <div key={t.id} className="dash-list-item live-timer-item" onClick={() => setActiveTab('timers')} title="Administrar Timer">
+                      <div style={{display:'flex', flexDirection:'column'}}>
+                        <span style={{fontWeight: 600, color: 'var(--text-primary)'}}>{t.label}</span>
+                      </div>
+                      <div style={{fontFamily: 'monospace', fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--accent)'}}>
+                        {formatDuration(totalElapsed)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Fila 2, Col 2: Inventario Crítico */}
         <div className="dash-module glass-panel">
           <div className="module-header">
             <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><AlertTriangle size={18} color="var(--danger)"/> Alertas de Inventario</h3>
@@ -264,36 +317,8 @@ export default function Dashboard({ state, setActiveTab, updateState, showToast 
           </div>
         </div>
 
-        {/* Modulo 3: Timers Activos en Vivo */}
+        {/* Fila 3: Sistema de Respaldo Híbrido (Ancho Completo) */}
         <div className="dash-module glass-panel module-full-center">
-          <div className="module-header">
-            <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><TrendingUp size={18} color="#f59e0b"/> Estímulos Activos</h3>
-          </div>
-          <div className="module-body">
-            {runningTimers.length === 0 ? (
-              <div className="empty-mini">No hay cronómetros activos actualmente.</div>
-            ) : (
-              <div className="dash-list">
-                {runningTimers.map(t => {
-                  const totalElapsed = t.accumulatedMs + (now - t.startedAt);
-                  return (
-                    <div key={t.id} className="dash-list-item live-timer-item" onClick={() => setActiveTab('timers')} title="Administrar Timer">
-                      <div style={{display:'flex', flexDirection:'column'}}>
-                        <span style={{fontWeight: 600, color: 'var(--text-primary)'}}>{t.label}</span>
-                      </div>
-                      <div style={{fontFamily: 'monospace', fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--accent)'}}>
-                        {formatDuration(totalElapsed)}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Modulo 4: Sistema de Respaldo Híbrido */}
-        <div className="dash-module glass-panel">
           <div className="module-header">
             <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><CloudUpload size={18} color="var(--accent)"/> Respaldo de Base de Datos</h3>
           </div>
@@ -332,31 +357,6 @@ export default function Dashboard({ state, setActiveTab, updateState, showToast 
               >
                 <Download size={16}/> Descargar Respaldo JSON (Web/PWA)
               </button>
-            )}
-          </div>
-        </div>
-
-        {/* Modulo 5: Agenda de Hoy */}
-        <div className="dash-module glass-panel">
-          <div className="module-header">
-            <h3 style={{display:'flex', alignItems:'center', gap:'8px'}}><CalendarIcon size={18} color="#8b5cf6"/> Agenda de Hoy</h3>
-          </div>
-          <div className="module-body">
-            {todayEvents.length === 0 ? (
-              <div className="empty-mini" style={{color: 'var(--success)'}}>Día libre. No hay eventos programados para hoy.</div>
-            ) : (
-              <div className="dash-list">
-                {todayEvents.map((ev, i) => (
-                  <div key={i} className={`dash-list-item ${ev.isDone ? 'warning-item' : ''}`} onClick={() => setActiveTab('scheduler')} title="Ir al Cronograma" style={{ opacity: ev.isDone ? 0.5 : 1 }}>
-                    <div style={{display:'flex', alignItems: 'center', gap: '10px'}}>
-                      {ev.isDone ? <CheckCircle2 size={16} color="var(--success)"/> : <Clock size={16} color="var(--text-secondary)"/>}
-                      <div style={{display:'flex', flexDirection:'column'}}>
-                        <span style={{fontWeight: 600, color: ev.isDone ? 'var(--success)' : 'var(--text-primary)', textDecoration: ev.isDone ? 'line-through' : 'none'}}>{ev.title}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
             )}
           </div>
         </div>
