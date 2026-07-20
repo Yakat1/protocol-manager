@@ -529,7 +529,7 @@ export default function PlateMapper({ state, updateState }) {
         <div className="plate-tools-panel no-print">
           <h4><Copy size={16}/> Herramienta de Replicados</h4>
           <div style={{fontSize:'0.78rem',color:'var(--text-secondary)',marginBottom:'10px',background:'rgba(0,0,0,0.03)',padding:'8px',borderRadius:'4px'}}>
-            <strong>Reorganiza automáticamente</strong> todas las muestras ya asignadas en la placa con la convención clásica de laboratorio:
+            <strong>Distribuye automáticamente</strong> todos los grupos activos (no bloqueados) en la placa con la convención clásica de laboratorio:
             <ul style={{margin:'4px 0 0 14px',padding:0}}>
               <li><strong>↓ Vertical:</strong> Cada muestra en su propia fila, réplicas lado a lado → M1: A1,A2 | M2: B1,B2</li>
               <li><strong>→ Horizontal:</strong> Todas las muestras en la misma fila, réplicas en filas debajo → Fila A: M1,M2,M3 | Fila B: M1,M2,M3</li>

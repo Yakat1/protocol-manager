@@ -73,21 +73,10 @@ export function applySerialDilution(wells, activeGroupId, config) {
 }
 
 export function applyReplicates(wells, groups, count, direction) {
-  // Collect unique groups that are assigned to the plate (preserving first-seen order)
+  // Collect all unlocked groups to be laid out (preserving their order in the groups list)
   const lockedGroupIds = new Set(groups.filter(g => g.locked).map(g => g.id));
-  const seenGroupIds = [];
-  const seenSet = new Set();
+  const seenGroupIds = groups.filter(g => !g.locked).map(g => g.id);
 
-  // Scan row-major to get group assignment order
-  ROWS.forEach(r => {
-    COLS.forEach(c => {
-      const w = wells[wellKey(r, c)];
-      if (w?.groupId && !seenSet.has(w.groupId) && !lockedGroupIds.has(w.groupId)) {
-        seenGroupIds.push(w.groupId);
-        seenSet.add(w.groupId);
-      }
-    });
-  });
   if (!seenGroupIds.length) return null;
 
   // Start with only locked wells
