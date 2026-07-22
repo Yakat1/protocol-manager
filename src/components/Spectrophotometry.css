@@ -84,6 +84,7 @@
   border-radius: 6px;
   border: 1px solid var(--border-color);
   background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .admin-actions {
@@ -146,6 +147,15 @@
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
+}
+
+.settings-row select {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: inherit;
 }
 
 .spectro-table {
