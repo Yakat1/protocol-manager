@@ -293,7 +293,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
       )}
       
       {!activeProtocolId && (
-        <div className="locked-alert" style={{borderColor: '#9ca3af', backgroundColor: '#f3f4f6', color: '#4b5563'}}>
+        <div className="locked-alert" style={{borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)'}}>
           <strong>Modo Libre Activo</strong>: Estás trabajando sin protocolo. No podrás guardar tu curva en la nube hasta que selecciones o crees un protocolo oficial.
         </div>
       )}

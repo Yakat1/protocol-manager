@@ -28,7 +28,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 16px;
-  background: white;
+  background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   padding: 16px 20px;
   border-radius: 12px;
