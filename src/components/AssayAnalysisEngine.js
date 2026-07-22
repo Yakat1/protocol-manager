@@ -66,7 +66,7 @@ export function processSpectroSamples(samples, method, curveParams, factor, glob
   });
 }
 
-export function generateSpectroXLSX(samples, standards, method, curveParams, factor, globalDilution, globalTime) {
+export function generateSpectroXLSX(samples, standards, numReplicates, method, curveParams, factor, globalDilution, globalTime) {
   const wb = XLSX.utils.book_new();
 
   // Sheet 1: Results
@@ -86,29 +86,73 @@ export function generateSpectroXLSX(samples, standards, method, curveParams, fac
   curveData.push({ Parametro: 'Método', Valor: method === 'linear' ? 'Regresión Lineal' : 'Factor de Corrección' });
   curveData.push({ Parametro: 'Dilución Global', Valor: globalDilution });
   curveData.push({ Parametro: 'Tiempo Global (min)', Valor: globalTime });
+  curveData.push({});
   
+  // Promedio (Final)
+  curveData.push({ Parametro: '=== RESULTADO FINAL (PROMEDIO) ===', Valor: '' });
   if (method === 'linear' && curveParams) {
     curveData.push({ Parametro: 'Pendiente (m)', Valor: parseFloat(curveParams.m.toFixed(5)) });
     curveData.push({ Parametro: 'Intersección (b)', Valor: parseFloat(curveParams.b.toFixed(5)) });
     curveData.push({ Parametro: 'R²', Valor: parseFloat(curveParams.r2.toFixed(5)) });
     curveData.push({ Parametro: 'Ecuación', Valor: `y = ${curveParams.m.toFixed(4)}x + ${curveParams.b.toFixed(4)}` });
   } else if (method === 'factor' && factor !== null) {
-    curveData.push({ Parametro: 'Factor', Valor: parseFloat(factor.toFixed(5)) });
+    curveData.push({ Parametro: 'Factor (Final)', Valor: parseFloat(factor.toFixed(5)) });
+  }
+  curveData.push({});
+
+  // Individual Replicates (if > 1)
+  if (numReplicates > 1) {
+    for (let r = 0; r < numReplicates; r++) {
+      const repPts = standards
+        .map(s => ({ x: parseFloat(s.concentration), y: parseFloat(s.values[r]) }))
+        .filter(p => !isNaN(p.x) && !isNaN(p.y));
+      
+      if (repPts.length > 0) {
+        curveData.push({ Parametro: `=== RÉPLICA ${r + 1} ===`, Valor: '' });
+        if (method === 'linear') {
+          const lr = linearRegression(repPts);
+          curveData.push({ Parametro: `R² (Rép ${r + 1})`, Valor: parseFloat(lr.r2.toFixed(5)) });
+          curveData.push({ Parametro: `Eq (Rép ${r + 1})`, Valor: `y = ${lr.m.toFixed(4)}x + ${lr.b.toFixed(4)}` });
+        } else {
+          const f = calculateFactor(repPts);
+          curveData.push({ Parametro: `Factor (Rép ${r + 1})`, Valor: parseFloat(f.toFixed(5)) });
+        }
+      }
+    }
+    curveData.push({});
   }
   
-  curveData.push({});
-  curveData.push({ Parametro: 'Datos de Calibración', Valor: '' });
+  // Data points
+  curveData.push({ Parametro: '=== DATOS DE CALIBRACIÓN ===', Valor: '' });
+  
+  // Build header row for table
+  const headerRow = { Parametro: 'Concentración' };
+  if (numReplicates === 1) {
+    headerRow.Valor = 'Absorbancia';
+  } else {
+    for(let r=0; r<numReplicates; r++) {
+      headerRow[`Abs_${r+1}`] = `Abs ${r+1}`;
+    }
+    headerRow.Valor = 'Promedio Abs';
+  }
+  curveData.push(headerRow);
   
   standards.forEach(std => {
-    if (std.concentration !== null && std.value !== null) {
-      curveData.push({
-        Parametro: `${std.concentration} μM`,
-        Valor: std.value
-      });
+    if (std.concentration !== null && std.concentration !== '') {
+      const row = { Parametro: std.concentration };
+      if (numReplicates === 1) {
+        row.Valor = std.values[0];
+      } else {
+        for(let r=0; r<numReplicates; r++) {
+          row[`Abs_${r+1}`] = std.values[r];
+        }
+        row.Valor = std.average;
+      }
+      curveData.push(row);
     }
   });
 
-  const wsCurve = XLSX.utils.json_to_sheet(curveData);
+  const wsCurve = XLSX.utils.json_to_sheet(curveData, { skipHeader: true });
   XLSX.utils.book_append_sheet(wb, wsCurve, "Curva Estándar");
 
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });

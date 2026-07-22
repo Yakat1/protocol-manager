@@ -16,8 +16,17 @@ function downloadFile(blob, filename) {
   document.body.removeChild(a);
 }
 
+// Compute the average of valid values in an array of strings/numbers
+function computeAverage(vals) {
+  const valid = vals.map(v => parseFloat(v)).filter(v => !isNaN(v));
+  if (valid.length === 0) return null;
+  const sum = valid.reduce((acc, curr) => acc + curr, 0);
+  return sum / valid.length;
+}
+
 export default function Spectrophotometry({ state, updateState, user, userRole }) {
-  const [standards, setStandards] = useState([{ id: uuidv4(), concentration: '', value: '' }]);
+  const [numReplicates, setNumReplicates] = useState(1);
+  const [standards, setStandards] = useState([{ id: uuidv4(), concentration: '', values: ['', '', ''] }]);
   const [samples, setSamples] = useState([{ id: uuidv4(), name: 'Muestra 1', value: '', dilution: '', time: '' }]);
   const [method, setMethod] = useState('linear');
   const [globalDilution, setGlobalDilution] = useState(1);
@@ -31,22 +40,32 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
   const templates = state?.spectroTemplates || [];
   const calibrations = state?.spectroCalibrations || [];
 
-  // If a calibration is loaded, everything is locked to that calibration's math.
   const activeCalibration = useMemo(() => calibrations.find(c => c.id === activeCalibrationId), [calibrations, activeCalibrationId]);
   const activeTemplate = useMemo(() => templates.find(t => t.id === activeTemplateId), [templates, activeTemplateId]);
 
-  // Clean standards for math (only used if NO calibration is loaded)
-  const cleanStandards = standards
-    .map(s => ({ x: parseFloat(s.concentration), y: parseFloat(s.value) }))
-    .filter(s => !isNaN(s.x) && !isNaN(s.y));
+  // Append average to each standard row
+  const standardsWithAverage = useMemo(() => {
+    return standards.map(s => {
+      const activeValues = s.values.slice(0, numReplicates);
+      return { ...s, activeValues, average: computeAverage(activeValues) };
+    });
+  }, [standards, numReplicates]);
 
-  // Compute curve params
+  // Clean standards (average) for math
+  const cleanStandards = useMemo(() => {
+    return standardsWithAverage
+      .map(s => ({ x: parseFloat(s.concentration), y: s.average, values: s.activeValues }))
+      .filter(s => !isNaN(s.x) && s.y !== null);
+  }, [standardsWithAverage]);
+
+  // Compute final curve params from averages
   const computedCurveParams = useMemo(() => {
     if (activeCalibration) return activeCalibration.curveParams;
     if (method === 'linear') return linearRegression(cleanStandards);
     return null;
   }, [cleanStandards, method, activeCalibration]);
 
+  // Compute final factor from averages
   const computedFactor = useMemo(() => {
     if (activeCalibration) return activeCalibration.factor;
     if (method === 'factor') {
@@ -56,23 +75,19 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
     return null;
   }, [cleanStandards, method, manualFactor, activeCalibration]);
 
-  // Active Method
   const activeMethod = activeCalibration ? activeCalibration.method : method;
 
-  // Process samples
   const processedSamples = useMemo(() => {
     return processSpectroSamples(samples, activeMethod, computedCurveParams, computedFactor, globalDilution, globalTime);
   }, [samples, activeMethod, computedCurveParams, computedFactor, globalDilution, globalTime]);
 
-  // Chart data
   const chartData = useMemo(() => {
-    // If a calibration is loaded, show its standard points instead.
     const pts = activeCalibration ? activeCalibration.standards : cleanStandards;
     if (!pts || pts.length === 0) return [];
     
     let data = pts.map(s => ({
       concentration: s.x,
-      absorbance: s.y,
+      absorbance: s.y, // This is the average
       isStandard: true
     }));
 
@@ -92,8 +107,17 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
   }, [cleanStandards, activeMethod, computedCurveParams, computedFactor, activeCalibration]);
 
   const handleExport = () => {
-    const exportStandards = activeCalibration ? activeCalibration.standards : standards;
-    const blob = generateSpectroXLSX(processedSamples, exportStandards, activeMethod, computedCurveParams, computedFactor, globalDilution, globalTime);
+    const exportStandards = activeCalibration ? activeCalibration.standards : standardsWithAverage;
+    const blob = generateSpectroXLSX(
+      processedSamples, 
+      exportStandards, 
+      activeCalibration ? activeCalibration.numReplicates : numReplicates,
+      activeMethod, 
+      computedCurveParams, 
+      computedFactor, 
+      globalDilution, 
+      globalTime
+    );
     downloadFile(blob, 'Resultados_Espectrofotometria.xlsx');
   };
 
@@ -102,25 +126,40 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
       const text = await navigator.clipboard.readText();
       const rows = text.trim().split('\n').map(r => r.split('\t'));
       
-      // If template is active, map onto existing standards
+      const cols = rows[0].length;
+      let newReps = numReplicates;
+      if (cols >= 4) newReps = 3;
+      else if (cols === 3) newReps = 2;
+      else if (cols === 2) newReps = 1;
+      
+      setNumReplicates(newReps);
+
       if (activeTemplate) {
         const newStds = [...standards];
         rows.forEach((r, i) => {
           if (newStds[i]) {
-            newStds[i].value = r[1] ? r[1].replace(',','.') : (r[0] ? r[0].replace(',','.') : '');
+            newStds[i].values[0] = r[1] ? r[1].replace(',','.') : '';
+            if (newReps >= 2) newStds[i].values[1] = r[2] ? r[2].replace(',','.') : '';
+            if (newReps >= 3) newStds[i].values[2] = r[3] ? r[3].replace(',','.') : '';
           }
         });
         setStandards(newStds);
       } else {
-        const newStds = rows.map(r => ({
-          id: uuidv4(),
-          concentration: r[0] ? r[0].replace(',','.') : '',
-          value: r[1] ? r[1].replace(',','.') : ''
-        }));
+        const newStds = rows.map(r => {
+          const vals = ['', '', ''];
+          if (cols >= 2) vals[0] = r[1] ? r[1].replace(',','.') : '';
+          if (cols >= 3) vals[1] = r[2] ? r[2].replace(',','.') : '';
+          if (cols >= 4) vals[2] = r[3] ? r[3].replace(',','.') : '';
+          return {
+            id: uuidv4(),
+            concentration: r[0] ? r[0].replace(',','.') : '',
+            values: vals
+          };
+        });
         setStandards(newStds);
       }
     } catch(e) {
-      alert("Error al pegar.");
+      alert("Error al pegar. Verifica que los datos vengan desde Excel.");
     }
   };
 
@@ -145,13 +184,13 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
     const tid = e.target.value;
     setActiveTemplateId(tid);
     if (!tid) {
-      setStandards([{ id: uuidv4(), concentration: '', value: '' }]);
+      setStandards([{ id: uuidv4(), concentration: '', values: ['', '', ''] }]);
       return;
     }
     const tmpl = templates.find(t => t.id === tid);
     if (tmpl) {
       setMethod(tmpl.method);
-      setStandards(tmpl.concentrations.map(c => ({ id: uuidv4(), concentration: c, value: '' })));
+      setStandards(tmpl.concentrations.map(c => ({ id: uuidv4(), concentration: c, values: ['', '', ''] })));
     }
   };
 
@@ -188,6 +227,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
       method,
       factor: computedFactor,
       curveParams: computedCurveParams,
+      numReplicates,
       standards: cleanStandards
     };
     updateState({ spectroCalibrations: [...calibrations, newCal] });
@@ -204,7 +244,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
     <div className="spectro-container">
       <div className="spectro-header">
         <h2>🔬 Análisis Espectrofotométrico</h2>
-        <p>Procesa absorbancias usando curvas estándar o factores matemáticos compartidos por el laboratorio.</p>
+        <p>Procesa absorbancias usando curvas estándar (soporta réplicas) o factores compartidos.</p>
       </div>
       
       {/* NUBE CLOUD BAR */}
@@ -243,8 +283,8 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
 
       {activeCalibration && (
         <div className="locked-alert">
-          <strong>🔒 Modo Lectura (Curva Cargada)</strong>: Estás utilizando la calibración de <strong>{activeCalibration.authorName}</strong>. 
-          El factor matemático está bloqueado para asegurar reproducibilidad. Para crear una nueva curva, vuelve a "Mi Propia Curva".
+          <strong>🔒 Modo Lectura (Curva Cargada)</strong>: Estás utilizando el factor consolidado de <strong>{activeCalibration.authorName}</strong>. 
+          Para estandarizar una nueva curva o ingresar réplicas, vuelve a "Mi Propia Curva".
         </div>
       )}
 
@@ -257,6 +297,16 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
           <div className="spectro-card">
             <h3>⚙️ Configuración del Ensayo</h3>
             <div className="settings-row">
+              {!activeCalibration && (
+                <div className="field">
+                  <label>Réplicas de Curva</label>
+                  <select value={numReplicates} onChange={e => setNumReplicates(Number(e.target.value))}>
+                    <option value={1}>1 (Simple)</option>
+                    <option value={2}>2 (Duplicado)</option>
+                    <option value={3}>3 (Triplicado)</option>
+                  </select>
+                </div>
+              )}
               <div className="field">
                 <label>Método de Cálculo</label>
                 <select value={activeMethod} onChange={e => setMethod(e.target.value)} disabled={!!activeCalibration || !!activeTemplate}>
@@ -264,12 +314,12 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
                   <option value="factor">Factor de Corrección (ΣConc / ΣAbs)</option>
                 </select>
               </div>
-              <div className="field">
-                <label>Dilución Global</label>
+              <div className="field" style={{width:'80px'}}>
+                <label>Dil. Global</label>
                 <input type="number" step="any" value={globalDilution} onChange={e => setGlobalDilution(e.target.value)} />
               </div>
-              <div className="field">
-                <label>Tiempo Global (min)</label>
+              <div className="field" style={{width:'80px'}}>
+                <label>T (min)</label>
                 <input type="number" step="any" value={globalTime} onChange={e => setGlobalTime(e.target.value)} />
               </div>
             </div>
@@ -289,7 +339,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
 
           {/* Standards Card */}
           {!activeCalibration && (
-            <div className="spectro-card">
+            <div className="spectro-card" style={{overflowX: 'auto'}}>
               <div className="card-header-flex">
                 <h3>🧪 Curva Estándar {activeTemplate && `(${activeTemplate.name})`}</h3>
                 <button className="btn btn-small" onClick={handlePasteStandards}><ClipboardPaste size={14}/> Pegar de Excel</button>
@@ -298,28 +348,54 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
               <table className="spectro-table">
                 <thead>
                   <tr>
-                    <th>Concentración {activeTemplate && '🔒'}</th>
-                    <th>Absorbancia</th>
-                    {!activeTemplate && <th width="40"></th>}
+                    <th>[ ] {activeTemplate && '🔒'}</th>
+                    <th>Abs 1</th>
+                    {numReplicates >= 2 && <th>Abs 2</th>}
+                    {numReplicates >= 3 && <th>Abs 3</th>}
+                    {numReplicates > 1 && <th style={{color:'#8b5cf6'}}>Promedio</th>}
+                    {!activeTemplate && <th width="30"></th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {standards.map((s, i) => (
+                  {standardsWithAverage.map((s, i) => (
                     <tr key={s.id}>
                       <td>
                         <input type="number" step="any" value={s.concentration} onChange={e => {
                           const newS = [...standards];
                           newS[i].concentration = e.target.value;
                           setStandards(newS);
-                        }} placeholder="Ej. 15" disabled={!!activeTemplate} />
+                        }} placeholder="[ ]" disabled={!!activeTemplate} style={{width:'70px'}} />
                       </td>
                       <td>
-                        <input type="number" step="any" value={s.value} onChange={e => {
+                        <input type="number" step="any" value={s.values[0]} onChange={e => {
                           const newS = [...standards];
-                          newS[i].value = e.target.value;
+                          newS[i].values[0] = e.target.value;
                           setStandards(newS);
-                        }} placeholder="Ej. 0.25" />
+                        }} placeholder="Abs" />
                       </td>
+                      {numReplicates >= 2 && (
+                        <td>
+                          <input type="number" step="any" value={s.values[1]} onChange={e => {
+                            const newS = [...standards];
+                            newS[i].values[1] = e.target.value;
+                            setStandards(newS);
+                          }} placeholder="Abs" />
+                        </td>
+                      )}
+                      {numReplicates >= 3 && (
+                        <td>
+                          <input type="number" step="any" value={s.values[2]} onChange={e => {
+                            const newS = [...standards];
+                            newS[i].values[2] = e.target.value;
+                            setStandards(newS);
+                          }} placeholder="Abs" />
+                        </td>
+                      )}
+                      {numReplicates > 1 && (
+                        <td>
+                          <strong style={{fontSize:'0.9rem', color:'#8b5cf6'}}>{s.average !== null ? s.average.toFixed(4) : '-'}</strong>
+                        </td>
+                      )}
                       {!activeTemplate && (
                         <td>
                           <button className="btn-icon" onClick={() => setStandards(standards.filter(st => st.id !== s.id))}><Trash2 size={16}/></button>
@@ -330,7 +406,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
                 </tbody>
               </table>
               {!activeTemplate && (
-                <button className="btn btn-outline" style={{marginTop:'10px', width:'100%'}} onClick={() => setStandards([...standards, { id: uuidv4(), concentration: '', value: '' }])}>
+                <button className="btn btn-outline" style={{marginTop:'10px', width:'100%'}} onClick={() => setStandards([...standards, { id: uuidv4(), concentration: '', values: ['', '', ''] }])}>
                   <Plus size={16}/> Agregar Fila
                 </button>
               )}
@@ -338,7 +414,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
           )}
 
           {/* Samples Card */}
-          <div className="spectro-card">
+          <div className="spectro-card" style={{overflowX: 'auto'}}>
             <div className="card-header-flex">
               <h3>🧬 Muestras</h3>
               <button className="btn btn-small" onClick={handlePasteSamples}><ClipboardPaste size={14}/> Pegar de Excel</button>
@@ -349,9 +425,9 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
                 <tr>
                   <th>Nombre</th>
                   <th>Absorbancia</th>
-                  <th>Dil. (Opc.)</th>
-                  <th>T (Opc.)</th>
-                  <th width="40"></th>
+                  <th>Dil. (Opc)</th>
+                  <th>T (Opc)</th>
+                  <th width="30"></th>
                 </tr>
               </thead>
               <tbody>
@@ -360,7 +436,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
                     <td>
                       <input type="text" value={s.name} onChange={e => {
                         const newS = [...samples]; newS[i].name = e.target.value; setSamples(newS);
-                      }} placeholder="Muestra" />
+                      }} placeholder="Muestra" style={{width:'100px'}} />
                     </td>
                     <td>
                       <input type="number" step="any" value={s.value} onChange={e => {
@@ -370,12 +446,12 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
                     <td>
                       <input type="number" step="any" value={s.dilution} onChange={e => {
                         const newS = [...samples]; newS[i].dilution = e.target.value; setSamples(newS);
-                      }} placeholder={`(${globalDilution})`} />
+                      }} placeholder={`(${globalDilution})`} style={{width:'60px'}} />
                     </td>
                     <td>
                       <input type="number" step="any" value={s.time} onChange={e => {
                         const newS = [...samples]; newS[i].time = e.target.value; setSamples(newS);
-                      }} placeholder={`(${globalTime})`} />
+                      }} placeholder={`(${globalTime})`} style={{width:'60px'}} />
                     </td>
                     <td>
                       <button className="btn-icon" onClick={() => setSamples(samples.filter(st => st.id !== s.id))}><Trash2 size={16}/></button>
@@ -395,19 +471,19 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
         <div className="spectro-right">
           
           <div className="spectro-card sticky-card">
-            <h3>📊 Visualización y Resultados</h3>
+            <h3>📊 Visualización (Promedio)</h3>
             
             <div className="chart-container">
               <ResponsiveContainer width="100%" height={250}>
                 <ComposedChart data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
                   <CartesianGrid stroke="#f5f5f5" strokeDasharray="3 3" />
                   <XAxis dataKey="concentration" type="number" name="Concentración" />
-                  <YAxis yAxisId="left" type="number" name="Absorbancia" />
+                  <YAxis yAxisId="left" type="number" name="Abs Promedio" />
                   <Tooltip cursor={{ strokeDasharray: '3 3' }} />
                   {/* Trend line */}
                   <Line yAxisId="left" type="monotone" dataKey="trendAbs" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={false} />
                   {/* Scatter points */}
-                  <Scatter yAxisId="left" name="Estándar" dataKey="absorbance" fill="#8b5cf6" />
+                  <Scatter yAxisId="left" name="Promedio" dataKey="absorbance" fill="#8b5cf6" />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -421,7 +497,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
               ) : activeMethod === 'factor' && computedFactor ? (
                 <div className="stat-badge">Factor: {computedFactor.toFixed(4)}</div>
               ) : (
-                <div className="stat-badge" style={{color:'#6b7280', background:'#f3f4f6'}}>Esperando datos de calibración...</div>
+                <div className="stat-badge" style={{color:'#6b7280', background:'#f3f4f6'}}>Esperando datos...</div>
               )}
             </div>
 
@@ -440,7 +516,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
                   <tbody>
                     {processedSamples.map(s => (
                       <tr key={s.id}>
-                        <td title={s.name}>{s.name.substring(0, 15) || '—'}</td>
+                        <td title={s.name}>{s.name.substring(0, 12) || '—'}</td>
                         <td>{s.value || '—'}</td>
                         <td>{s.calculated_concentration !== null ? s.calculated_concentration.toFixed(3) : '—'}</td>
                         <td><strong>{s.final_activity !== null ? s.final_activity.toFixed(3) : '—'}</strong></td>
