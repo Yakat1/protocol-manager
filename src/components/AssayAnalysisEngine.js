@@ -1,56 +1,4 @@
-import { wellKey, ROWS, COLS } from './PlateMapperHelpers';
 import * as XLSX from 'xlsx';
-
-export const ASSAY_KITS = [
-  {
-    id: 'cayman_707002',
-    name: 'Catalase Assay Kit (Cayman 707002)',
-    description: 'Asegúrate de configurar la curva estándar antes de analizar.',
-    standardCurveSetup: {
-      blankGroupNote: 'Crea un grupo tipo "Blanco" — el sistema lo asignará automáticamente en A1 y A2 (duplicado).',
-      standardGroupNote: 'Crea un grupo "Estándar" — el sistema asignará los 6 estándares (0–75 μM) en pares de columnas 1-2, de la fila B a la G.',
-      blankWells: ['A1', 'A2'],
-      standards: [
-        { conc: 5,  unit: 'μM', wells: ['B1', 'B2'] },
-        { conc: 15, unit: 'μM', wells: ['C1', 'C2'] },
-        { conc: 30, unit: 'μM', wells: ['D1', 'D2'] },
-        { conc: 45, unit: 'μM', wells: ['E1', 'E2'] },
-        { conc: 60, unit: 'μM', wells: ['F1', 'F2'] },
-        { conc: 75, unit: 'μM', wells: ['G1', 'G2'] }
-      ]
-    },
-    defaultMethod: 'linear',
-    requiredInputs: [
-      { id: 'user_sample_dilution', label: 'Dilución Muestra', type: 'number', default: 1 },
-      { id: 'reaction_time', label: 'Tiempo (min)', type: 'number', default: 20 }
-    ]
-  },
-  {
-    id: 'generic_free',
-    name: 'Curva Libre (Regresión o Factor)',
-    description: 'Selecciona tu grupo estándar y el método de cálculo (Regresión Lineal o Factor).',
-    standardCurveSetup: null, // No auto setup
-    defaultMethod: 'linear',
-    requiredInputs: [
-      { id: 'user_sample_dilution', label: 'Dilución Muestra', type: 'number', default: 1 },
-      { id: 'reaction_time', label: 'Tiempo (min)', type: 'number', default: 1 }
-    ]
-  }
-];
-
-export function applyCustomConcentrations(wells, groupId, startWell, concentrations, direction, ROWS, COLS, wellKey, parseWellId) {
-  const pos = parseWellId(startWell);
-  if (!pos) return null;
-  const newWells = { ...wells };
-  concentrations.forEach((conc, i) => {
-    const r = direction === 'vertical' ? pos.ri + i : pos.ri;
-    const c = direction === 'horizontal' ? pos.ci + i : pos.ci;
-    if (r >= ROWS.length || c >= COLS.length) return;
-    const key = wellKey(ROWS[r], COLS[c]);
-    newWells[key] = { ...newWells[key], groupId, concentration: conc, concUnit: 'μM' };
-  });
-  return newWells;
-}
 
 export function linearRegression(pts) {
   const n = pts.length;
@@ -94,105 +42,50 @@ export function calculateFactor(pts) {
   return sumConc / sumAbs;
 }
 
-export function runGenericAnalysis(kitId, originalWells, groups, standardGroupId, method, userInputs) {
-  const wells = JSON.parse(JSON.stringify(originalWells));
-  
-  // Extract standard points
-  const pts = [];
-  if (standardGroupId) {
-    ROWS.forEach(r => {
-      COLS.forEach(c => {
-        const k = wellKey(r, c);
-        const w = wells[k];
-        if (w && w.groupId === standardGroupId && typeof w.concentration === 'number' && typeof w.value === 'number') {
-          pts.push({ x: w.concentration, y: w.value, well: k });
-        }
-      });
-    });
-  }
+export function processSpectroSamples(samples, method, curveParams, factor, globalDilution = 1, globalTime = 1) {
+  return samples.map(s => {
+    let conc = null;
+    let act = null;
 
-  let curveParams = null;
-  let factor = null;
-
-  if (method === 'linear') {
-    if (pts.length > 1) curveParams = linearRegression(pts);
-  } else if (method === 'factor') {
-    if (userInputs.manual_factor && parseFloat(userInputs.manual_factor) > 0) {
-      factor = parseFloat(userInputs.manual_factor);
-    } else if (pts.length > 0) {
-      factor = calculateFactor(pts);
-    }
-  }
-
-  const dilution = parseFloat(userInputs.user_sample_dilution || 1);
-  const time = parseFloat(userInputs.reaction_time || 1);
-  const isCatalase = kitId === 'cayman_707002';
-
-  // Apply to all wells
-  ROWS.forEach(r => {
-    COLS.forEach(c => {
-      const k = wellKey(r, c);
-      const w = wells[k];
-      if (w && typeof w.value === 'number') {
-        const yVal = w.value; // raw absorbance, assuming blank=0
-        
-        // 1. Calculate Concentration
-        let conc = 0;
-        if (method === 'linear' && curveParams && curveParams.m !== 0) {
-          conc = (yVal - curveParams.b) / curveParams.m;
-        } else if (method === 'factor' && factor !== null) {
-          conc = yVal * factor;
-        }
-        w.calculated_concentration = conc;
-
-        // 2. Calculate Final Activity
-        if (isCatalase) {
-          // Catalase specific: (uM * (170/20)) / time * dilution
-          const cat_uM = conc * 8.5;
-          w.final_activity = (cat_uM / time) * dilution;
-        } else {
-          // Generic: Conc * Dilution / Time
-          w.final_activity = (conc * dilution) / time;
-        }
+    if (s.value !== null && s.value !== undefined && !isNaN(parseFloat(s.value))) {
+      const yVal = parseFloat(s.value);
+      if (method === 'linear' && curveParams && curveParams.m !== 0) {
+        conc = (yVal - curveParams.b) / curveParams.m;
+      } else if (method === 'factor' && factor !== null) {
+        conc = yVal * factor;
       }
-    });
-  });
 
-  return { results: wells, curveParams, factor, pts };
+      if (conc !== null) {
+        const d = parseFloat(s.dilution) || parseFloat(globalDilution);
+        const t = parseFloat(s.time) || parseFloat(globalTime);
+        act = (conc * d) / t;
+      }
+    }
+    
+    return { ...s, calculated_concentration: conc, final_activity: act };
+  });
 }
 
-export function generateAnalysisXLSX(kitName, processedWells, groups, method, curveParams, factor, userInputs, standardGroupId) {
+export function generateSpectroXLSX(samples, standards, method, curveParams, factor, globalDilution, globalTime) {
   const wb = XLSX.utils.book_new();
 
   // Sheet 1: Results
-  const resultsData = [];
-  ROWS.forEach(r => {
-    COLS.forEach(c => {
-      const k = wellKey(r, c);
-      const w = processedWells[k];
-      if (w && w.groupId) {
-        const g = groups.find(gr => gr.id === w.groupId);
-        resultsData.push({
-          Pocillo: k,
-          Grupo: g?.name || '',
-          Tipo: g?.wellType || '',
-          Replicado: w.replicateNum || '',
-          'Lectura (Abs)': w.value !== null && w.value !== undefined ? w.value : '',
-          'Concentración Interpolada': w.calculated_concentration !== undefined ? parseFloat(w.calculated_concentration.toFixed(4)) : '',
-          'Actividad Final': w.final_activity !== undefined ? parseFloat(w.final_activity.toFixed(4)) : ''
-        });
-      }
-    });
-  });
+  const resultsData = samples.map(s => ({
+    Muestra: s.name || '',
+    'Lectura (Abs)': s.value,
+    'Dilución': s.dilution || globalDilution,
+    'Tiempo (min)': s.time || globalTime,
+    'Concentración Interpolada': s.calculated_concentration !== null ? parseFloat(s.calculated_concentration.toFixed(4)) : '',
+    'Actividad Final': s.final_activity !== null ? parseFloat(s.final_activity.toFixed(4)) : ''
+  }));
   const wsResults = XLSX.utils.json_to_sheet(resultsData);
-  XLSX.utils.book_append_sheet(wb, wsResults, "Resultados de Muestras");
+  XLSX.utils.book_append_sheet(wb, wsResults, "Resultados");
 
   // Sheet 2: Standard Curve & Params
   const curveData = [];
-  curveData.push({ Parametro: 'Kit', Valor: kitName });
   curveData.push({ Parametro: 'Método', Valor: method === 'linear' ? 'Regresión Lineal' : 'Factor de Corrección' });
-  curveData.push({ Parametro: 'Dilución de Muestra (Global)', Valor: userInputs.user_sample_dilution });
-  curveData.push({ Parametro: 'Tiempo de Reacción (min)', Valor: userInputs.reaction_time });
+  curveData.push({ Parametro: 'Dilución Global', Valor: globalDilution });
+  curveData.push({ Parametro: 'Tiempo Global (min)', Valor: globalTime });
   
   if (method === 'linear' && curveParams) {
     curveData.push({ Parametro: 'Pendiente (m)', Valor: parseFloat(curveParams.m.toFixed(5)) });
@@ -206,24 +99,18 @@ export function generateAnalysisXLSX(kitName, processedWells, groups, method, cu
   curveData.push({});
   curveData.push({ Parametro: 'Datos de Calibración', Valor: '' });
   
-  // Find standard points
-  ROWS.forEach(r => {
-    COLS.forEach(c => {
-      const k = wellKey(r, c);
-      const w = processedWells[k];
-      if (w && typeof w.concentration === 'number' && typeof w.value === 'number' && w.groupId === standardGroupId) {
-        curveData.push({
-          Parametro: `[${k}] ${w.concentration} ${w.concUnit || ''}`,
-          Valor: w.value
-        });
-      }
-    });
+  standards.forEach(std => {
+    if (std.concentration !== null && std.value !== null) {
+      curveData.push({
+        Parametro: `${std.concentration} μM`,
+        Valor: std.value
+      });
+    }
   });
 
   const wsCurve = XLSX.utils.json_to_sheet(curveData);
   XLSX.utils.book_append_sheet(wb, wsCurve, "Curva Estándar");
 
-  // Generate binary blob
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   return new Blob([wbout], { type: "application/octet-stream" });
 }

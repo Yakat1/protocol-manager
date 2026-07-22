@@ -27,6 +27,7 @@ const CellCulture = lazy(() => import('./components/CellCulture'));
 const LabAdmin = lazy(() => import('./components/LabAdmin'));
 const PersonalLog = lazy(() => import('./components/PersonalLog'));
 const Scheduler = lazy(() => import('./components/Scheduler'));
+const Spectrophotometry = lazy(() => import('./components/Spectrophotometry'));
 
 const TABS = [
   { id: 'home', label: 'Inicio', icon: '🏠' },
@@ -43,6 +44,7 @@ const TABS = [
   { id: 'culture', label: 'Cultivos', icon: '🦠' },
   { id: 'scheduler', label: 'Cronograma', icon: '📅' },
   { id: 'journal', label: 'Bitácora', icon: '📔' },
+  { id: 'spectro', label: 'Espectrofotometría', icon: '🌈' },
 ];
 
 const ADMIN_TAB = { id: 'admin', label: 'Admin', icon: '🛡️' };
@@ -392,6 +394,8 @@ export default function App() {
         return <Scheduler state={state} updateState={updateState} can={can} />;
       case 'journal':
         return <PersonalLog labId={activeLabId} user={user} can={can} />;
+      case 'spectro':
+        return <Spectrophotometry />;
       case 'admin':
         return userRole === 'admin' ? <LabAdmin labId={activeLabId} user={user} /> : null;
       default:

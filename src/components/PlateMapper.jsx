@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import { Plus, X, Download, ClipboardPaste, Printer, Save, Upload, Shuffle, AlertTriangle, Copy, Lock, Unlock } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { ROWS, COLS, WELL_TYPES, wellKey, parseWellId, getGroupStats, validateLayout, applySerialDilution, applyReplicates, randomizeInner, exportBioTekCSV, exportSoftMaxPro, exportPlateCSV, importSampleList } from './PlateMapperHelpers';
-import AutoAnalysis from './AutoAnalysis';
 import './PlateMapper.css';
 
 function downloadFile(content, filename, type='text/csv') {
@@ -318,8 +317,6 @@ export default function PlateMapper({ state, updateState }) {
         }}><X size={16}/> Limpiar Placa</button>
       </div>
 
-      {/* Assay Analysis Engine Panel */}
-      <AutoAnalysis wells={wells} groups={groups} setWells={setWells} setGroups={setGroups} setActiveGroupId={setActiveGroupId} />
 
 
       {/* Export Toolbar */}

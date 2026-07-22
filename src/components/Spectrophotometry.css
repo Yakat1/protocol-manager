@@ -1,0 +1,178 @@
+.spectro-container {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.spectro-header {
+  margin-bottom: 24px;
+}
+
+.spectro-header h2 {
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spectro-header p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.spectro-grid {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: 24px;
+  align-items: start;
+}
+
+.spectro-card {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-color);
+}
+
+.spectro-card h3 {
+  margin: 0 0 16px 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.card-header-flex h3 {
+  margin-bottom: 0;
+}
+
+.sticky-card {
+  position: sticky;
+  top: 24px;
+}
+
+.settings-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.spectro-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.spectro-table th {
+  text-align: left;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.spectro-table td {
+  padding: 6px 4px;
+}
+
+.spectro-table input {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.spectro-table input:focus {
+  outline: none;
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+}
+
+.chart-container {
+  background: var(--bg-primary);
+  border-radius: 8px;
+  padding: 16px 16px 16px 0;
+  border: 1px solid var(--border-color);
+  margin-bottom: 16px;
+}
+
+.chart-stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.stat-badge {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.results-preview h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.results-table-container {
+  max-height: 250px;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.spectro-results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.spectro-results-table th {
+  background: var(--bg-tertiary);
+  padding: 8px 12px;
+  text-align: left;
+  position: sticky;
+  top: 0;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.spectro-results-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.spectro-results-table tr:last-child td {
+  border-bottom: none;
+}
+
+@media (max-width: 900px) {
+  .spectro-grid {
+    grid-template-columns: 1fr;
+  }
+  .sticky-card {
+    position: static;
+  }
+}
