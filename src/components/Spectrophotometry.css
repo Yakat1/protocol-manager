@@ -318,3 +318,8 @@
     position: static;
   }
 }
+
+.spectro-container option {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
