@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Plus, Trash2, ClipboardPaste, Calculator, TrendingUp, Save, Users, FileText } from 'lucide-react';
+import { Download, Plus, Trash2, ClipboardPaste, FileText, CheckCircle } from 'lucide-react';
 import {
   ComposedChart, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
@@ -16,7 +16,6 @@ function downloadFile(blob, filename) {
   document.body.removeChild(a);
 }
 
-// Compute the average of valid values in an array of strings/numbers
 function computeAverage(vals) {
   const valid = vals.map(v => parseFloat(v)).filter(v => !isNaN(v));
   if (valid.length === 0) return null;
@@ -25,25 +24,46 @@ function computeAverage(vals) {
 }
 
 export default function Spectrophotometry({ state, updateState, user, userRole }) {
+  // Protocol Master Selection
+  const [activeProtocolId, setActiveProtocolId] = useState('');
+  
+  // Cloud lists
+  const protocols = state?.spectroTemplates || []; // Re-purposed as Protocol Master List
+  const calibrations = state?.spectroCalibrations || [];
+
+  const activeProtocol = useMemo(() => protocols.find(p => p.id === activeProtocolId), [protocols, activeProtocolId]);
+  
+  // Data States
   const [numReplicates, setNumReplicates] = useState(1);
   const [standards, setStandards] = useState([{ id: uuidv4(), concentration: '', values: ['', '', ''] }]);
   const [samples, setSamples] = useState([{ id: uuidv4(), name: 'Muestra 1', value: '', dilution: '', time: '' }]);
-  const [method, setMethod] = useState('linear');
+  
+  // Math & Settings
+  const [sampleMathMethod, setSampleMathMethod] = useState('linear');
   const [globalDilution, setGlobalDilution] = useState(1);
   const [globalTime, setGlobalTime] = useState(1);
   const [manualFactor, setManualFactor] = useState('');
   
-  const [activeTemplateId, setActiveTemplateId] = useState('');
   const [activeCalibrationId, setActiveCalibrationId] = useState('');
-  
-  // Nube states
-  const templates = state?.spectroTemplates || [];
-  const calibrations = state?.spectroCalibrations || [];
-
   const activeCalibration = useMemo(() => calibrations.find(c => c.id === activeCalibrationId), [calibrations, activeCalibrationId]);
-  const activeTemplate = useMemo(() => templates.find(t => t.id === activeTemplateId), [templates, activeTemplateId]);
 
-  // Append average to each standard row
+  // Handle Protocol Change
+  const handleProtocolChange = (e) => {
+    const pid = e.target.value;
+    setActiveProtocolId(pid);
+    setActiveCalibrationId(''); // Reset loaded calibration
+    
+    if (!pid) {
+      setStandards([{ id: uuidv4(), concentration: '', values: ['', '', ''] }]);
+      return;
+    }
+    const proto = protocols.find(p => p.id === pid);
+    if (proto) {
+      setStandards(proto.concentrations.map(c => ({ id: uuidv4(), concentration: c, values: ['', '', ''] })));
+    }
+  };
+
+  // Derived Standards
   const standardsWithAverage = useMemo(() => {
     return standards.map(s => {
       const activeValues = s.values.slice(0, numReplicates);
@@ -51,35 +71,30 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
     });
   }, [standards, numReplicates]);
 
-  // Clean standards (average) for math
   const cleanStandards = useMemo(() => {
     return standardsWithAverage
       .map(s => ({ x: parseFloat(s.concentration), y: s.average, values: s.activeValues }))
       .filter(s => !isNaN(s.x) && s.y !== null);
   }, [standardsWithAverage]);
 
-  // Compute final curve params from averages
+  // Dual Math Computing
   const computedCurveParams = useMemo(() => {
     if (activeCalibration) return activeCalibration.curveParams;
-    if (method === 'linear') return linearRegression(cleanStandards);
-    return null;
-  }, [cleanStandards, method, activeCalibration]);
+    return linearRegression(cleanStandards);
+  }, [cleanStandards, activeCalibration]);
 
-  // Compute final factor from averages
   const computedFactor = useMemo(() => {
     if (activeCalibration) return activeCalibration.factor;
-    if (method === 'factor') {
-      if (manualFactor && parseFloat(manualFactor) > 0) return parseFloat(manualFactor);
-      return calculateFactor(cleanStandards);
-    }
-    return null;
-  }, [cleanStandards, method, manualFactor, activeCalibration]);
+    if (manualFactor && parseFloat(manualFactor) > 0) return parseFloat(manualFactor);
+    return calculateFactor(cleanStandards);
+  }, [cleanStandards, manualFactor, activeCalibration]);
 
-  const activeMethod = activeCalibration ? activeCalibration.method : method;
+  const activeSampleMathMethod = activeCalibration ? activeCalibration.sampleMathMethod : sampleMathMethod;
 
+  // Process Samples
   const processedSamples = useMemo(() => {
-    return processSpectroSamples(samples, activeMethod, computedCurveParams, computedFactor, globalDilution, globalTime);
-  }, [samples, activeMethod, computedCurveParams, computedFactor, globalDilution, globalTime]);
+    return processSpectroSamples(samples, activeSampleMathMethod, computedCurveParams, computedFactor, globalDilution, globalTime);
+  }, [samples, activeSampleMathMethod, computedCurveParams, computedFactor, globalDilution, globalTime]);
 
   const chartData = useMemo(() => {
     const pts = activeCalibration ? activeCalibration.standards : cleanStandards;
@@ -87,16 +102,16 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
     
     let data = pts.map(s => ({
       concentration: s.x,
-      absorbance: s.y, // This is the average
+      absorbance: s.y,
       isStandard: true
     }));
 
-    if (activeMethod === 'linear' && computedCurveParams) {
+    if (activeSampleMathMethod === 'linear' && computedCurveParams && computedCurveParams.m !== 0) {
       const minX = 0;
       const maxX = Math.max(...pts.map(s => s.x)) * 1.1 || 100;
       data.push({ concentration: minX, trendAbs: computedCurveParams.m * minX + computedCurveParams.b });
       data.push({ concentration: maxX, trendAbs: computedCurveParams.m * maxX + computedCurveParams.b });
-    } else if (activeMethod === 'factor' && computedFactor) {
+    } else if (activeSampleMathMethod === 'factor' && computedFactor && computedFactor !== 0) {
       const maxX = Math.max(...pts.map(s => s.x)) * 1.1 || 100;
       data.push({ concentration: 0, trendAbs: 0 });
       data.push({ concentration: maxX, trendAbs: maxX / computedFactor });
@@ -104,15 +119,16 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
 
     data.sort((a, b) => a.concentration - b.concentration);
     return data;
-  }, [cleanStandards, activeMethod, computedCurveParams, computedFactor, activeCalibration]);
+  }, [cleanStandards, activeSampleMathMethod, computedCurveParams, computedFactor, activeCalibration]);
 
+  // Export
   const handleExport = () => {
     const exportStandards = activeCalibration ? activeCalibration.standards : standardsWithAverage;
     const blob = generateSpectroXLSX(
       processedSamples, 
       exportStandards, 
       activeCalibration ? activeCalibration.numReplicates : numReplicates,
-      activeMethod, 
+      activeSampleMathMethod, 
       computedCurveParams, 
       computedFactor, 
       globalDilution, 
@@ -121,6 +137,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
     downloadFile(blob, 'Resultados_Espectrofotometria.xlsx');
   };
 
+  // Clipboard
   const handlePasteStandards = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -134,7 +151,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
       
       setNumReplicates(newReps);
 
-      if (activeTemplate) {
+      if (activeProtocol) {
         const newStds = [...standards];
         rows.forEach((r, i) => {
           if (newStds[i]) {
@@ -180,120 +197,118 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
     }
   };
 
-  const handleLoadTemplate = (e) => {
-    const tid = e.target.value;
-    setActiveTemplateId(tid);
-    if (!tid) {
-      setStandards([{ id: uuidv4(), concentration: '', values: ['', '', ''] }]);
-      return;
-    }
-    const tmpl = templates.find(t => t.id === tid);
-    if (tmpl) {
-      setMethod(tmpl.method);
-      setStandards(tmpl.concentrations.map(c => ({ id: uuidv4(), concentration: c, values: ['', '', ''] })));
-    }
-  };
-
-  const handleSaveTemplate = () => {
+  // Protocol & Calibration Cloud actions
+  const handleSaveProtocol = () => {
+    if (userRole !== 'admin') return alert('Solo administradores pueden crear protocolos.');
     if (!cleanStandards.length) return alert('No hay concentraciones para guardar.');
-    const name = prompt('Nombre de la nueva plantilla de ensayo:');
+    const name = prompt('Nombre del nuevo protocolo (Ej: Proteínas Lowry):');
     if (!name) return;
-    const newTemplate = {
+    const newProtocol = {
       id: uuidv4(),
       name,
-      method,
       concentrations: cleanStandards.map(s => s.x)
     };
-    updateState({ spectroTemplates: [...templates, newTemplate] });
+    updateState({ spectroTemplates: [...protocols, newProtocol] });
+    setActiveProtocolId(newProtocol.id);
   };
   
-  const handleDeleteTemplate = (id) => {
-    if(confirm('¿Eliminar esta plantilla para todo el laboratorio?')) {
-      updateState({ spectroTemplates: templates.filter(t => t.id !== id) });
-      if (activeTemplateId === id) setActiveTemplateId('');
+  const handleDeleteProtocol = () => {
+    if (userRole !== 'admin') return;
+    if(confirm('¿Eliminar este protocolo para todo el laboratorio?')) {
+      updateState({ spectroTemplates: protocols.filter(t => t.id !== activeProtocolId) });
+      setActiveProtocolId('');
     }
   };
 
   const handleSaveCalibration = () => {
+    if (!activeProtocolId) return alert('Debes seleccionar un Protocolo Activo antes de guardar una curva.');
     if (cleanStandards.length === 0 && !manualFactor) return alert('No hay datos para guardar.');
-    const name = prompt('Nombre de esta curva/factor para compartir:');
-    if (!name) return;
+    
     const newCal = {
       id: uuidv4(),
-      name,
+      protocolId: activeProtocolId,
+      name: `Calibración - ${new Date().toLocaleDateString()}`,
       authorName: user?.displayName || user?.email || 'Desconocido',
       authorUid: user?.uid,
       date: new Date().toISOString(),
-      method,
       factor: computedFactor,
       curveParams: computedCurveParams,
+      sampleMathMethod,
       numReplicates,
       standards: cleanStandards
     };
     updateState({ spectroCalibrations: [...calibrations, newCal] });
+    alert('Curva guardada y compartida en este protocolo.');
   };
-  
-  const handleDeleteCalibration = (id) => {
-    if(confirm('¿Eliminar esta curva guardada?')) {
-      updateState({ spectroCalibrations: calibrations.filter(c => c.id !== id) });
-      if (activeCalibrationId === id) setActiveCalibrationId('');
-    }
-  };
+
+  // Filter calibrations by active protocol
+  const filteredCalibrations = calibrations.filter(c => c.protocolId === activeProtocolId);
 
   return (
     <div className="spectro-container">
       <div className="spectro-header">
-        <h2>🔬 Análisis Espectrofotométrico</h2>
-        <p>Procesa absorbancias usando curvas estándar (soporta réplicas) o factores compartidos.</p>
+        <h2>🔬 Espectrofotometría Multiparamétrica</h2>
+        <p>Selecciona un protocolo oficial del laboratorio para estandarizar tus curvas o cargar las de tus colegas.</p>
       </div>
       
-      {/* NUBE CLOUD BAR */}
-      <div className="spectro-cloud-bar">
-        <div className="cloud-section">
-          <div className="cloud-title"><FileText size={16}/> Plantillas de Ensayo</div>
-          <select value={activeTemplateId} onChange={handleLoadTemplate} disabled={!!activeCalibration}>
-            <option value="">Libre (Sin Plantilla)</option>
-            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+      {/* PROTOCOL BAR */}
+      <div className="protocol-bar">
+        <div className="protocol-selector-group">
+          <FileText size={20} style={{color: '#6366f1'}}/>
+          <select className="protocol-select" value={activeProtocolId} onChange={handleProtocolChange}>
+            <option value="">-- Modo Libre (Sin Protocolo) --</option>
+            {protocols.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          {userRole === 'admin' && (
-            <div className="admin-actions">
-              <button className="btn btn-small btn-outline" onClick={handleSaveTemplate} disabled={!!activeCalibration}>Guardar Plantilla</button>
-              {activeTemplateId && <button className="btn btn-small btn-danger" onClick={() => handleDeleteTemplate(activeTemplateId)}>Borrar</button>}
-            </div>
-          )}
         </div>
-        <div className="cloud-section">
-          <div className="cloud-title"><Users size={16}/> Compartir Factores & Curvas</div>
-          <select value={activeCalibrationId} onChange={e => setActiveCalibrationId(e.target.value)}>
-            <option value="">Mi Propia Curva (Libre)</option>
-            {calibrations.map(c => (
-              <option key={c.id} value={c.id}>{c.authorName} - {c.name} ({new Date(c.date).toLocaleDateString()})</option>
-            ))}
-          </select>
-          {!activeCalibrationId && (
-            <button className="btn btn-small btn-primary" onClick={handleSaveCalibration}>
-              <Save size={14}/> Compartir
-            </button>
-          )}
-          {activeCalibrationId && (
-            <button className="btn btn-small btn-danger" onClick={() => handleDeleteCalibration(activeCalibrationId)}>Borrar</button>
-          )}
-        </div>
+        
+        {userRole === 'admin' && (
+          <div className="admin-actions">
+            <button className="btn btn-outline" onClick={handleSaveProtocol} disabled={!!activeCalibration}>Guardar como Protocolo</button>
+            {activeProtocolId && <button className="btn btn-danger" onClick={handleDeleteProtocol}>Borrar Protocolo</button>}
+          </div>
+        )}
       </div>
+
+      {activeProtocolId && (
+        <div className="calibrations-bar">
+          <div className="cloud-title">Curvas Guardadas (Protocolo: {activeProtocol?.name})</div>
+          <div className="calibrations-controls">
+            <select value={activeCalibrationId} onChange={e => setActiveCalibrationId(e.target.value)}>
+              <option value="">Crear Nueva Curva (Libre)</option>
+              {filteredCalibrations.map(c => (
+                <option key={c.id} value={c.id}>{c.authorName} - {new Date(c.date).toLocaleDateString()}</option>
+              ))}
+            </select>
+            {!activeCalibrationId && (
+              <button className="btn btn-primary" onClick={handleSaveCalibration}>Compartir mi Curva Actual</button>
+            )}
+            {activeCalibrationId && (
+              <button className="btn btn-danger" onClick={() => {
+                updateState({ spectroCalibrations: calibrations.filter(c => c.id !== activeCalibrationId) });
+                setActiveCalibrationId('');
+              }}>Borrar Curva</button>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {!activeProtocolId && (
+        <div className="locked-alert" style={{borderColor: '#9ca3af', backgroundColor: '#f3f4f6', color: '#4b5563'}}>
+          <strong>Modo Libre Activo</strong>: Estás trabajando sin protocolo. No podrás guardar tu curva en la nube hasta que selecciones o crees un protocolo oficial.
+        </div>
+      )}
 
       {activeCalibration && (
         <div className="locked-alert">
-          <strong>🔒 Modo Lectura (Curva Cargada)</strong>: Estás utilizando el factor consolidado de <strong>{activeCalibration.authorName}</strong>. 
-          Para estandarizar una nueva curva o ingresar réplicas, vuelve a "Mi Propia Curva".
+          <strong>🔒 Modo Lectura</strong>: Curva de <strong>{activeCalibration.authorName}</strong> cargada. Sus factores están bloqueados para garantizar reproducibilidad.
         </div>
       )}
 
       <div className="spectro-grid">
         
-        {/* Left Column: Data Input */}
+        {/* Left Column */}
         <div className="spectro-left">
           
-          {/* Settings Card */}
           <div className="spectro-card">
             <h3>⚙️ Configuración del Ensayo</h3>
             <div className="settings-row">
@@ -307,53 +322,33 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
                   </select>
                 </div>
               )}
-              <div className="field">
-                <label>Método de Cálculo</label>
-                <select value={activeMethod} onChange={e => setMethod(e.target.value)} disabled={!!activeCalibration || !!activeTemplate}>
-                  <option value="linear">Regresión Lineal (y = mx + b)</option>
-                  <option value="factor">Factor de Corrección (ΣConc / ΣAbs)</option>
-                </select>
-              </div>
-              <div className="field" style={{width:'80px'}}>
+              <div className="field" style={{width:'100px'}}>
                 <label>Dil. Global</label>
                 <input type="number" step="any" value={globalDilution} onChange={e => setGlobalDilution(e.target.value)} />
               </div>
-              <div className="field" style={{width:'80px'}}>
+              <div className="field" style={{width:'100px'}}>
                 <label>T (min)</label>
                 <input type="number" step="any" value={globalTime} onChange={e => setGlobalTime(e.target.value)} />
               </div>
             </div>
-            {activeMethod === 'factor' && !activeCalibration && (
-              <div className="field" style={{marginTop:'12px'}}>
-                <label>Factor Manual (opcional, ignora curva)</label>
-                <input type="number" step="any" placeholder="Ej. 1.45" value={manualFactor} onChange={e => setManualFactor(e.target.value)} />
-              </div>
-            )}
-            {activeCalibration && activeMethod === 'factor' && (
-              <div className="field" style={{marginTop:'12px'}}>
-                <label>Factor Bloqueado ({activeCalibration.authorName})</label>
-                <input type="text" value={activeCalibration.factor.toFixed(4)} disabled />
-              </div>
-            )}
           </div>
 
-          {/* Standards Card */}
           {!activeCalibration && (
             <div className="spectro-card" style={{overflowX: 'auto'}}>
               <div className="card-header-flex">
-                <h3>🧪 Curva Estándar {activeTemplate && `(${activeTemplate.name})`}</h3>
+                <h3>🧪 Curva Estándar {activeProtocol && `🔒`}</h3>
                 <button className="btn btn-small" onClick={handlePasteStandards}><ClipboardPaste size={14}/> Pegar de Excel</button>
               </div>
               
               <table className="spectro-table">
                 <thead>
                   <tr>
-                    <th>[ ] {activeTemplate && '🔒'}</th>
+                    <th>[ ] {activeProtocol && '🔒'}</th>
                     <th>Abs 1</th>
                     {numReplicates >= 2 && <th>Abs 2</th>}
                     {numReplicates >= 3 && <th>Abs 3</th>}
                     {numReplicates > 1 && <th style={{color:'#8b5cf6'}}>Promedio</th>}
-                    {!activeTemplate && <th width="30"></th>}
+                    {!activeProtocol && <th width="30"></th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -364,7 +359,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
                           const newS = [...standards];
                           newS[i].concentration = e.target.value;
                           setStandards(newS);
-                        }} placeholder="[ ]" disabled={!!activeTemplate} style={{width:'70px'}} />
+                        }} placeholder="[ ]" disabled={!!activeProtocol} style={{width:'70px'}} />
                       </td>
                       <td>
                         <input type="number" step="any" value={s.values[0]} onChange={e => {
@@ -396,7 +391,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
                           <strong style={{fontSize:'0.9rem', color:'#8b5cf6'}}>{s.average !== null ? s.average.toFixed(4) : '-'}</strong>
                         </td>
                       )}
-                      {!activeTemplate && (
+                      {!activeProtocol && (
                         <td>
                           <button className="btn-icon" onClick={() => setStandards(standards.filter(st => st.id !== s.id))}><Trash2 size={16}/></button>
                         </td>
@@ -405,7 +400,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
                   ))}
                 </tbody>
               </table>
-              {!activeTemplate && (
+              {!activeProtocol && (
                 <button className="btn btn-outline" style={{marginTop:'10px', width:'100%'}} onClick={() => setStandards([...standards, { id: uuidv4(), concentration: '', values: ['', '', ''] }])}>
                   <Plus size={16}/> Agregar Fila
                 </button>
@@ -415,12 +410,20 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
 
           {/* Samples Card */}
           <div className="spectro-card" style={{overflowX: 'auto'}}>
-            <div className="card-header-flex">
+            <div className="card-header-flex" style={{marginBottom: '8px'}}>
               <h3>🧬 Muestras</h3>
               <button className="btn btn-small" onClick={handlePasteSamples}><ClipboardPaste size={14}/> Pegar de Excel</button>
             </div>
+            
+            <div className="sample-math-toggle">
+              <span>Calcular concentración de muestras usando:</span>
+              <select value={activeSampleMathMethod} onChange={e => setSampleMathMethod(e.target.value)} disabled={!!activeCalibration}>
+                <option value="linear">Regresión Lineal</option>
+                <option value="factor">Factor de Corrección</option>
+              </select>
+            </div>
 
-            <table className="spectro-table samples-table">
+            <table className="spectro-table samples-table" style={{marginTop:'16px'}}>
               <thead>
                 <tr>
                   <th>Nombre</th>
@@ -471,38 +474,48 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
         <div className="spectro-right">
           
           <div className="spectro-card sticky-card">
-            <h3>📊 Visualización (Promedio)</h3>
+            <h3>📊 Resultados Matemáticos</h3>
             
+            <div className="dual-math-stats">
+              <div className={`math-box ${activeSampleMathMethod === 'linear' ? 'math-box-active' : ''}`}>
+                <div className="math-box-title">
+                  Regresión Lineal
+                  {activeSampleMathMethod === 'linear' && <CheckCircle size={14} color="#10b981"/>}
+                </div>
+                {computedCurveParams ? (
+                  <>
+                    <div className="stat-text">y = {computedCurveParams.m.toFixed(4)}x + {computedCurveParams.b.toFixed(4)}</div>
+                    <div className="stat-text">R² = {computedCurveParams.r2.toFixed(4)}</div>
+                  </>
+                ) : <div className="stat-text text-muted">-</div>}
+              </div>
+
+              <div className={`math-box ${activeSampleMathMethod === 'factor' ? 'math-box-active' : ''}`}>
+                <div className="math-box-title">
+                  Factor Promedio
+                  {activeSampleMathMethod === 'factor' && <CheckCircle size={14} color="#10b981"/>}
+                </div>
+                {computedFactor ? (
+                  <div className="stat-text">Factor = {computedFactor.toFixed(4)}</div>
+                ) : <div className="stat-text text-muted">-</div>}
+              </div>
+            </div>
+
             <div className="chart-container">
-              <ResponsiveContainer width="100%" height={250}>
-                <ComposedChart data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
+              <ResponsiveContainer width="100%" height={220}>
+                <ComposedChart data={chartData} margin={{ top: 10, right: 20, bottom: 0, left: -20 }}>
                   <CartesianGrid stroke="#f5f5f5" strokeDasharray="3 3" />
-                  <XAxis dataKey="concentration" type="number" name="Concentración" />
-                  <YAxis yAxisId="left" type="number" name="Abs Promedio" />
+                  <XAxis dataKey="concentration" type="number" />
+                  <YAxis yAxisId="left" type="number" />
                   <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                  {/* Trend line */}
                   <Line yAxisId="left" type="monotone" dataKey="trendAbs" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={false} />
-                  {/* Scatter points */}
-                  <Scatter yAxisId="left" name="Promedio" dataKey="absorbance" fill="#8b5cf6" />
+                  <Scatter yAxisId="left" name="Estándar" dataKey="absorbance" fill="#8b5cf6" />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
 
-            <div className="chart-stats">
-              {activeMethod === 'linear' && computedCurveParams ? (
-                <>
-                  <div className="stat-badge">R²: {computedCurveParams.r2.toFixed(4)}</div>
-                  <div className="stat-badge">y = {computedCurveParams.m.toFixed(4)}x + {computedCurveParams.b.toFixed(4)}</div>
-                </>
-              ) : activeMethod === 'factor' && computedFactor ? (
-                <div className="stat-badge">Factor: {computedFactor.toFixed(4)}</div>
-              ) : (
-                <div className="stat-badge" style={{color:'#6b7280', background:'#f3f4f6'}}>Esperando datos...</div>
-              )}
-            </div>
-
             <div className="results-preview">
-              <h4>Previsualización de Resultados</h4>
+              <h4 style={{marginTop:0}}>Interpolación de Muestras</h4>
               <div className="results-table-container">
                 <table className="spectro-results-table">
                   <thead>
@@ -516,7 +529,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
                   <tbody>
                     {processedSamples.map(s => (
                       <tr key={s.id}>
-                        <td title={s.name}>{s.name.substring(0, 12) || '—'}</td>
+                        <td title={s.name}>{s.name.substring(0, 10) || '—'}</td>
                         <td>{s.value || '—'}</td>
                         <td>{s.calculated_concentration !== null ? s.calculated_concentration.toFixed(3) : '—'}</td>
                         <td><strong>{s.final_activity !== null ? s.final_activity.toFixed(3) : '—'}</strong></td>
@@ -528,7 +541,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
             </div>
 
             <button className="btn btn-primary btn-large" style={{width:'100%', marginTop:'16px'}} onClick={handleExport}>
-              <Download size={18}/> Exportar Reporte a Excel
+              <Download size={18}/> Exportar Excel Completo
             </button>
 
           </div>

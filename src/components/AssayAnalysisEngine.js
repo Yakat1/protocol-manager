@@ -42,16 +42,16 @@ export function calculateFactor(pts) {
   return sumConc / sumAbs;
 }
 
-export function processSpectroSamples(samples, method, curveParams, factor, globalDilution = 1, globalTime = 1) {
+export function processSpectroSamples(samples, sampleMathMethod, curveParams, factor, globalDilution = 1, globalTime = 1) {
   return samples.map(s => {
     let conc = null;
     let act = null;
 
     if (s.value !== null && s.value !== undefined && !isNaN(parseFloat(s.value))) {
       const yVal = parseFloat(s.value);
-      if (method === 'linear' && curveParams && curveParams.m !== 0) {
+      if (sampleMathMethod === 'linear' && curveParams && curveParams.m !== 0) {
         conc = (yVal - curveParams.b) / curveParams.m;
-      } else if (method === 'factor' && factor !== null) {
+      } else if (sampleMathMethod === 'factor' && factor !== null) {
         conc = yVal * factor;
       }
 
@@ -66,7 +66,7 @@ export function processSpectroSamples(samples, method, curveParams, factor, glob
   });
 }
 
-export function generateSpectroXLSX(samples, standards, numReplicates, method, curveParams, factor, globalDilution, globalTime) {
+export function generateSpectroXLSX(samples, standards, numReplicates, sampleMathMethod, curveParams, factor, globalDilution, globalTime) {
   const wb = XLSX.utils.book_new();
 
   // Sheet 1: Results
@@ -76,26 +76,27 @@ export function generateSpectroXLSX(samples, standards, numReplicates, method, c
     'Dilución': s.dilution || globalDilution,
     'Tiempo (min)': s.time || globalTime,
     'Concentración Interpolada': s.calculated_concentration !== null ? parseFloat(s.calculated_concentration.toFixed(4)) : '',
-    'Actividad Final': s.final_activity !== null ? parseFloat(s.final_activity.toFixed(4)) : ''
+    'Actividad Final': s.final_activity !== null ? parseFloat(s.final_activity.toFixed(4)) : '',
+    'Método Aplicado': sampleMathMethod === 'linear' ? 'Regresión' : 'Factor'
   }));
   const wsResults = XLSX.utils.json_to_sheet(resultsData);
   XLSX.utils.book_append_sheet(wb, wsResults, "Resultados");
 
   // Sheet 2: Standard Curve & Params
   const curveData = [];
-  curveData.push({ Parametro: 'Método', Valor: method === 'linear' ? 'Regresión Lineal' : 'Factor de Corrección' });
   curveData.push({ Parametro: 'Dilución Global', Valor: globalDilution });
   curveData.push({ Parametro: 'Tiempo Global (min)', Valor: globalTime });
   curveData.push({});
   
   // Promedio (Final)
   curveData.push({ Parametro: '=== RESULTADO FINAL (PROMEDIO) ===', Valor: '' });
-  if (method === 'linear' && curveParams) {
+  if (curveParams) {
     curveData.push({ Parametro: 'Pendiente (m)', Valor: parseFloat(curveParams.m.toFixed(5)) });
     curveData.push({ Parametro: 'Intersección (b)', Valor: parseFloat(curveParams.b.toFixed(5)) });
     curveData.push({ Parametro: 'R²', Valor: parseFloat(curveParams.r2.toFixed(5)) });
     curveData.push({ Parametro: 'Ecuación', Valor: `y = ${curveParams.m.toFixed(4)}x + ${curveParams.b.toFixed(4)}` });
-  } else if (method === 'factor' && factor !== null) {
+  }
+  if (factor !== null) {
     curveData.push({ Parametro: 'Factor (Final)', Valor: parseFloat(factor.toFixed(5)) });
   }
   curveData.push({});
@@ -109,14 +110,13 @@ export function generateSpectroXLSX(samples, standards, numReplicates, method, c
       
       if (repPts.length > 0) {
         curveData.push({ Parametro: `=== RÉPLICA ${r + 1} ===`, Valor: '' });
-        if (method === 'linear') {
-          const lr = linearRegression(repPts);
-          curveData.push({ Parametro: `R² (Rép ${r + 1})`, Valor: parseFloat(lr.r2.toFixed(5)) });
-          curveData.push({ Parametro: `Eq (Rép ${r + 1})`, Valor: `y = ${lr.m.toFixed(4)}x + ${lr.b.toFixed(4)}` });
-        } else {
-          const f = calculateFactor(repPts);
-          curveData.push({ Parametro: `Factor (Rép ${r + 1})`, Valor: parseFloat(f.toFixed(5)) });
-        }
+        
+        const lr = linearRegression(repPts);
+        curveData.push({ Parametro: `R² (Rép ${r + 1})`, Valor: parseFloat(lr.r2.toFixed(5)) });
+        curveData.push({ Parametro: `Eq (Rép ${r + 1})`, Valor: `y = ${lr.m.toFixed(4)}x + ${lr.b.toFixed(4)}` });
+        
+        const f = calculateFactor(repPts);
+        curveData.push({ Parametro: `Factor (Rép ${r + 1})`, Valor: parseFloat(f.toFixed(5)) });
       }
     }
     curveData.push({});
