@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Plus, X, Download, ClipboardPaste, Printer, Save, Upload, Shuffle, AlertTriangle, Copy, Lock, Unlock } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { ROWS, COLS, WELL_TYPES, wellKey, parseWellId, getGroupStats, validateLayout, applySerialDilution, applyReplicates, randomizeInner, exportBioTekCSV, exportSoftMaxPro, exportPlateCSV, importSampleList } from './PlateMapperHelpers';
-import { ASSAY_KITS, runAssayAnalysis, generateAnalysisCSV, applyCustomConcentrations } from './AssayAnalysisEngine';
+import AutoAnalysis from './AutoAnalysis';
 import './PlateMapper.css';
 
 function downloadFile(content, filename, type='text/csv') {
@@ -35,8 +35,6 @@ export default function PlateMapper({ state, updateState }) {
   const [sampleRepCount, setSampleRepCount] = useState(2);
   const [sampleDir, setSampleDir] = useState('horizontal');
   const [warnings, setWarnings] = useState([]);
-  const [selectedKitId, setSelectedKitId] = useState('');
-  const [kitInputs, setKitInputs] = useState({});
 
   const plateLayouts = state?.plateLayouts || [];
 
@@ -147,60 +145,6 @@ export default function PlateMapper({ state, updateState }) {
     if (populatePlate) setWells(result.wells);
     setShowSampleImport(false); setSampleText('');
   };
-
-  const handleRunAnalysis = () => {
-    try {
-      const { results, curveParams } = runAssayAnalysis(selectedKitId, wells, groups, kitInputs);
-      const csv = generateAnalysisCSV(selectedKitId, results, groups, curveParams);
-      downloadFile(csv, `analisis_${selectedKitId}.csv`);
-      alert('Analisis exitoso. El archivo ha sido descargado.');
-    } catch (e) {
-      alert(`Error en el analisis: ${e.message}`);
-    }
-  };
-
-  const handleAutoConfigureStandard = () => {
-    const kit = ASSAY_KITS.find(k => k.id === selectedKitId);
-    const setup = kit?.standardCurveSetup;
-    if (!setup) return;
-
-    let newWells = { ...wells };
-    let newGroups = [...groups];
-
-    // Create or reuse Blank group and assign blankWells (A1, A2)
-    if (setup.blankWells?.length) {
-      let blkGroup = newGroups.find(g => g.wellType === 'blank');
-      if (!blkGroup) {
-        blkGroup = { id: uuidv4(), name: 'Blanco (A)', color: WELL_TYPES.blank.color, wellType: 'blank' };
-        newGroups = [...newGroups, blkGroup];
-      }
-      setup.blankWells.forEach((wk, i) => {
-        newWells[wk] = { ...newWells[wk], groupId: blkGroup.id, concentration: 0, concUnit: 'uM', replicateNum: i + 1 };
-      });
-    }
-
-    // Create or reuse Standard group and assign each standard pair
-    if (setup.standards?.length) {
-      let stdGroup = newGroups.find(g => g.wellType === 'standard');
-      if (!stdGroup) {
-        stdGroup = { id: uuidv4(), name: 'Estandar', color: WELL_TYPES.standard.color, wellType: 'standard' };
-        newGroups = [...newGroups, stdGroup];
-      }
-      setup.standards.forEach(({ conc, unit, wells: stdWells }) => {
-        stdWells.forEach((wk, i) => {
-          newWells[wk] = { ...newWells[wk], groupId: stdGroup.id, concentration: conc, concUnit: unit, replicateNum: i + 1 };
-        });
-      });
-      setActiveGroupId(stdGroup.id);
-    }
-
-    setGroups(newGroups);
-    setWells(newWells);
-
-    const stdSummary = setup.standards?.map(s => `${s.wells.join('/')} = ${s.conc} ${s.unit}`).join(', ');
-    alert(`Curva estandar configurada:\n- Blanco: ${setup.blankWells?.join(', ')} (0 uM)\n- Estandares: ${stdSummary}`);
-  };
-
 
   const saveLayout = () => {
     if (!updateState) return alert('Editor inactivo.');
@@ -375,101 +319,7 @@ export default function PlateMapper({ state, updateState }) {
       </div>
 
       {/* Assay Analysis Engine Panel */}
-      <div className="glass-panel no-print" style={{padding:'16px', marginBottom:'16px', borderLeft:'4px solid #8b5cf6'}}>
-        <h4 style={{marginBottom:'12px', display:'flex', alignItems:'center', gap:'8px'}}>
-          {'🔬'} Análisis Automático (Kits LIMS)
-        </h4>
-
-        <div className="field" style={{marginBottom:'14px'}}>
-          <label>Seleccionar Kit</label>
-          <select className="input-field" value={selectedKitId} style={{maxWidth:'380px'}} onChange={e => {
-            setSelectedKitId(e.target.value);
-            setKitInputs({});
-          }}>
-            <option value="">-- Sin Módulo de Análisis --</option>
-            {ASSAY_KITS.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
-          </select>
-        </div>
-
-        {selectedKitId && (() => {
-          const kit = ASSAY_KITS.find(k => k.id === selectedKitId);
-          const setup = kit?.standardCurveSetup;
-          const dp = setup?.dilutionParams;
-          return (
-            <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
-
-              {/* Step cards */}
-              {setup && (
-                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(210px, 1fr))', gap:'10px'}}>
-
-                  {/* STEP 1 – Blank */}
-                  <div style={{background:'rgba(107,114,128,0.12)', borderRadius:'8px', padding:'10px', borderLeft:'3px solid #6b7280'}}>
-                    <div style={{fontWeight:700, fontSize:'0.8rem', marginBottom:'4px', color:'var(--text-primary)'}}>
-                      {'🥛'} Paso 1 — Blanco
-                    </div>
-                    <div style={{fontSize:'0.78rem', color:'var(--text-secondary)'}}>
-                      El sistema asignará el blanco en los pocillos <strong>{setup.blankWells?.join(' y ')}</strong> (0 μM, duplicado).
-                      Estos quedarán marcados automáticamente al hacer clic en el botón del Paso 2.
-                    </div>
-                  </div>
-
-                  {/* STEP 2 – Standard curve */}
-                  <div style={{background:'rgba(59,130,246,0.1)', borderRadius:'8px', padding:'10px', borderLeft:'3px solid #3b82f6'}}>
-                    <div style={{fontWeight:700, fontSize:'0.8rem', marginBottom:'6px', color:'var(--text-primary)'}}>
-                      {'🧪'} Paso 2 — Curva Estándar Automática
-                    </div>
-                    <div style={{fontSize:'0.78rem', color:'var(--text-secondary)', marginBottom:'8px'}}>
-                      El botón asignará automáticamente <strong>Blanco</strong> en {setup.blankWells?.join(', ')} (0 μM)
-                      y los siguientes <strong>{setup.standards?.length} estándares</strong> en duplicado:
-                      <ul style={{margin:'4px 0 0 14px', padding:0}}>
-                        {setup.standards?.map(s => (
-                          <li key={s.conc}>{s.wells.join(' y ')} → <strong>{s.conc} {s.unit}</strong></li>
-                        ))}
-                      </ul>
-                    </div>
-                    <button className="btn btn-primary" style={{fontSize:'0.8rem', padding:'4px 10px'}} onClick={handleAutoConfigureStandard}>
-                      {'⚗️'} Configurar Curva Estándar
-                    </button>
-                  </div>
-
-                  {/* STEP 3 – Samples */}
-                  <div style={{background:'rgba(245,158,11,0.1)', borderRadius:'8px', padding:'10px', borderLeft:'3px solid #f59e0b'}}>
-                    <div style={{fontWeight:700, fontSize:'0.8rem', marginBottom:'4px', color:'var(--text-primary)'}}>
-                      {'🔬'} Paso 3 — Muestras y Cálculo
-                    </div>
-                    <div style={{fontSize:'0.78rem', color:'var(--text-secondary)'}}>
-                      Crea grupos <strong>Desconocido</strong> y/o <strong>Ctrl (+)</strong> para tus muestras.
-                      Importa las lecturas de absorbancia con <em>"Importar Lecturas"</em>.
-                      Luego ingresa el factor de dilución de tu muestra y haz clic en <strong>Calcular y Exportar</strong>.
-                    </div>
-                  </div>
-
-                </div>
-              )}
-
-              {/* Inputs + export */}
-              <div style={{display:'flex', gap:'12px', flexWrap:'wrap', alignItems:'flex-end'}}>
-                {kit?.requiredInputs?.map(inp => (
-                  <div className="field" key={inp.id}>
-                    <label>{inp.label}</label>
-                    <input
-                      type={inp.type}
-                      className="input-field"
-                      style={{width:'150px'}}
-                      value={kitInputs[inp.id] ?? inp.default}
-                      onChange={e => setKitInputs({...kitInputs, [inp.id]: e.target.value})}
-                    />
-                  </div>
-                ))}
-                <button className="btn btn-primary" onClick={handleRunAnalysis}>
-                  <Download size={16}/> Calcular y Exportar
-                </button>
-              </div>
-
-            </div>
-          );
-        })()}
-      </div>
+      <AutoAnalysis wells={wells} groups={groups} setWells={setWells} setGroups={setGroups} setActiveGroupId={setActiveGroupId} />
 
 
       {/* Export Toolbar */}
