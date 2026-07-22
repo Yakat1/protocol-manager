@@ -395,7 +395,7 @@ export default function App() {
       case 'journal':
         return <PersonalLog labId={activeLabId} user={user} can={can} />;
       case 'spectro':
-        return <Spectrophotometry />;
+        return <Spectrophotometry state={state} updateState={updateState} user={user} userRole={userRole} />;
       case 'admin':
         return userRole === 'admin' ? <LabAdmin labId={activeLabId} user={user} /> : null;
       default:
