@@ -75,6 +75,11 @@
   min-width: 300px;
 }
 
+.protocol-select option {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
 .calibrations-bar {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
