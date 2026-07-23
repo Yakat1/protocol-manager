@@ -21,6 +21,10 @@
   padding: 0;
 }
 
+html, body {
+  color-scheme: dark;
+}
+
 body {
   font-family: var(--font-family);
   background-color: var(--bg-color);
@@ -159,9 +163,13 @@ a { color: var(--accent); text-decoration: none; }
   border-color: var(--accent);
 }
 
-select.input-field option {
-  background-color: var(--bg-color);
-  color: var(--text-primary);
+select {
+  color-scheme: dark;
+}
+
+option {
+  background-color: #0d1117;
+  color: #e6edf3;
 }
 
 /* Sidebar */
