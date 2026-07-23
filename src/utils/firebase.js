@@ -214,7 +214,7 @@ export async function removeMember(labId, userId) {
 
 // ─── Lab State (shared data) ─────────────────────────────────────────────────
 
-export async function saveLabState(labId, state, sessionId = null) {
+export async function saveLabState(labId, state, sessionId = null, userId = null) {
   const stateWithoutImages = {
     ...state,
     subjects: state.subjects?.map(s => ({ ...s, images: [] })) || [],
@@ -224,6 +224,7 @@ export async function saveLabState(labId, state, sessionId = null) {
   await setDoc(ref, { 
     state: JSON.stringify(stateWithoutImages),
     sessionId,
+    activeUserId: userId,
     updatedAt: new Date().toISOString()
   }, { merge: true });
 }
@@ -243,7 +244,11 @@ export function subscribeToLabState(labId, callback) {
     if (snap.exists()) {
       const data = snap.data();
       try {
-        callback({ state: JSON.parse(data.state), sessionId: data.sessionId });
+        callback({ 
+          state: JSON.parse(data.state), 
+          sessionId: data.sessionId,
+          activeUserId: data.activeUserId
+        });
       } catch (e) {
         console.error('Error parsing lab state:', e);
       }

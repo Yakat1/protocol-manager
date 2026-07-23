@@ -176,7 +176,11 @@ export default function App() {
     // Subscribe to real-time
     if (firestoreUnsubRef.current) firestoreUnsubRef.current();
     firestoreUnsubRef.current = subscribeToLabState(activeLabId, (remoteData) => {
-      if (remoteData.sessionId && remoteData.sessionId !== sessionIdRef.current) {
+      if (
+        remoteData.activeUserId === user.uid &&
+        remoteData.sessionId && 
+        remoteData.sessionId !== sessionIdRef.current
+      ) {
         setIsSuspended(true);
       }
       const remoteState = remoteData.state;
@@ -206,7 +210,7 @@ export default function App() {
         saveStateLocal(state);
         // Save to lab if active
         if (activeLabId) {
-          saveLabState(activeLabId, state, sessionIdRef.current).catch(console.error);
+          saveLabState(activeLabId, state, sessionIdRef.current, user.uid).catch(console.error);
         }
       }
     }, 5000);
@@ -449,7 +453,7 @@ export default function App() {
               setIsSuspended(false);
               saveStateLocal(state);
               if (activeLabId) {
-                saveLabState(activeLabId, state, sessionIdRef.current).catch(console.error);
+                saveLabState(activeLabId, state, sessionIdRef.current, user.uid).catch(console.error);
               }
             }}
           >
