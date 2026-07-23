@@ -736,7 +736,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
                       <div>
                         <strong>{t.nombre}</strong>
                         <div style={{fontSize: '0.85rem', color: 'var(--text-secondary)'}}>
-                          C1: {t.curvas[0]?.points.length} pts | C2: {t.curvas[1]?.points.length} pts | C3: {t.curvas[2]?.points.length} pts
+                          C1: {t.curvas?.[0]?.points?.length || 0} pts | C2: {t.curvas?.[1]?.points?.length || 0} pts | C3: {t.curvas?.[2]?.points?.length || 0} pts
                         </div>
                       </div>
                       <button className="btn-icon" style={{color: '#ef4444'}} onClick={() => handleDeleteTemplate(t.id)}>
