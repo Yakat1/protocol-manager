@@ -42,16 +42,14 @@ export function calculateFactor(pts) {
   return sumConc / sumAbs;
 }
 
-export function processSpectroSamples(samples, sampleMathMethod, curveParams, factor, globalDilution = 1, globalTime = 1) {
+export function processSpectroSamples(samples, factor, globalDilution = 1, globalTime = 1) {
   return samples.map(s => {
     let conc = null;
     let act = null;
 
     if (s.value !== null && s.value !== undefined && !isNaN(parseFloat(s.value))) {
       const yVal = parseFloat(s.value);
-      if (sampleMathMethod === 'linear' && curveParams && curveParams.m !== 0) {
-        conc = (yVal - curveParams.b) / curveParams.m;
-      } else if (sampleMathMethod === 'factor' && factor !== null) {
+      if (factor !== null && !isNaN(factor)) {
         conc = yVal * factor;
       }
 
@@ -66,7 +64,7 @@ export function processSpectroSamples(samples, sampleMathMethod, curveParams, fa
   });
 }
 
-export function generateSpectroXLSX(samples, standards, numReplicates, sampleMathMethod, curveParams, factor, globalDilution, globalTime) {
+export function generateSpectroXLSX(samples, standards, numReplicates, curveParams, factor, globalDilution, globalTime) {
   const wb = XLSX.utils.book_new();
 
   // Sheet 1: Results
@@ -76,8 +74,7 @@ export function generateSpectroXLSX(samples, standards, numReplicates, sampleMat
     'Dilución': s.dilution || globalDilution,
     'Tiempo (min)': s.time || globalTime,
     'Concentración Interpolada': s.calculated_concentration !== null ? parseFloat(s.calculated_concentration.toFixed(4)) : '',
-    'Actividad Final': s.final_activity !== null ? parseFloat(s.final_activity.toFixed(4)) : '',
-    'Método Aplicado': sampleMathMethod === 'linear' ? 'Regresión' : 'Factor'
+    'Actividad Final': s.final_activity !== null ? parseFloat(s.final_activity.toFixed(4)) : ''
   }));
   const wsResults = XLSX.utils.json_to_sheet(resultsData);
   XLSX.utils.book_append_sheet(wb, wsResults, "Resultados");
