@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Plus, Trash2, ClipboardPaste, Save, FileText, CheckCircle, Calculator, FlaskConical, Beaker, Calendar, BookOpen } from 'lucide-react';
+import { Download, Plus, Trash2, ClipboardPaste, Save, FileText, CheckCircle, Calculator, FlaskConical, Beaker, Calendar, BookOpen, Settings } from 'lucide-react';
 import {
   ComposedChart, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
@@ -22,17 +22,20 @@ const DEFAULT_CURVES = () => [
   { id: 'c3', name: 'Curva 3', points: [{ id: uuidv4(), concentration: '', abs1: '', abs2: '', abs3: '' }] }
 ];
 
-export default function Spectrophotometry({ state, updateState, user }) {
-  const [activeTab, setActiveTab] = useState('calibration'); // 'calibration' | 'samples'
+export default function Spectrophotometry({ state, updateState, user, userRole }) {
+  const [activeTab, setActiveTab] = useState('calibration'); // 'calibration' | 'samples' | 'templates'
   
-  // Cloud data: Protocols are now "Working Sessions" containing the 3 curves and samples.
+  // Cloud data
   const savedProtocols = state?.spectroProtocols || [];
+  const spectroTemplates = state?.spectroTemplates || [];
   
   const [activeProtocolId, setActiveProtocolId] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   
   // Current Working Session State
   const [protocolName, setProtocolName] = useState('Nuevo Protocolo');
   const [protocolNotes, setProtocolNotes] = useState('');
+  const [isFromTemplate, setIsFromTemplate] = useState(false);
   
   const [curves, setCurves] = useState(DEFAULT_CURVES());
   const [activeCurveIdx, setActiveCurveIdx] = useState(0);
@@ -44,16 +47,23 @@ export default function Spectrophotometry({ state, updateState, user }) {
   const [factorSource, setFactorSource] = useState('protocol'); // 'protocol' | 'manual'
   const [manualFactorInput, setManualFactorInput] = useState('');
 
-  // Handle Loading a Protocol
+  // Template Admin State
+  const [adminTemplateName, setAdminTemplateName] = useState('');
+  const [adminCurves, setAdminCurves] = useState(DEFAULT_CURVES());
+  const [adminActiveCurveIdx, setAdminActiveCurveIdx] = useState(0);
+
+  // Handle Loading a Protocol Session
   const handleLoadProtocol = (e) => {
     const pid = e.target.value;
     setActiveProtocolId(pid);
+    setSelectedTemplateId('');
     
     if (!pid) {
       setProtocolName('Nuevo Protocolo');
       setProtocolNotes('');
       setCurves(DEFAULT_CURVES());
       setSamples([{ id: uuidv4(), name: 'Muestra 1', value: '', dilution: '', time: '' }]);
+      setIsFromTemplate(false);
       return;
     }
     
@@ -65,24 +75,55 @@ export default function Spectrophotometry({ state, updateState, user }) {
       setSamples(proto.muestras && proto.muestras.length > 0 ? proto.muestras : [{ id: uuidv4(), name: 'Muestra 1', value: '', dilution: '', time: '' }]);
       setGlobalDilution(proto.globalDilution || 1);
       setGlobalTime(proto.globalTime || 1);
+      setIsFromTemplate(!!proto.isFromTemplate);
+    }
+  };
+
+  // Handle Loading a Template
+  const handleLoadTemplate = (e) => {
+    const tid = e.target.value;
+    setSelectedTemplateId(tid);
+    setActiveProtocolId(''); // Deselect saved protocol
+    
+    if (!tid) {
+      setProtocolName('Nuevo Protocolo');
+      setCurves(DEFAULT_CURVES());
+      setIsFromTemplate(false);
+      return;
+    }
+
+    const template = spectroTemplates.find(t => t.id === tid);
+    if (template) {
+      setProtocolName(`${template.nombre} - ${new Date().toLocaleDateString()}`);
+      setIsFromTemplate(true);
+      
+      // Load curves from template, initializing absorbances as empty
+      const initializedCurves = template.curvas.map(c => ({
+        ...c,
+        points: c.points.map(p => ({
+          ...p,
+          id: uuidv4(), // Regenerate IDs to prevent state collision
+          abs1: '',
+          abs2: '',
+          abs3: ''
+        }))
+      }));
+      setCurves(initializedCurves);
     }
   };
 
   // Live Math Calculations
   const processedCurves = useMemo(() => {
     return curves.map(curve => {
-      // 1. Calculate Average Absorbance per point
       const pointsWithAvg = curve.points.map(p => {
         const absPromedio = computeAverageAbs(p.abs1, p.abs2, p.abs3);
         return { ...p, absPromedio };
       });
       
-      // 2. Extract valid points for regression and factor
       const validMathPts = pointsWithAvg
         .map(p => ({ x: parseFloat(p.concentration), y: p.absPromedio }))
         .filter(p => !isNaN(p.x) && p.y !== null);
 
-      // 3. Calculate Results
       let results = { m: null, b: null, r2: null, factor: null };
       if (validMathPts.length > 0) {
         const lr = linearRegression(validMathPts);
@@ -156,7 +197,8 @@ export default function Spectrophotometry({ state, updateState, user }) {
       muestras: samples,
       factorCorreccionPromedio: protocolFactor,
       globalDilution,
-      globalTime
+      globalTime,
+      isFromTemplate
     };
 
     let updatedProtocols = [...savedProtocols];
@@ -184,6 +226,7 @@ export default function Spectrophotometry({ state, updateState, user }) {
   };
 
   const handlePasteCurve = async () => {
+    if (isFromTemplate) return alert("Las concentraciones están fijadas por la plantilla. Escribe las absorbancias manualmente.");
     try {
       const text = await navigator.clipboard.readText();
       const rows = text.trim().split('\n').map(r => r.split('\t'));
@@ -223,35 +266,69 @@ export default function Spectrophotometry({ state, updateState, user }) {
     }
   };
 
+  // Admin Templates Operations
+  const handleSaveAdminTemplate = () => {
+    if (!adminTemplateName.trim()) return alert("Ingresa un nombre para la plantilla oficial.");
+    const newTemplate = {
+      id: uuidv4(),
+      nombre: adminTemplateName,
+      curvas: adminCurves
+    };
+    updateState({ spectroTemplates: [...spectroTemplates, newTemplate] });
+    setAdminTemplateName('');
+    setAdminCurves(DEFAULT_CURVES());
+    alert("Plantilla guardada. Los usuarios ahora pueden cargarla para prellenar concentraciones.");
+  };
+
+  const handleDeleteTemplate = (id) => {
+    if(confirm('¿Seguro que deseas eliminar esta plantilla oficial del laboratorio?')) {
+      updateState({ spectroTemplates: spectroTemplates.filter(t => t.id !== id) });
+    }
+  };
+
   const isReadOnly = activeProtocolId && savedProtocols.find(p => p.id === activeProtocolId)?.autorUid !== user?.uid;
+  const isConcentrationLocked = isReadOnly || isFromTemplate;
 
   return (
     <div className="spectro-container">
       <div className="spectro-header">
         <h2>🔬 Espectrofotometría Multiparamétrica</h2>
-        <p>Modelo Oficial: Crea protocolos con 3 curvas por triplicado para estandarizar tus factores de cálculo.</p>
+        <p>Crea sesiones de trabajo con 3 curvas por triplicado o carga plantillas oficiales para estandarizar tus cálculos.</p>
       </div>
 
-      {/* PROTOCOL BAR (Session Management) */}
-      <div className="protocol-bar" style={{ flexWrap: 'wrap', gap: '16px' }}>
-        <div className="protocol-selector-group" style={{ flex: '1', minWidth: '300px' }}>
-          <BookOpen size={20} style={{color: '#6366f1'}}/>
-          <select className="protocol-select" value={activeProtocolId} onChange={handleLoadProtocol}>
-            <option value="">-- Iniciar Nuevo Protocolo --</option>
-            {savedProtocols.map(p => (
-              <option key={p.id} value={p.id}>{p.nombre} ({new Date(p.fecha).toLocaleDateString()}) - {p.autor}</option>
-            ))}
-          </select>
+      {/* PROTOCOL & TEMPLATE BAR */}
+      <div className="protocol-bar" style={{ flexWrap: 'wrap', gap: '16px', flexDirection: 'column' }}>
+        
+        <div style={{ display: 'flex', gap: '16px', width: '100%', flexWrap: 'wrap' }}>
+          <div className="protocol-selector-group" style={{ flex: '1', minWidth: '250px' }}>
+            <FileText size={20} style={{color: '#10b981'}}/>
+            <select className="protocol-select" value={selectedTemplateId} onChange={handleLoadTemplate} style={{borderColor: '#10b981'}}>
+              <option value="">-- Cargar desde Plantilla Oficial --</option>
+              {spectroTemplates.map(t => (
+                <option key={t.id} value={t.id}>{t.nombre}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="protocol-selector-group" style={{ flex: '1', minWidth: '250px' }}>
+            <BookOpen size={20} style={{color: '#6366f1'}}/>
+            <select className="protocol-select" value={activeProtocolId} onChange={handleLoadProtocol}>
+              <option value="">-- Abrir Sesión Guardada --</option>
+              {savedProtocols.map(p => (
+                <option key={p.id} value={p.id}>{p.nombre} ({new Date(p.fecha).toLocaleDateString()}) - {p.autor}</option>
+              ))}
+            </select>
+          </div>
         </div>
         
-        <div className="protocol-meta" style={{ display: 'flex', gap: '16px', flex: '2', minWidth: '400px' }}>
+        <div className="protocol-meta" style={{ display: 'flex', gap: '16px', width: '100%', flexWrap: 'wrap' }}>
           <input 
             type="text" 
-            placeholder="Nombre del Protocolo (Ej: Lowry Lote 4)" 
+            placeholder="Nombre de Sesión (Ej: Lowry Lote 4)" 
             value={protocolName} 
             onChange={e => setProtocolName(e.target.value)} 
             className="input-field"
-            style={{ flex: '1' }}
+            style={{ flex: '1', minWidth: '200px' }}
             disabled={isReadOnly}
           />
           <input 
@@ -260,23 +337,29 @@ export default function Spectrophotometry({ state, updateState, user }) {
             value={protocolNotes} 
             onChange={e => setProtocolNotes(e.target.value)} 
             className="input-field"
-            style={{ flex: '1' }}
+            style={{ flex: '2', minWidth: '200px' }}
             disabled={isReadOnly}
           />
+          <div className="admin-actions" style={{display: 'flex', alignItems: 'center'}}>
+            {!isReadOnly && (
+              <button className="btn btn-primary" onClick={handleSaveToCloud}>
+                <Save size={16}/> Guardar Sesión
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="admin-actions">
-          {!isReadOnly && (
-            <button className="btn btn-primary" onClick={handleSaveToCloud}>
-              <Save size={16}/> Guardar Protocolo
-            </button>
-          )}
-        </div>
       </div>
 
       {isReadOnly && (
         <div className="locked-alert">
-          <strong>🔒 Modo Lectura</strong>: Este protocolo fue creado por otro usuario. No puedes sobreescribirlo, pero puedes usar su factor para calcular tus muestras.
+          <strong>🔒 Modo Lectura</strong>: Esta sesión fue creada por otro usuario. No puedes sobreescribirla, pero puedes usar su factor para calcular tus muestras.
+        </div>
+      )}
+
+      {isFromTemplate && !isReadOnly && (
+        <div className="locked-alert" style={{backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: '#10b981', color: '#047857'}}>
+          <strong>✅ Plantilla Oficial Activa</strong>: Las concentraciones han sido bloqueadas por el administrador. Solo ingresa tus absorbancias.
         </div>
       )}
 
@@ -288,6 +371,11 @@ export default function Spectrophotometry({ state, updateState, user }) {
         <button className={`spectro-tab-btn ${activeTab === 'samples' ? 'active' : ''}`} onClick={() => setActiveTab('samples')}>
           <Calculator size={18}/> 2. Análisis de Muestras
         </button>
+        {userRole === 'admin' && (
+          <button className={`spectro-tab-btn ${activeTab === 'templates' ? 'active' : ''}`} onClick={() => setActiveTab('templates')} style={{marginLeft: 'auto'}}>
+            <Settings size={18}/> 3. Plantillas (Admin)
+          </button>
+        )}
       </div>
 
       {activeTab === 'calibration' && (
@@ -309,8 +397,8 @@ export default function Spectrophotometry({ state, updateState, user }) {
             <div className="spectro-left">
               <div className="spectro-card" style={{overflowX: 'auto'}}>
                 <div className="card-header-flex">
-                  <h3>🧪 Puntos de {activeCurve.name}</h3>
-                  {!isReadOnly && (
+                  <h3>🧪 Puntos de {activeCurve.name} {isConcentrationLocked && '🔒'}</h3>
+                  {!isReadOnly && !isFromTemplate && (
                     <button className="btn btn-small" onClick={handlePasteCurve}><ClipboardPaste size={14}/> Pegar de Excel</button>
                   )}
                 </div>
@@ -323,7 +411,7 @@ export default function Spectrophotometry({ state, updateState, user }) {
                       <th>Abs 2</th>
                       <th>Abs 3</th>
                       <th style={{color:'#8b5cf6'}}>Promedio</th>
-                      {!isReadOnly && <th width="30"></th>}
+                      {!isConcentrationLocked && <th width="30"></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -334,7 +422,7 @@ export default function Spectrophotometry({ state, updateState, user }) {
                             const newCurves = [...curves];
                             newCurves[activeCurveIdx].points[i].concentration = e.target.value;
                             setCurves(newCurves);
-                          }} placeholder="[ ]" disabled={isReadOnly} />
+                          }} placeholder="[ ]" disabled={isConcentrationLocked} style={isConcentrationLocked ? {backgroundColor: 'var(--bg-primary)'} : {}} />
                         </td>
                         <td>
                           <input type="number" step="any" value={p.abs1} onChange={e => {
@@ -360,7 +448,7 @@ export default function Spectrophotometry({ state, updateState, user }) {
                         <td>
                           <strong style={{fontSize:'0.9rem', color:'#8b5cf6'}}>{p.absPromedio !== null ? p.absPromedio.toFixed(4) : '-'}</strong>
                         </td>
-                        {!isReadOnly && (
+                        {!isConcentrationLocked && (
                           <td>
                             <button className="btn-icon" onClick={() => {
                               const newCurves = [...curves];
@@ -373,7 +461,7 @@ export default function Spectrophotometry({ state, updateState, user }) {
                     ))}
                   </tbody>
                 </table>
-                {!isReadOnly && (
+                {!isConcentrationLocked && (
                   <button className="btn btn-outline" style={{marginTop:'10px', width:'100%'}} onClick={() => {
                     const newCurves = [...curves];
                     newCurves[activeCurveIdx].points.push({ id: uuidv4(), concentration: '', abs1: '', abs2: '', abs3: '' });
@@ -562,6 +650,102 @@ export default function Spectrophotometry({ state, updateState, user }) {
               <button className="btn btn-primary btn-large" style={{width:'100%', marginTop:'16px'}} onClick={handleExport}>
                 <Download size={18}/> Exportar Reporte GLP Completo
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'templates' && userRole === 'admin' && (
+        <div className="spectro-grid">
+          <div className="spectro-left">
+            <div className="spectro-card">
+              <h3>⚙️ Crear Plantilla de Concentraciones</h3>
+              <p className="text-muted" style={{marginBottom: '16px'}}>Define las concentraciones oficiales para estandarizar el cálculo. Los usuarios no podrán modificar estas concentraciones cuando usen la plantilla.</p>
+              
+              <div className="settings-row" style={{marginBottom: '16px'}}>
+                <div className="field" style={{flex: 1}}>
+                  <label>Nombre de la Plantilla</label>
+                  <input type="text" value={adminTemplateName} onChange={e => setAdminTemplateName(e.target.value)} placeholder="Ej: Método de Lowry Oficial" />
+                </div>
+                <div style={{display: 'flex', alignItems: 'flex-end'}}>
+                  <button className="btn btn-primary" onClick={handleSaveAdminTemplate}>
+                    <Save size={16}/> Guardar Plantilla
+                  </button>
+                </div>
+              </div>
+
+              <div className="curves-tabs" style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                {adminCurves.map((curve, idx) => (
+                  <button 
+                    key={curve.id} 
+                    className={`btn ${adminActiveCurveIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setAdminActiveCurveIdx(idx)}
+                  >
+                    {curve.name} ({curve.points.length} pts)
+                  </button>
+                ))}
+              </div>
+
+              <table className="spectro-table">
+                <thead>
+                  <tr>
+                    <th>Concentración [ ]</th>
+                    <th width="30"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminCurves[adminActiveCurveIdx].points.map((p, i) => (
+                    <tr key={p.id}>
+                      <td>
+                        <input type="number" step="any" value={p.concentration} onChange={e => {
+                          const newCurves = [...adminCurves];
+                          newCurves[adminActiveCurveIdx].points[i].concentration = e.target.value;
+                          setAdminCurves(newCurves);
+                        }} placeholder="Ej: 5.0" />
+                      </td>
+                      <td>
+                        <button className="btn-icon" onClick={() => {
+                          const newCurves = [...adminCurves];
+                          newCurves[adminActiveCurveIdx].points = newCurves[adminActiveCurveIdx].points.filter(pt => pt.id !== p.id);
+                          setAdminCurves(newCurves);
+                        }}><Trash2 size={16}/></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button className="btn btn-outline" style={{marginTop:'10px', width:'100%'}} onClick={() => {
+                const newCurves = [...adminCurves];
+                newCurves[adminActiveCurveIdx].points.push({ id: uuidv4(), concentration: '', abs1: '', abs2: '', abs3: '' });
+                setAdminCurves(newCurves);
+              }}>
+                <Plus size={16}/> Agregar Concentración
+              </button>
+            </div>
+          </div>
+          
+          <div className="spectro-right">
+            <div className="spectro-card sticky-card">
+              <h3>📂 Plantillas Oficiales Existentes</h3>
+              {spectroTemplates.length === 0 ? (
+                <p className="text-muted">No hay plantillas creadas.</p>
+              ) : (
+                <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                  {spectroTemplates.map(t => (
+                    <div key={t.id} style={{padding: '12px', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                      <div>
+                        <strong>{t.nombre}</strong>
+                        <div style={{fontSize: '0.85rem', color: 'var(--text-secondary)'}}>
+                          C1: {t.curvas[0]?.points.length} pts | C2: {t.curvas[1]?.points.length} pts | C3: {t.curvas[2]?.points.length} pts
+                        </div>
+                      </div>
+                      <button className="btn-icon" style={{color: '#ef4444'}} onClick={() => handleDeleteTemplate(t.id)}>
+                        <Trash2 size={18}/>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
