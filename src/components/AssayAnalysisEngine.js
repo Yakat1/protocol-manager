@@ -42,6 +42,13 @@ export function calculateFactor(pts) {
   return sumConc / sumAbs;
 }
 
+export function computeAverageAbs(abs1, abs2, abs3) {
+  const valid = [abs1, abs2, abs3].map(v => parseFloat(v)).filter(v => !isNaN(v));
+  if (valid.length === 0) return null;
+  const sum = valid.reduce((acc, curr) => acc + curr, 0);
+  return sum / valid.length;
+}
+
 export function processSpectroSamples(samples, factor, globalDilution = 1, globalTime = 1) {
   return samples.map(s => {
     let conc = null;
@@ -64,7 +71,7 @@ export function processSpectroSamples(samples, factor, globalDilution = 1, globa
   });
 }
 
-export function generateSpectroXLSX(samples, standards, numReplicates, curveParams, factor, globalDilution, globalTime) {
+export function generateSpectroXLSX(protocolName, curvesData, samples, finalFactor, globalDilution, globalTime) {
   const wb = XLSX.utils.book_new();
 
   // Sheet 1: Results
@@ -73,84 +80,58 @@ export function generateSpectroXLSX(samples, standards, numReplicates, curvePara
     'Lectura (Abs)': s.value,
     'Dilución': s.dilution || globalDilution,
     'Tiempo (min)': s.time || globalTime,
-    'Concentración Interpolada': s.calculated_concentration !== null ? parseFloat(s.calculated_concentration.toFixed(4)) : '',
+    'Concentración Calculada': s.calculated_concentration !== null ? parseFloat(s.calculated_concentration.toFixed(4)) : '',
     'Actividad Final': s.final_activity !== null ? parseFloat(s.final_activity.toFixed(4)) : ''
   }));
   const wsResults = XLSX.utils.json_to_sheet(resultsData);
-  XLSX.utils.book_append_sheet(wb, wsResults, "Resultados");
+  XLSX.utils.book_append_sheet(wb, wsResults, "Resultados Muestras");
 
-  // Sheet 2: Standard Curve & Params
-  const curveData = [];
-  curveData.push({ Parametro: 'Dilución Global', Valor: globalDilution });
-  curveData.push({ Parametro: 'Tiempo Global (min)', Valor: globalTime });
-  curveData.push({});
+  // Sheet 2: Calibration Curves
+  const sheetData = [];
+  sheetData.push({ Col1: 'Protocolo:', Col2: protocolName });
+  sheetData.push({ Col1: 'Factor Final Promedio:', Col2: finalFactor !== null ? parseFloat(finalFactor.toFixed(5)) : '' });
+  sheetData.push({});
   
-  // Promedio (Final)
-  curveData.push({ Parametro: '=== RESULTADO FINAL (PROMEDIO) ===', Valor: '' });
-  if (curveParams) {
-    curveData.push({ Parametro: 'Pendiente (m)', Valor: parseFloat(curveParams.m.toFixed(5)) });
-    curveData.push({ Parametro: 'Intersección (b)', Valor: parseFloat(curveParams.b.toFixed(5)) });
-    curveData.push({ Parametro: 'R²', Valor: parseFloat(curveParams.r2.toFixed(5)) });
-    curveData.push({ Parametro: 'Ecuación', Valor: `y = ${curveParams.m.toFixed(4)}x + ${curveParams.b.toFixed(4)}` });
-  }
-  if (factor !== null) {
-    curveData.push({ Parametro: 'Factor (Final)', Valor: parseFloat(factor.toFixed(5)) });
-  }
-  curveData.push({});
-
-  // Individual Replicates (if > 1)
-  if (numReplicates > 1) {
-    for (let r = 0; r < numReplicates; r++) {
-      const repPts = standards
-        .map(s => ({ x: parseFloat(s.concentration), y: parseFloat(s.values[r]) }))
-        .filter(p => !isNaN(p.x) && !isNaN(p.y));
-      
-      if (repPts.length > 0) {
-        curveData.push({ Parametro: `=== RÉPLICA ${r + 1} ===`, Valor: '' });
-        
-        const lr = linearRegression(repPts);
-        curveData.push({ Parametro: `R² (Rép ${r + 1})`, Valor: parseFloat(lr.r2.toFixed(5)) });
-        curveData.push({ Parametro: `Eq (Rép ${r + 1})`, Valor: `y = ${lr.m.toFixed(4)}x + ${lr.b.toFixed(4)}` });
-        
-        const f = calculateFactor(repPts);
-        curveData.push({ Parametro: `Factor (Rép ${r + 1})`, Valor: parseFloat(f.toFixed(5)) });
+  curvesData.forEach(curve => {
+    sheetData.push({ Col1: `=== ${curve.name.toUpperCase()} ===`, Col2: '' });
+    
+    // Math Results
+    if (curve.results) {
+      sheetData.push({ Col1: 'Pendiente (m)', Col2: curve.results.m !== null ? parseFloat(curve.results.m.toFixed(5)) : '' });
+      sheetData.push({ Col1: 'Intersección (b)', Col2: curve.results.b !== null ? parseFloat(curve.results.b.toFixed(5)) : '' });
+      sheetData.push({ Col1: 'R²', Col2: curve.results.r2 !== null ? parseFloat(curve.results.r2.toFixed(5)) : '' });
+      sheetData.push({ Col1: 'Factor (Curva)', Col2: curve.results.factor !== null ? parseFloat(curve.results.factor.toFixed(5)) : '' });
+    }
+    sheetData.push({});
+    
+    // Table Headers
+    sheetData.push({
+      Col1: 'Concentración',
+      Col2: 'Abs 1',
+      Col3: 'Abs 2',
+      Col4: 'Abs 3',
+      Col5: 'Abs Promedio'
+    });
+    
+    // Points
+    curve.points.forEach(p => {
+      if (p.concentration !== '' && p.concentration !== null) {
+        sheetData.push({
+          Col1: p.concentration,
+          Col2: p.abs1,
+          Col3: p.abs2,
+          Col4: p.abs3,
+          Col5: p.absPromedio !== null ? p.absPromedio : ''
+        });
       }
-    }
-    curveData.push({});
-  }
-  
-  // Data points
-  curveData.push({ Parametro: '=== DATOS DE CALIBRACIÓN ===', Valor: '' });
-  
-  // Build header row for table
-  const headerRow = { Parametro: 'Concentración' };
-  if (numReplicates === 1) {
-    headerRow.Valor = 'Absorbancia';
-  } else {
-    for(let r=0; r<numReplicates; r++) {
-      headerRow[`Abs_${r+1}`] = `Abs ${r+1}`;
-    }
-    headerRow.Valor = 'Promedio Abs';
-  }
-  curveData.push(headerRow);
-  
-  standards.forEach(std => {
-    if (std.concentration !== null && std.concentration !== '') {
-      const row = { Parametro: std.concentration };
-      if (numReplicates === 1) {
-        row.Valor = std.values[0];
-      } else {
-        for(let r=0; r<numReplicates; r++) {
-          row[`Abs_${r+1}`] = std.values[r];
-        }
-        row.Valor = std.average;
-      }
-      curveData.push(row);
-    }
+    });
+    
+    sheetData.push({});
+    sheetData.push({});
   });
 
-  const wsCurve = XLSX.utils.json_to_sheet(curveData, { skipHeader: true });
-  XLSX.utils.book_append_sheet(wb, wsCurve, "Curva Estándar");
+  const wsCurve = XLSX.utils.json_to_sheet(sheetData, { skipHeader: true });
+  XLSX.utils.book_append_sheet(wb, wsCurve, "Curvas de Calibración");
 
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   return new Blob([wbout], { type: "application/octet-stream" });
