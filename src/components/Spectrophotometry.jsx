@@ -27,7 +27,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
   
   // Cloud data
   const savedProtocols = state?.spectroProtocols || [];
-  const spectroTemplates = state?.spectroTemplates || [];
+  const spectroTemplates = (state?.spectroTemplates || []).filter(t => !t.deletedAt);
   
   const [activeProtocolId, setActiveProtocolId] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -274,7 +274,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
       nombre: adminTemplateName,
       curvas: adminCurves
     };
-    updateState({ spectroTemplates: [...spectroTemplates, newTemplate] });
+    updateState({ spectroTemplates: [...(state?.spectroTemplates || []), newTemplate] });
     setAdminTemplateName('');
     setAdminCurves(DEFAULT_CURVES());
     alert("Plantilla guardada. Los usuarios ahora pueden cargarla para prellenar concentraciones.");
@@ -282,7 +282,9 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
 
   const handleDeleteTemplate = (id) => {
     if(confirm('¿Seguro que deseas eliminar esta plantilla oficial del laboratorio?')) {
-      updateState({ spectroTemplates: spectroTemplates.filter(t => t.id !== id) });
+      updateState({
+        spectroTemplates: (state?.spectroTemplates || []).map(t => t.id === id ? { ...t, deletedAt: new Date().toISOString(), deletedBy: user?.email || 'unknown' } : t)
+      }, { immediate: true });
     }
   };
 
@@ -297,11 +299,11 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
       </div>
 
       {/* PROTOCOL & TEMPLATE BAR */}
-      <div className="protocol-bar" style={{ flexWrap: 'wrap', gap: '16px', flexDirection: 'column' }}>
-        
-        <div style={{ display: 'flex', gap: '16px', width: '100%', flexWrap: 'wrap' }}>
-          <div className="protocol-selector-group" style={{ flex: '1', minWidth: '250px' }}>
-            <FileText size={20} style={{color: '#10b981'}}/>
+      <div className="protocol-bar">
+        {/* Row 1: selectors */}
+        <div className="protocol-selector-row">
+          <div className="protocol-selector-group">
+            <FileText size={18} style={{color: '#10b981', flexShrink: 0}}/>
             <select className="protocol-select" value={selectedTemplateId} onChange={handleLoadTemplate} style={{borderColor: '#10b981'}}>
               <option value="">-- Cargar desde Plantilla Oficial --</option>
               {spectroTemplates.map(t => (
@@ -310,37 +312,38 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
             </select>
           </div>
 
-          <div className="protocol-selector-group" style={{ flex: '1', minWidth: '250px' }}>
-            <BookOpen size={20} style={{color: '#6366f1'}}/>
+          <div className="protocol-selector-group">
+            <BookOpen size={18} style={{color: '#6366f1', flexShrink: 0}}/>
             <select className="protocol-select" value={activeProtocolId} onChange={handleLoadProtocol}>
               <option value="">-- Abrir Sesión Guardada --</option>
               {savedProtocols.map(p => (
-                <option key={p.id} value={p.id}>{p.nombre} ({new Date(p.fecha).toLocaleDateString()}) - {p.autor}</option>
+                <option key={p.id} value={p.id}>{p.nombre} ({new Date(p.fecha).toLocaleDateString()}) – {p.autor}</option>
               ))}
             </select>
           </div>
         </div>
-        
-        <div className="protocol-meta" style={{ display: 'flex', gap: '16px', width: '100%', flexWrap: 'wrap' }}>
-          <input 
-            type="text" 
-            placeholder="Nombre de Sesión (Ej: Lowry Lote 4)" 
-            value={protocolName} 
-            onChange={e => setProtocolName(e.target.value)} 
+
+        {/* Row 2: name + notes + save */}
+        <div className="protocol-meta-row">
+          <input
+            type="text"
+            placeholder="Nombre de Sesión (Ej: Lowry Lote 4)"
+            value={protocolName}
+            onChange={e => setProtocolName(e.target.value)}
             className="input-field"
-            style={{ flex: '1', minWidth: '200px' }}
+            style={{ flex: '1', minWidth: '180px' }}
             disabled={isReadOnly}
           />
-          <input 
-            type="text" 
-            placeholder="Notas u Observaciones..." 
-            value={protocolNotes} 
-            onChange={e => setProtocolNotes(e.target.value)} 
+          <input
+            type="text"
+            placeholder="Notas u Observaciones..."
+            value={protocolNotes}
+            onChange={e => setProtocolNotes(e.target.value)}
             className="input-field"
-            style={{ flex: '2', minWidth: '200px' }}
+            style={{ flex: '2', minWidth: '180px' }}
             disabled={isReadOnly}
           />
-          <div className="admin-actions" style={{display: 'flex', alignItems: 'center'}}>
+          <div className="admin-actions">
             {!isReadOnly && (
               <button className="btn btn-primary" onClick={handleSaveToCloud}>
                 <Save size={16}/> Guardar Sesión
@@ -348,7 +351,6 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
             )}
           </div>
         </div>
-
       </div>
 
       {isReadOnly && (
@@ -358,7 +360,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
       )}
 
       {isFromTemplate && !isReadOnly && (
-        <div className="locked-alert" style={{backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: '#10b981', color: '#047857'}}>
+        <div className="template-alert">
           <strong>✅ Plantilla Oficial Activa</strong>: Las concentraciones han sido bloqueadas por el administrador. Solo ingresa tus absorbancias.
         </div>
       )}
