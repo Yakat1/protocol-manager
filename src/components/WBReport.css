@@ -2,6 +2,189 @@
   padding: 24px;
 }
 
+/* === ENCABEZADO GLOBAL DE COLUMNAS === */
+.wb-global-header {
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 0;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed rgba(255,255,255,0.1);
+}
+
+.wb-global-columns-bar {
+  position: relative;
+  flex: 1;
+  height: 52px; /* misma altura que el espacio de lanes anterior */
+}
+
+.wb-global-col-handle {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: ew-resize;
+  z-index: 10;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.wb-global-col-handle:hover {
+  background: rgba(255,255,255,0.07);
+}
+
+/* === LÍNEAS GUÍA VERTICALES EN BANDAS === */
+.wb-guide-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(99, 102, 241, 0.45);
+  border-left: 1px dashed rgba(99, 102, 241, 0.5);
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.wb-guide-chip {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.65);
+  border-radius: 4px;
+  padding: 2px 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  text-align: center;
+  min-width: 52px;
+}
+
+/* === LAYOUT PRINCIPAL CON SIDEBAR === */
+.wb-workspace-layout {
+  display: flex;
+  gap: 0;
+  align-items: flex-start;
+}
+
+.wb-main-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* === SIDEBAR DE LIBRERÍA === */
+.wb-sidebar {
+  width: 200px;
+  min-width: 200px;
+  margin-right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: sticky;
+  top: 20px;
+}
+
+.wb-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.wb-sidebar-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.wb-sidebar-add-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px dashed var(--panel-border);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 0.75rem;
+  width: 100%;
+  transition: 0.2s;
+}
+
+.wb-sidebar-add-btn:hover {
+  background: rgba(255,255,255,0.12);
+  color: var(--text-primary);
+}
+
+.wb-library-item {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: var(--glass-bg);
+}
+
+.wb-library-item:hover {
+  border-color: rgba(255,255,255,0.25);
+}
+
+.wb-library-item.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 4px 12px rgba(99,102,241,0.3);
+}
+
+.wb-library-thumbnail {
+  width: 100%;
+  height: 90px;
+  object-fit: cover;
+  display: block;
+}
+
+.wb-library-item-footer {
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  background: rgba(0,0,0,0.4);
+}
+
+.wb-library-item-name {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.wb-library-item.active .wb-library-item-name {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.wb-library-active-badge {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.55rem;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 /* Band strip card */
 .wb-strip-card {
   padding: 16px;
@@ -292,3 +475,26 @@
   background: rgba(255,255,255,0.1);
   color: var(--text-primary);
 }
+
+/* Modal overlay para reajuste */
+.wb-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.wb-modal-content {
+  background: #1e1e24; /* o var(--bg-color) */
+  padding: 24px;
+  border-radius: 8px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
+  border: 1px solid #333;
+}
+
