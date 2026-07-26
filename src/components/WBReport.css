@@ -2,6 +2,166 @@
   padding: 24px;
 }
 
+/* ── Botón secundario ── */
+.btn-secondary {
+  background: rgba(99,102,241,0.15);
+  border: 1px solid rgba(99,102,241,0.4);
+  color: var(--accent);
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.2s;
+}
+.btn-secondary:hover { background: rgba(99,102,241,0.28); }
+
+/* ── Panel de cuantificación por banda ── */
+.wb-quant-panel {
+  margin-top: 10px;
+  padding-right: 70px;
+}
+
+.wb-quant-toggle {
+  background: rgba(99,102,241,0.1);
+  border: 1px solid rgba(99,102,241,0.25);
+  color: var(--accent);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  transition: background 0.2s;
+}
+.wb-quant-toggle:hover { background: rgba(99,102,241,0.2); }
+
+.wb-quant-content {
+  margin-top: 10px;
+  padding: 14px;
+  background: rgba(0,0,0,0.25);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+/* ── Controles de brillo/contraste ── */
+.wb-bc-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wb-bc-title {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.wb-bc-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wb-bc-label {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  width: 60px;
+  flex-shrink: 0;
+}
+
+.wb-bc-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.15);
+  outline: none;
+  cursor: pointer;
+}
+.wb-bc-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.wb-bc-val {
+  font-size: 0.7rem;
+  color: var(--text-primary);
+  width: 30px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ── Barras de intensidad ── */
+.wb-intensity-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 100px;
+  padding: 0 4px;
+}
+
+.wb-intensity-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  height: 100%;
+}
+
+.wb-intensity-bar-value {
+  font-size: 0.6rem;
+  color: var(--text-secondary);
+  margin-bottom: 3px;
+  white-space: nowrap;
+}
+
+.wb-intensity-bar-track {
+  flex: 1;
+  width: 100%;
+  background: rgba(255,255,255,0.07);
+  border-radius: 4px 4px 0 0;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.wb-intensity-bar-fill {
+  width: 100%;
+  background: linear-gradient(to top, rgba(99,102,241,0.9), rgba(139,92,246,0.7));
+  border-radius: 4px 4px 0 0;
+  min-height: 2px;
+  transition: height 0.4s ease;
+}
+
+.wb-intensity-bar-ratio {
+  font-size: 0.6rem;
+  color: #ffcc00;
+  font-weight: 700;
+  margin-top: 3px;
+}
+
+.wb-intensity-bar-label {
+  font-size: 0.6rem;
+  color: var(--text-secondary);
+  margin-top: 3px;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* === ENCABEZADO GLOBAL DE COLUMNAS === */
 .wb-global-header {
   display: flex;
