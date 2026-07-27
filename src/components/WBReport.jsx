@@ -1,7 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { UploadCloud, Plus, Trash2, Download, Image as ImageIcon, Crop, GripHorizontal, GripVertical, BarChart2, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import { UploadCloud, Plus, Trash2, Download, Image as ImageIcon, Crop, GripHorizontal, GripVertical, BarChart2, ChevronDown, ChevronUp, RotateCcw, BookOpen } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import './WBReport.css';
+import WBReportFAQ from './WBReportFAQ';
 
 /* ─── Utilidades de cálculo ─── */
 
@@ -9,45 +10,52 @@ const calculateLaneIntensitiesFromCanvas = (canvas, columns) => {
   const width = canvas.width;
   const height = canvas.height;
   const ctx = canvas.getContext('2d');
-  const data = ctx.getImageData(0, 0, width, height).data;
+  const imageData = ctx.getImageData(0, 0, width, height).data;
+
   const sortedCols = [...columns].sort((a, b) => a.x - b.x);
   const boundaries = [0];
-  for (let i = 0; i < sortedCols.length - 1; i++)
+  for (let i = 0; i < sortedCols.length - 1; i++) {
     boundaries.push(((sortedCols[i].x + sortedCols[i + 1].x) / 2) * width / 100);
+  }
   boundaries.push(width);
+
   const intensities = {};
-  sortedCols.forEach((col) => { intensities[col.id] = 0; });
-  for (let y = 0; y < height; y++)
-    for (let x = 0; x < width; x++) {
-      const idx = sortedCols.findIndex((_, i) => x >= boundaries[i] && x < boundaries[i + 1]);
-      if (idx !== -1) {
-        const p = (y * width + x) * 4;
-        intensities[sortedCols[idx].id] += 255 - (data[p] + data[p + 1] + data[p + 2]) / 3;
+  sortedCols.forEach((col, idx) => {
+    const startX = Math.floor(boundaries[idx]);
+    const endX = Math.floor(boundaries[idx + 1]);
+    let sum = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = startX; x < endX; x++) {
+        const idxPx = (y * width + x) * 4;
+        const gray = (imageData[idxPx] + imageData[idxPx + 1] + imageData[idxPx + 2]) / 3;
+        sum += (255 - gray);
       }
     }
-  const result = {};
-  for (const id in intensities) result[id] = Math.round(intensities[id]);
-  return result;
+    intensities[col.id] = Math.round(sum);
+  });
+  return intensities;
 };
 
-/* Perfil de intensidad horizontal: suma de grises invertidos por cada columna de píxeles */
-const calculateIntensityProfile = (imageData) => {
+const calculateIntensityProfile = (imageDataUrl) => {
+  const img = new Image();
+  img.src = imageDataUrl;
+  if (!img.complete && !img.width) return [];
   const canvas = document.createElement('canvas');
-  const img = new window.Image();
-  img.src = imageData;
-  // síncrono solo si ya está cargada (caso normal con base64)
-  canvas.width = img.naturalWidth || img.width;
-  canvas.height = img.naturalHeight || img.height;
-  if (!canvas.width) return [];
+  canvas.width = img.naturalWidth || 100;
+  canvas.height = img.naturalHeight || 30;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0);
-  const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const profile = new Array(width).fill(0);
-  for (let y = 0; y < height; y++)
-    for (let x = 0; x < width; x++) {
-      const p = (y * width + x) * 4;
-      profile[x] += 255 - (data[p] + data[p + 1] + data[p + 2]) / 3;
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  const profile = [];
+  for (let x = 0; x < canvas.width; x++) {
+    let colSum = 0;
+    for (let y = 0; y < canvas.height; y++) {
+      const idx = (y * canvas.width + x) * 4;
+      const gray = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+      colSum += (255 - gray);
     }
+    profile.push(colSum);
+  }
   return profile;
 };
 
@@ -89,6 +97,23 @@ const PeaksChart = ({ strip, globalColumns }) => {
     // Fondo
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.fillRect(0, 0, W, H);
+
+    // Líneas divisorias de carril (punto medio ecuatorial) y sombreado
+    const sortedCols = [...globalColumns].sort((a, b) => a.x - b.x);
+    const boundaries = [0];
+    for (let i = 0; i < sortedCols.length - 1; i++) {
+      boundaries.push(((sortedCols[i].x + sortedCols[i + 1].x) / 2) * W / 100);
+    }
+    boundaries.push(W);
+
+    // Sombreado alterno de carriles para identificar cada ROI visualmente
+    for (let i = 0; i < sortedCols.length; i++) {
+      if (i % 2 === 1) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+        ctx.fillRect(boundaries[i], 0, boundaries[i + 1] - boundaries[i], H);
+      }
+    }
+
     // Relleno bajo la curva
     const gradient = ctx.createLinearGradient(0, 0, 0, H);
     gradient.addColorStop(0, 'rgba(99,102,241,0.7)');
@@ -114,8 +139,7 @@ const PeaksChart = ({ strip, globalColumns }) => {
       x === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
     });
     ctx.stroke();
-    // Líneas guía de columnas globales
-    const sortedCols = [...globalColumns].sort((a, b) => a.x - b.x);
+    // Líneas guía de columnas globales (centroides)
     sortedCols.forEach((col) => {
       const px = (col.x / 100) * W;
       ctx.beginPath();
@@ -126,6 +150,17 @@ const PeaksChart = ({ strip, globalColumns }) => {
       ctx.stroke();
       ctx.setLineDash([]);
     });
+
+    // Líneas divisorias entre carriles (amarillo punteado)
+    for (let i = 1; i < boundaries.length - 1; i++) {
+      ctx.beginPath();
+      ctx.setLineDash([2, 2]);
+      ctx.strokeStyle = 'rgba(255, 193, 7, 0.75)';
+      ctx.lineWidth = 1;
+      ctx.moveTo(boundaries[i], 0); ctx.lineTo(boundaries[i], H);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }, [strip.imageData, globalColumns]);
 
   return (
@@ -182,6 +217,7 @@ export default function WBReport() {
   const [editingStripId, setEditingStripId] = useState(null);
   const [editCropStart, setEditCropStart] = useState(null);
   const [editCropRect, setEditCropRect] = useState(null);
+  const [showFaq, setShowFaq] = useState(false);
 
   const fileRef = useRef(null);
   const addMoreRef = useRef(null);
@@ -363,6 +399,10 @@ export default function WBReport() {
   };
 
   const sortedColumns = [...globalColumns].sort((a, b) => a.x - b.x);
+  const boundaries = [];
+  for (let i = 0; i < sortedColumns.length - 1; i++) {
+    boundaries.push((sortedColumns[i].x + sortedColumns[i + 1].x) / 2);
+  }
 
   /* ════════════════════════════════════════════
      RENDER
@@ -371,8 +411,13 @@ export default function WBReport() {
     <div className="wb-report-container">
       {imageLibrary.length === 0 ? (
         <div>
-          <div className="wb-instructions" style={{ marginBottom: '16px' }}>
-            <strong>Modo Reporte de Western Blot:</strong> Sube una o más imágenes de WB. Selecciona la imagen activa en la librería lateral y recorta cada banda individualmente.
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '16px', flexWrap: 'wrap' }}>
+            <div className="wb-instructions" style={{ margin: 0, flex: 1, minWidth: '280px' }}>
+              <strong>Modo Reporte de Western Blot:</strong> Sube una o más imágenes de WB. Selecciona la imagen activa en la librería lateral y recorta cada banda individualmente.
+            </div>
+            <button className="btn btn-secondary" onClick={() => setShowFaq(true)} style={{ borderColor: '#818cf8', color: '#818cf8', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+              <BookOpen size={15} /> Guía Científica y FAQ
+            </button>
           </div>
           <div className="dropzone" onClick={() => fileRef.current?.click()} style={{ maxWidth: '500px' }}>
             <UploadCloud size={32} style={{ marginBottom: '12px' }} />
@@ -387,12 +432,17 @@ export default function WBReport() {
           {/* Barra de acciones */}
           <div className="wb-report-actions">
             <button className="btn btn-danger" onClick={() => { setImageLibrary([]); setActiveImageId(null); setStrips([]); }}>Reiniciar todo</button>
-            {strips.length > 0 && (
-              <>
-                <button className="btn btn-primary" onClick={exportFigure}><Download size={14} /> Exportar Figura PNG</button>
-                <button className="btn btn-secondary" onClick={exportCSV}><BarChart2 size={14} /> Descargar CSV</button>
-              </>
-            )}
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button className="btn btn-secondary" onClick={() => setShowFaq(true)} style={{ borderColor: '#818cf8', color: '#818cf8', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                <BookOpen size={14} /> Guía Científica y FAQ
+              </button>
+              {strips.length > 0 && (
+                <>
+                  <button className="btn btn-primary" onClick={exportFigure}><Download size={14} /> Exportar Figura PNG</button>
+                  <button className="btn btn-secondary" onClick={exportCSV}><BarChart2 size={14} /> Descargar CSV</button>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="wb-workspace-layout">
@@ -483,6 +533,9 @@ export default function WBReport() {
                                   {!strip.isHousekeeping && getRatioDisplay(strip, col)}
                                 </div>
                               </div>
+                            ))}
+                            {boundaries.map((bx, idx) => (
+                              <div key={idx} className="wb-lane-boundary-line" style={{ left: `${bx}%` }} title="Límite de carril (Punto medio automatizado)" />
                             ))}
                             <div className="wb-kda-draggable" style={{ top: `${strip.targetY ?? 50}%`, left: '10px' }} onMouseDown={() => setDragItem({ type: 'target', id: 'target', stripId: strip.id })}>
                               <div style={{ display: 'flex', alignItems: 'center', color: '#ff3333' }}>
@@ -628,6 +681,9 @@ export default function WBReport() {
           )}
         </>
       )}
+
+      {/* Modal de Fundamentos Científicos y FAQ */}
+      <WBReportFAQ isOpen={showFaq} onClose={() => setShowFaq(false)} />
     </div>
   );
 }

@@ -208,6 +208,18 @@
   z-index: 3;
 }
 
+.wb-lane-boundary-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 193, 7, 0.35);
+  border-left: 1px dotted rgba(255, 193, 7, 0.75);
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 2;
+}
+
 .wb-guide-chip {
   position: absolute;
   bottom: 4px;
@@ -656,5 +668,10 @@
   max-height: 90vh;
   overflow: auto;
   border: 1px solid #333;
+}
+
+.wb-faq-tab:hover {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.04) !important;
 }
 
