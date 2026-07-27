@@ -4,13 +4,34 @@ import { v4 as uuidv4 } from 'uuid';
 import './WBReport.css';
 import WBReportFAQ from './WBReportFAQ';
 
-/* ─── Utilidades de cálculo ─── */
+/* ─── Utilidades de cálculo cuantitativo y auditoría ─── */
 
-const calculateLaneIntensitiesFromCanvas = (canvas, columns) => {
+const GRAY_MODES = {
+  average: (r, g, b) => (r + g + b) / 3,
+  rec709: (r, g, b) => 0.2126 * r + 0.7152 * g + 0.0722 * b,
+  green: (r, g, b) => g,
+};
+
+const estimateBaseline1D = (profile1D) => {
+  const n = profile1D.length;
+  if (n === 0) return [];
+  const sorted = [...profile1D].sort((a, b) => a - b);
+  const floor = sorted[Math.floor(n * 0.10)] || 0;
+  const left = Math.min(profile1D[0], floor);
+  const right = Math.min(profile1D[n - 1], floor);
+  const baseline = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const interp = left + (right - left) * (i / (n - 1));
+    baseline[i] = Math.min(profile1D[i], Math.max(interp, floor));
+  }
+  return baseline;
+};
+
+const calculateLaneIntensitiesWithBackground = (canvas, columns, grayMode = 'average') => {
   const width = canvas.width;
   const height = canvas.height;
   const ctx = canvas.getContext('2d');
-  const imageData = ctx.getImageData(0, 0, width, height).data;
+  const data = ctx.getImageData(0, 0, width, height).data;
 
   const sortedCols = [...columns].sort((a, b) => a.x - b.x);
   const boundaries = [0];
@@ -19,24 +40,47 @@ const calculateLaneIntensitiesFromCanvas = (canvas, columns) => {
   }
   boundaries.push(width);
 
-  const intensities = {};
+  const toGrayFn = GRAY_MODES[grayMode] || GRAY_MODES.average;
+  const result = {};
+
   sortedCols.forEach((col, idx) => {
     const startX = Math.floor(boundaries[idx]);
     const endX = Math.floor(boundaries[idx + 1]);
-    let sum = 0;
-    for (let y = 0; y < height; y++) {
-      for (let x = startX; x < endX; x++) {
-        const idxPx = (y * width + x) * 4;
-        const gray = (imageData[idxPx] + imageData[idxPx + 1] + imageData[idxPx + 2]) / 3;
-        sum += (255 - gray);
+    const profile = [];
+    let satPixels = 0, totalPixels = 0;
+
+    for (let x = startX; x < endX; x++) {
+      let colSum = 0;
+      for (let y = 0; y < height; y++) {
+        const p = (y * width + x) * 4;
+        const gray = toGrayFn(data[p], data[p + 1], data[p + 2]);
+        if (gray >= 254 || gray <= 1) satPixels++;
+        totalPixels++;
+        colSum += (255 - gray);
       }
+      profile.push(colSum);
     }
-    intensities[col.id] = Math.round(sum);
+
+    const baseline = estimateBaseline1D(profile);
+    let raw = 0, net = 0, bg = 0;
+    for (let i = 0; i < profile.length; i++) {
+      raw += profile[i];
+      bg += baseline[i];
+      net += Math.max(0, profile[i] - baseline[i]);
+    }
+
+    result[col.id] = {
+      raw: Math.round(raw),
+      net: Math.round(net),
+      background: Math.round(bg),
+      saturatedFraction: totalPixels ? +(satPixels / totalPixels).toFixed(4) : 0,
+    };
   });
-  return intensities;
+
+  return result;
 };
 
-const calculateIntensityProfile = (imageDataUrl) => {
+const calculateIntensityProfile = (imageDataUrl, grayMode = 'average') => {
   const img = new Image();
   img.src = imageDataUrl;
   if (!img.complete && !img.width) return [];
@@ -47,11 +91,12 @@ const calculateIntensityProfile = (imageDataUrl) => {
   ctx.drawImage(img, 0, 0);
   const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
   const profile = [];
+  const toGrayFn = GRAY_MODES[grayMode] || GRAY_MODES.average;
   for (let x = 0; x < canvas.width; x++) {
     let colSum = 0;
     for (let y = 0; y < canvas.height; y++) {
       const idx = (y * canvas.width + x) * 4;
-      const gray = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+      const gray = toGrayFn(data[idx], data[idx + 1], data[idx + 2]);
       colSum += (255 - gray);
     }
     profile.push(colSum);
@@ -72,23 +117,31 @@ const estimateKda = (markers, targetY) => {
   return Math.round(Math.pow(10, ((n * sxy - sx * sy) / den) * targetY + (sy - ((n * sxy - sx * sy) / den) * sx) / n));
 };
 
-const recalcAllStrips = (strips, columns) => strips.map((strip) => {
+const recalcAllStrips = (strips, columns, grayMode = 'average') => strips.map((strip) => {
   const el = document.querySelector(`#strip-img-${strip.id} .wb-strip-image`);
   if (!el || !el.naturalWidth) return strip;
   const canvas = document.createElement('canvas');
   canvas.width = el.naturalWidth; canvas.height = el.naturalHeight;
   const ctx = canvas.getContext('2d'); ctx.drawImage(el, 0, 0);
-  return { ...strip, laneIntensities: calculateLaneIntensitiesFromCanvas(canvas, columns) };
+  return { ...strip, laneIntensities: calculateLaneIntensitiesWithBackground(canvas, columns, grayMode) };
 });
 
+const normalizedRatio = (strip, col, normStrip) => {
+  if (!normStrip || strip.id === normStrip.id) return null;
+  const t = strip.laneIntensities?.[col.id]?.net ?? (typeof strip.laneIntensities?.[col.id] === 'number' ? strip.laneIntensities[col.id] : 0);
+  const r = normStrip?.laneIntensities?.[col.id]?.net ?? (typeof normStrip?.laneIntensities?.[col.id] === 'number' ? normStrip.laneIntensities[col.id] : 0);
+  if (!t || !r) return null;
+  return +(t / r).toFixed(2);
+};
+
 /* ─── Sub-componente: Gráfico de Perfil de Picos ─── */
-const PeaksChart = ({ strip, globalColumns }) => {
+const PeaksChart = ({ strip, globalColumns, grayMode = 'average' }) => {
   const canvasRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !strip.imageData) return;
-    const profile = calculateIntensityProfile(strip.imageData);
+    const profile = calculateIntensityProfile(strip.imageData, grayMode);
     if (!profile.length) return;
     const ctx = canvas.getContext('2d');
     const W = canvas.width, H = canvas.height;
@@ -129,7 +182,22 @@ const PeaksChart = ({ strip, globalColumns }) => {
     ctx.closePath();
     ctx.fillStyle = gradient;
     ctx.fill();
-    // Línea de la curva
+
+    // Línea de fondo estimado (Valle a valle 1D)
+    const baseline = estimateBaseline1D(profile);
+    ctx.beginPath();
+    ctx.setLineDash([2, 2]);
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
+    ctx.lineWidth = 1.2;
+    baseline.forEach((val, x) => {
+      const px = (x / baseline.length) * W;
+      const py = H - (val / maxVal) * (H - 4);
+      x === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Línea de la curva de señal
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(129,140,248,1)';
     ctx.lineWidth = 1.5;
@@ -139,6 +207,7 @@ const PeaksChart = ({ strip, globalColumns }) => {
       x === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
     });
     ctx.stroke();
+
     // Líneas guía de columnas globales (centroides)
     sortedCols.forEach((col) => {
       const px = (col.x / 100) * W;
@@ -161,7 +230,7 @@ const PeaksChart = ({ strip, globalColumns }) => {
       ctx.stroke();
       ctx.setLineDash([]);
     }
-  }, [strip.imageData, globalColumns]);
+  }, [strip.imageData, globalColumns, grayMode]);
 
   return (
     <canvas
@@ -174,9 +243,12 @@ const PeaksChart = ({ strip, globalColumns }) => {
 };
 
 /* ─── Sub-componente: Barras de Intensidad ─── */
-const IntensityBars = ({ strip, globalColumns, hkStrip }) => {
+const IntensityBars = ({ strip, globalColumns, normStrip }) => {
   const sortedCols = [...globalColumns].sort((a, b) => a.x - b.x);
-  const values = sortedCols.map((col) => strip.laneIntensities?.[col.id] ?? 0);
+  const values = sortedCols.map((col) => {
+    const li = strip.laneIntensities?.[col.id];
+    return li?.net ?? (typeof li === 'number' ? li : 0);
+  });
   const maxVal = Math.max(...values, 1);
 
   return (
@@ -184,17 +256,20 @@ const IntensityBars = ({ strip, globalColumns, hkStrip }) => {
       {sortedCols.map((col, i) => {
         const val = values[i];
         const heightPct = (val / maxVal) * 100;
-        const ratio = hkStrip && !strip.isHousekeeping
-          ? (hkStrip.laneIntensities?.[col.id] ? (val / hkStrip.laneIntensities[col.id]).toFixed(2) : null)
-          : null;
+        const ratio = normalizedRatio(strip, col, normStrip);
+        const li = strip.laneIntensities?.[col.id];
+        const sat = (li?.saturatedFraction ?? 0) > 0.01;
         return (
           <div key={col.id} className="wb-intensity-bar-col">
-            <div className="wb-intensity-bar-value">{val > 0 ? (val / 1000).toFixed(0) + 'k' : '—'}</div>
+            <div className="wb-intensity-bar-value" style={{ color: sat ? '#ff4d4f' : undefined }}>
+              {val > 0 ? (val / 1000).toFixed(0) + 'k' : '—'}
+            </div>
             <div className="wb-intensity-bar-track">
-              <div className="wb-intensity-bar-fill" style={{ height: `${heightPct}%` }} />
+              <div className="wb-intensity-bar-fill" style={{ height: `${heightPct}%`, backgroundColor: sat ? '#ff4d4f' : undefined }} />
             </div>
             {ratio !== null && <div className="wb-intensity-bar-ratio">{ratio}</div>}
             <div className="wb-intensity-bar-label">{col.value}</div>
+            {sat && <div style={{ fontSize: '0.55rem', color: '#ff4d4f', fontWeight: 'bold' }}>⚠ Sat</div>}
           </div>
         );
       })}
@@ -219,6 +294,11 @@ export default function WBReport() {
   const [editCropRect, setEditCropRect] = useState(null);
   const [showFaq, setShowFaq] = useState(false);
 
+  // Estados cuantitativos avanzados
+  const [modality, setModality] = useState('chemiluminescence');
+  const [normMode, setNormMode] = useState('totalProtein');
+  const [grayMode, setGrayMode] = useState('average');
+
   const fileRef = useRef(null);
   const addMoreRef = useRef(null);
   const imgRef = useRef(null);
@@ -227,15 +307,20 @@ export default function WBReport() {
   const globalHeaderRef = useRef(null);
 
   const activeImage = imageLibrary.find((img) => img.id === activeImageId) ?? null;
-  const hkStrip = strips.find((s) => s.isHousekeeping) ?? null;
+  const normStrip = strips.find((s) => {
+    if (normMode === 'totalProtein') return s.normRole === 'totalProtein';
+    if (normMode === 'housekeeping') return s.normRole === 'housekeeping' || s.isHousekeeping;
+    return false;
+  }) || null;
+  const hkStrip = normStrip;
 
   /* ─── Recalcular al soltar columna ─── */
   useEffect(() => {
     const prev = previousDragItem.current;
     if (prev?.type === 'column' && dragItem === null)
-      setStrips((s) => recalcAllStrips(s, globalColumns));
+      setStrips((s) => recalcAllStrips(s, globalColumns, grayMode));
     previousDragItem.current = dragItem;
-  }, [dragItem, globalColumns]);
+  }, [dragItem, globalColumns, grayMode]);
 
   /* ─── Drag global ─── */
   useEffect(() => {
@@ -296,13 +381,13 @@ export default function WBReport() {
       const sw = Math.round(cropRect.w * img.naturalWidth), sh = Math.round(cropRect.h * img.naturalHeight);
       canvas.width = sw; canvas.height = sh;
       const ctx = canvas.getContext('2d'); ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
-      const laneIntensities = calculateLaneIntensitiesFromCanvas(canvas, globalColumns);
+      const laneIntensities = calculateLaneIntensitiesWithBackground(canvas, globalColumns, grayMode);
       setStrips((prev) => [...prev, {
         id: uuidv4(), sourceImageId: activeImageId,
         protein: `Proteína ${prev.length + 1}`,
         imageData: canvas.toDataURL('image/png'),
         crop: cropRect, laneIntensities,
-        isHousekeeping: false, targetY: 50,
+        isHousekeeping: false, normRole: 'none', targetY: 50,
         brightness: 0, contrast: 0,
         quantOpen: false,
         kdaMarkers: [{ id: uuidv4(), value: '50 kDa', y: 30 }, { id: uuidv4(), value: '25 kDa', y: 70 }],
@@ -317,19 +402,24 @@ export default function WBReport() {
   const updateKda = (sid, kid, value) => setStrips(strips.map((s) => s.id !== sid ? s : { ...s, kdaMarkers: s.kdaMarkers.map((k) => k.id === kid ? { ...k, value } : k) }));
   const addKda = (sid) => setStrips(strips.map((s) => s.id !== sid ? s : { ...s, kdaMarkers: [...s.kdaMarkers, { id: uuidv4(), value: '-- kDa', y: 50 }] }));
   const removeKda = (sid, kid) => setStrips(strips.map((s) => s.id !== sid ? s : { ...s, kdaMarkers: s.kdaMarkers.filter((k) => k.id !== kid) }));
-  const setHousekeeping = (id) => setStrips(strips.map((s) => ({ ...s, isHousekeeping: s.id === id ? !s.isHousekeeping : false })));
+  const setHousekeeping = (id) => setStrips(strips.map((s) => ({ ...s, isHousekeeping: s.id === id ? !s.isHousekeeping : false, normRole: s.id === id && !s.isHousekeeping ? 'housekeeping' : 'none' })));
+  const setNormRole = (id, role) => setStrips(strips.map((s) => ({
+    ...s,
+    normRole: s.id === id ? (s.normRole === role ? 'none' : role) : (role !== 'none' ? 'none' : s.normRole),
+    isHousekeeping: s.id === id ? role === 'housekeeping' : false,
+  })));
 
   /* ─── CRUD Columnas Globales ─── */
   const addGlobalColumn = () => {
     const newCol = { id: uuidv4(), value: 'Grupo', x: 50 };
     const newCols = [...globalColumns, newCol];
     setGlobalColumns(newCols);
-    setTimeout(() => setStrips((s) => recalcAllStrips(s, newCols)), 50);
+    setTimeout(() => setStrips((s) => recalcAllStrips(s, newCols, grayMode)), 50);
   };
   const removeGlobalColumn = (colId) => {
     const newCols = globalColumns.filter((c) => c.id !== colId);
     setGlobalColumns(newCols);
-    setStrips((s) => recalcAllStrips(s.map((strip) => { const { [colId]: _, ...rest } = strip.laneIntensities ?? {}; return { ...strip, laneIntensities: rest }; }), newCols));
+    setStrips((s) => recalcAllStrips(s.map((strip) => { const { [colId]: _, ...rest } = strip.laneIntensities ?? {}; return { ...strip, laneIntensities: rest }; }), newCols, grayMode));
   };
   const updateGlobalColumnLabel = (colId, value) => setGlobalColumns((cols) => cols.map((c) => c.id === colId ? { ...c, value } : c));
 
@@ -355,7 +445,7 @@ export default function WBReport() {
       const sw = Math.round(editCropRect.w * img.naturalWidth), sh = Math.round(editCropRect.h * img.naturalHeight);
       canvas.width = sw; canvas.height = sh;
       const ctx = canvas.getContext('2d'); ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
-      const laneIntensities = calculateLaneIntensitiesFromCanvas(canvas, globalColumns);
+      const laneIntensities = calculateLaneIntensitiesWithBackground(canvas, globalColumns, grayMode);
       setStrips(strips.map((s) => s.id !== editingStripId ? s : { ...s, imageData: canvas.toDataURL('image/png'), crop: editCropRect, laneIntensities }));
     }
     setEditingStripId(null); setEditCropRect(null);
@@ -372,22 +462,37 @@ export default function WBReport() {
     })).catch(() => alert('Error exportando figura'));
   }, []);
 
-  /* ─── Exportar CSV ─── */
+  /* ─── Exportar CSV (con metadatos de auditoría) ─── */
   const exportCSV = useCallback(() => {
     const sortedCols = [...globalColumns].sort((a, b) => a.x - b.x);
-    const rows = ['Banda,Carril,Intensidad,Ratio_vs_Referencia'];
+    const meta = [
+      `# WBReport v2.0 - Audit Trail`,
+      `# fecha,${new Date().toISOString()}`,
+      `# modalidad_deteccion,${modality}`,
+      `# modo_escala_grises,${grayMode}`,
+      `# metodo_sustraccion_fondo,valle-a-valle_1d`,
+      `# umbral_alerta_saturacion,1.0%`,
+      `# normalizacion_activa,${normMode}`,
+      `# nota_integridad,ajustes brillo/contraste solo para visualizacion; densitometria e integracion AUC ejecutada sobre pixeles crudos ImageData inmutables`,
+    ].join('\n');
+    const header = 'Banda,Carril,Volumen_Neto,Volumen_Crudo,Fondo_Estimado,Fraccion_Saturada,Ratio_Normalizado,Estado_Saturacion';
+    const rows = [];
     strips.forEach((strip) => {
       sortedCols.forEach((col) => {
-        const int = strip.laneIntensities?.[col.id] ?? 0;
-        const hkInt = hkStrip?.laneIntensities?.[col.id];
-        const ratio = (!strip.isHousekeeping && hkInt) ? (int / hkInt).toFixed(3) : (strip.isHousekeeping ? '1.000' : 'N/A');
-        rows.push(`"${strip.protein}","${col.value}",${int},${ratio}`);
+        const li = strip.laneIntensities?.[col.id] ?? {};
+        const net = li.net ?? (typeof li === 'number' ? li : 0);
+        const raw = li.raw ?? (typeof li === 'number' ? li : 0);
+        const bg = li.background ?? 0;
+        const satFrac = li.saturatedFraction ?? 0;
+        const satFlag = satFrac > 0.01 ? `ADVERTENCIA: ${(satFrac * 100).toFixed(1)}% px saturados` : 'OK';
+        const ratio = normStrip ? (strip.id === normStrip.id ? '1.000' : normalizedRatio(strip, col, normStrip) ?? 'N/A') : 'N/A';
+        rows.push(`"${strip.protein}","${col.value}",${net},${raw},${bg},${satFrac},${ratio},"${satFlag}"`);
       });
     });
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'wb_quantification.csv';
+    const blob = new Blob([`${meta}\n${header}\n${rows.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'wb_quantification_audit_trail.csv';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  }, [strips, globalColumns, hkStrip]);
+  }, [strips, globalColumns, normStrip, modality, grayMode, normMode]);
 
   /* ─── getRatioDisplay ─── */
   const getRatioDisplay = (strip, col) => {
@@ -429,19 +534,52 @@ export default function WBReport() {
         <>
           <input type="file" ref={addMoreRef} accept="image/*" multiple style={{ display: 'none' }} onChange={handleFileUpload} />
 
-          {/* Barra de acciones */}
-          <div className="wb-report-actions">
-            <button className="btn btn-danger" onClick={() => { setImageLibrary([]); setActiveImageId(null); setStrips([]); }}>Reiniciar todo</button>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <button className="btn btn-secondary" onClick={() => setShowFaq(true)} style={{ borderColor: '#818cf8', color: '#818cf8', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
-                <BookOpen size={14} /> Guía Científica y FAQ
-              </button>
-              {strips.length > 0 && (
-                <>
-                  <button className="btn btn-primary" onClick={exportFigure}><Download size={14} /> Exportar Figura PNG</button>
-                  <button className="btn btn-secondary" onClick={exportCSV}><BarChart2 size={14} /> Descargar CSV</button>
-                </>
-              )}
+          {/* Barra de acciones y Configuración Cuantitativa */}
+          <div className="wb-report-actions" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <button className="btn btn-danger" onClick={() => { setImageLibrary([]); setActiveImageId(null); setStrips([]); }}>Reiniciar todo</button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <button className="btn btn-secondary" onClick={() => setShowFaq(true)} style={{ borderColor: '#818cf8', color: '#818cf8', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                  <BookOpen size={14} /> Guía Científica y FAQ
+                </button>
+                {strips.length > 0 && (
+                  <>
+                    <button className="btn btn-primary" onClick={exportFigure}><Download size={14} /> Exportar Figura PNG</button>
+                    <button className="btn btn-secondary" onClick={exportCSV}><BarChart2 size={14} /> Descargar CSV de Auditoría</button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Cabecera cuantitativa y selectores de auditoría */}
+            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)', alignItems: 'center', fontSize: '0.85rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Detección:</span>
+                <select value={modality} onChange={(e) => setModality(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '4px 8px', fontSize: '0.8rem' }}>
+                  <option value="chemiluminescence">Quimioluminiscencia (ECL)</option>
+                  <option value="fluorescence">Fluorescencia (IR/RGB)</option>
+                  <option value="colorimetric">Colorimétrica / DAB</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Escala de Grises:</span>
+                <select value={grayMode} onChange={(e) => setGrayMode(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '4px 8px', fontSize: '0.8rem' }}>
+                  <option value="average">Promedio RGB</option>
+                  <option value="rec709">Luminancia (Rec. 709)</option>
+                  <option value="green">Canal Verde (G)</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Normalización:</span>
+                <select value={normMode} onChange={(e) => setNormMode(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '4px 8px', fontSize: '0.8rem' }}>
+                  <option value="totalProtein">Proteína Total (Recomendado)</option>
+                  <option value="housekeeping">Proteína Housekeeping (Actina/Tubulina)</option>
+                  <option value="none">Sin Normalizar (Solo vol. netos)</option>
+                </select>
+              </div>
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontSize: '0.75rem', fontWeight: 600 }}>
+                ✓ Fondo: Valle-a-Valle 1D (Inmutable)
+              </div>
             </div>
           </div>
 
@@ -526,14 +664,18 @@ export default function WBReport() {
                         <div className="wb-strip-image-wrapper">
                           <div id={`strip-img-${strip.id}`} className="wb-strip-image-container">
                             <img src={strip.imageData} alt={strip.protein} className="wb-strip-image" draggable={false} style={{ filter: cssFilter }} />
-                            {sortedColumns.map((col) => (
-                              <div key={col.id} className="wb-guide-line" style={{ left: `${col.x}%` }}>
-                                <div className="wb-guide-chip">
-                                  <div style={{ fontSize: '0.55rem', opacity: 0.85 }}>Int: {strip.laneIntensities?.[col.id]?.toLocaleString() ?? '—'}</div>
-                                  {!strip.isHousekeeping && getRatioDisplay(strip, col)}
+                            {sortedColumns.map((col) => {
+                              const li = strip.laneIntensities?.[col.id];
+                              const val = li?.net ?? (typeof li === 'number' ? li : null);
+                              return (
+                                <div key={col.id} className="wb-guide-line" style={{ left: `${col.x}%` }}>
+                                  <div className="wb-guide-chip">
+                                    <div style={{ fontSize: '0.55rem', opacity: 0.85 }}>Int: {val !== null ? val.toLocaleString() : '—'}</div>
+                                    {(!normStrip || strip.id !== normStrip.id) && getRatioDisplay(strip, col)}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                             {boundaries.map((bx, idx) => (
                               <div key={idx} className="wb-lane-boundary-line" style={{ left: `${bx}%` }} title="Límite de carril (Punto medio automatizado)" />
                             ))}
@@ -593,14 +735,14 @@ export default function WBReport() {
 
                                 {/* Gráfico de picos */}
                                 <div style={{ marginTop: '12px' }}>
-                                  <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginBottom: '4px', fontWeight: 600 }}>PERFIL DE INTENSIDAD</div>
-                                  <PeaksChart strip={strip} globalColumns={globalColumns} />
+                                  <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginBottom: '4px', fontWeight: 600 }}>PERFIL DE INTENSIDAD Y FONDO (VALLE A VALLE)</div>
+                                  <PeaksChart strip={strip} globalColumns={globalColumns} grayMode={grayMode} />
                                 </div>
 
                                 {/* Barras de intensidad */}
                                 <div style={{ marginTop: '12px' }}>
-                                  <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginBottom: '4px', fontWeight: 600 }}>INTENSIDAD POR CARRIL{hkStrip && !strip.isHousekeeping ? ' — Ratio vs Ref.' : ''}</div>
-                                  <IntensityBars strip={strip} globalColumns={globalColumns} hkStrip={hkStrip} />
+                                  <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginBottom: '4px', fontWeight: 600 }}>INTENSIDAD NET POR CARRIL{normStrip && strip.id !== normStrip.id ? ' — Ratio vs Ref.' : ''}</div>
+                                  <IntensityBars strip={strip} globalColumns={globalColumns} normStrip={normStrip} />
                                 </div>
                               </div>
                             )}
@@ -609,10 +751,15 @@ export default function WBReport() {
 
                         {/* Controles */}
                         <div className="wb-strip-remove" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          <label style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', marginRight: '8px' }}>
-                            <input type="checkbox" checked={!!strip.isHousekeeping} onChange={() => setHousekeeping(strip.id)} />
-                            Ref
-                          </label>
+                          <select
+                            value={strip.normRole || 'none'}
+                            onChange={(e) => setNormRole(strip.id, e.target.value)}
+                            style={{ background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '2px 6px', fontSize: '0.72rem', cursor: 'pointer' }}
+                          >
+                            <option value="none">Rol: Normal</option>
+                            <option value="totalProtein">Rol: Proteína Total</option>
+                            <option value="housekeeping">Rol: Housekeeping</option>
+                          </select>
                           <button className="btn-icon" onClick={() => startEditCrop(strip)} title="Reajustar recorte"><Crop size={16} /></button>
                           <button className="btn-icon" onClick={() => removeStrip(strip.id)} title="Eliminar banda"><Trash2 size={16} /></button>
                         </div>

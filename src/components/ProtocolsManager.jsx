@@ -26,10 +26,11 @@ export default function ProtocolsManager({ protocols: protocolsProp, inventory: 
 
   // Auto-select first protocol
   useEffect(() => {
-    if (!activeProtoId && protocols.length > 0) {
-      setActiveProtoId(protocols[0].id);
+    const activeProtos = protocols.filter(p => !p.deletedAt);
+    if (!activeProtoId && activeProtos.length > 0) {
+      setActiveProtoId(activeProtos[0].id);
     }
-  }, [protocols.length, activeProtoId]);
+  }, [protocols, activeProtoId]);
 
   const addProtocol = () => {
     if (can && !can.createProtocol) return;
@@ -49,7 +50,10 @@ export default function ProtocolsManager({ protocols: protocolsProp, inventory: 
     if (can && !can.deleteProtocol) return;
     if (confirm('¿Eliminar protocolo? Esta acción no se puede deshacer.')) {
       const deletedName = protocols.find(p => p.id === id)?.name;
-      setCultureProtocols(protocols.filter(p => p.id !== id));
+      setCultureProtocols(
+        protocols.map(p => p.id === id ? { ...p, deletedAt: new Date().toISOString(), deletedBy: user?.email || 'unknown' } : p),
+        { immediate: true }
+      );
       if (user?.uid && labId) writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action: 'protocol_deleted', target: deletedName || 'Protocolo', details: {} }).catch(console.error);
       if (activeProtoId === id) setActiveProtoId(null);
     }
@@ -160,11 +164,11 @@ export default function ProtocolsManager({ protocols: protocolsProp, inventory: 
   };
 
   const filteredInventory = inventory.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+    !item.deletedAt && item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
   
   const filteredRecipes = bufferRecipes.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+    !item.deletedAt && item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const activeProtocol = protocols.find(p => p.id === activeProtoId);
@@ -193,7 +197,7 @@ export default function ProtocolsManager({ protocols: protocolsProp, inventory: 
           </div>
           
           <div className="protocols-list">
-            {protocols.map(p => (
+            {protocols.filter(p => !p.deletedAt).map(p => (
               <div 
                 key={p.id} 
                 className={`protocol-list-item ${activeProtoId === p.id ? 'active' : ''}`}
@@ -203,7 +207,7 @@ export default function ProtocolsManager({ protocols: protocolsProp, inventory: 
                 <span className="proto-name">{p.name}</span>
               </div>
             ))}
-            {protocols.length === 0 && <div className="empty-mini">No hay protocolos.</div>}
+            {protocols.filter(p => !p.deletedAt).length === 0 && <div className="empty-mini">No hay protocolos.</div>}
           </div>
         </div>
 

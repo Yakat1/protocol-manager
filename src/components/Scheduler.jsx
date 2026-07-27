@@ -12,7 +12,7 @@ export default function Scheduler({ state, updateState, can }) {
   // State slices
   const cages = state?.cages || [];
   const cultures = state?.cultures || [];
-  const manualEvents = state?.calendarEvents || [];
+  const manualEvents = (state?.calendarEvents || []).filter(e => !e.deletedAt);
 
   // 1. Auto-generate events from Cages
   const generatedEvents = useMemo(() => {
@@ -199,7 +199,7 @@ export default function Scheduler({ state, updateState, can }) {
       recurrencePattern: newEventForm.recurrencePattern,
       completedDates: isRecurring ? [] : undefined
     };
-    updateState({ calendarEvents: [...manualEvents, newEvent] });
+    updateState({ calendarEvents: [...(state?.calendarEvents || []), newEvent] });
     setShowEventModal(false);
   };
 
@@ -210,7 +210,7 @@ export default function Scheduler({ state, updateState, can }) {
     }
     
     if (ev.isRecurringInstance) {
-      const updated = manualEvents.map(mEv => {
+      const updated = (state?.calendarEvents || []).map(mEv => {
         if (mEv.id === ev.parentId) {
           const doneList = mEv.completedDates || [];
           const isDone = doneList.includes(ev.date);
@@ -225,7 +225,7 @@ export default function Scheduler({ state, updateState, can }) {
       });
       updateState({ calendarEvents: updated });
     } else {
-      const updated = manualEvents.map(mEv => 
+      const updated = (state?.calendarEvents || []).map(mEv => 
         mEv.id === ev.id ? { ...mEv, status: mEv.status === 'done' ? 'pending' : 'done' } : mEv
       );
       updateState({ calendarEvents: updated });
@@ -237,7 +237,9 @@ export default function Scheduler({ state, updateState, can }) {
     const targetId = ev.isRecurringInstance ? ev.parentId : ev.id;
     const msg = ev.isRecurringInstance ? '¿Eliminar toda la serie de este evento recurrente?' : '¿Eliminar evento?';
     if (confirm(msg)) {
-      updateState({ calendarEvents: manualEvents.filter(mEv => mEv.id !== targetId) });
+      updateState({
+        calendarEvents: (state?.calendarEvents || []).map(mEv => mEv.id === targetId ? { ...mEv, deletedAt: new Date().toISOString(), deletedBy: 'system' } : mEv)
+      }, { immediate: true });
     }
   };
 

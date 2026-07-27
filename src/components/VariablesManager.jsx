@@ -8,8 +8,8 @@ export default function VariablesManager({ state, updateState }) {
   const [newVar, setNewVar] = useState({ name: '', unit: '', type: 'number', appliesTo: [] });
   const [newModel, setNewModel] = useState('');
 
-  const variables = state.variables || [];
-  const modelTypes = state.modelTypes || [];
+  const variables = (state.variables || []).filter(v => !v.deletedAt);
+  const modelTypes = (state.modelTypes || []).filter(m => !m.deletedAt);
 
   const addVariable = () => {
     if (!newVar.name.trim()) return;
@@ -20,23 +20,27 @@ export default function VariablesManager({ state, updateState }) {
       type: newVar.type,
       appliesTo: newVar.appliesTo
     };
-    updateState({ variables: [...variables, variable] });
+    updateState({ variables: [...(state.variables || []), variable] });
     setNewVar({ name: '', unit: '', type: 'number', appliesTo: [] });
   };
 
   const removeVariable = (id) => {
-    updateState({ variables: variables.filter(v => v.id !== id) });
+    updateState({
+      variables: (state.variables || []).map(v => v.id === id ? { ...v, deletedAt: new Date().toISOString(), deletedBy: 'system' } : v)
+    }, { immediate: true });
   };
 
   const addModelType = () => {
     if (!newModel.trim()) return;
     const type = { id: uuidv4(), name: newModel };
-    updateState({ modelTypes: [...modelTypes, type] });
+    updateState({ modelTypes: [...(state.modelTypes || []), type] });
     setNewModel('');
   };
 
   const removeModelType = (id) => {
-    updateState({ modelTypes: modelTypes.filter(m => m.id !== id) });
+    updateState({
+      modelTypes: (state.modelTypes || []).map(m => m.id === id ? { ...m, deletedAt: new Date().toISOString(), deletedBy: 'system' } : m)
+    }, { immediate: true });
   };
 
   const toggleAppliesTo = (modelId) => {

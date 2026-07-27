@@ -94,40 +94,38 @@ export default function WBReportFAQ({ isOpen, onClose }) {
           {activeTab === 'math' && (
             <div>
               <h4 style={{ color: '#818cf8', fontSize: '1.1rem', marginTop: 0, marginBottom: '12px' }}>
-                ¿Cuál es el fundamento físico y matemático de estas mediciones?
+                ¿Cuál es el fundamento físico, matemático y de sustracción de fondo?
               </h4>
               <p>
-                La medición se fundamenta en la <strong>Densitometría Óptica Digital</strong> e <strong>Integración de Área Bajo la Curva (AUC)</strong>, el mismo principio físico implementado por software de referencia mundial como <em>ImageJ / Fiji (NIH)</em>, <em>Bio-Rad ImageLab</em> y <em>Sciugo</em>.
+                La medición se fundamenta en la <strong>Densitometría Óptica Digital</strong> e <strong>Integración de Área Bajo la Curva (AUC) con sustracción de línea base</strong>, el estándar metodológico moderno de las revistas de impacto internacional (ej. <em>Journal of Biological Chemistry</em>, <em>Nature</em>).
               </p>
 
-              <h5 style={{ color: '#fff', margin: '16px 0 6px 0' }}>1. Inversión Óptica y Ley de Beer-Lambert Aproximada</h5>
+              <h5 style={{ color: '#fff', margin: '16px 0 6px 0' }}>1. Ley de Beer-Lambert y Emisión de Luminancia</h5>
               <p>
-                Una imagen digital captura luminancia en escala RGB (8 bits, valores de 0 a 255). En membranas de Western Blot (por quimioluminiscencia o colorimetría), una mayor cantidad de proteína genera una señal lumínica más oscura sobre fondo claro (o una emisión brillante en cuarto oscuro).
+                En <strong>colorimetría / absorbancia</strong>, la transmisión luminosa sigue la Ley de Beer-Lambert ($A = -\log_{10}(I/I_0)$). Sin embargo, la gran mayoría de Western Blots modernos utilizan <strong>quimioluminiscencia (ECL)</strong> o <strong>fluorescencia directa (IR/RGB)</strong>. En estas modalidades de emisión de fotones, la intensidad luminosa capturada por el sensor o detector digital en escala lineal (o invertida $I(x, y) = 255 - Y$) es <strong>directamente proporcional</strong> a la concentración de la enzima reportera o el fluoróforo en el rango dinámico lineal, sin requerir transformaciones logarítmicas.
               </p>
-              <p>
-                Para transformar esta señal en una métrica proporcional a la abundancia de proteína, se calcula la luminancia base <code style={{ color: '#fff' }}>Y = (R + G + B) / 3</code> y se invierte la escala densitométrica para cada píxel <i>(x, y)</i>:
-              </p>
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 16px', borderRadius: '6px', textAlign: 'center', fontFamily: 'monospace', color: '#a5b4fc', margin: '12px 0' }}>
-                Intensidad Óptica I(x, y) = 255 - Y(x, y)
-              </div>
 
-              <h5 style={{ color: '#fff', margin: '16px 0 6px 0' }}>2. Integración Densitométrica por Carril (Volumen total)</h5>
+              <h5 style={{ color: '#fff', margin: '16px 0 6px 0' }}>2. Sustracción de Fondo Automatizada (Valle-a-Valle 1D)</h5>
               <p>
-                La intensidad bruta cruda de una banda no es una simple lectura de un píxel central, sino la suma integrada de <strong>todos los píxeles</strong> dentro de las coordenadas del carril delimitado por el punto medio:
+                Una membrana real presenta ruido de fondo por unión inespecífica de anticuerpo secundario o bloqueo heterogéneo. Para no sobreestimar las bandas tenues, el algoritmo construye una línea base continua conectando los valles locales (percentil 10 inferior) a lo largo del perfil de carril 1D:
               </p>
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 16px', borderRadius: '6px', textAlign: 'center', fontFamily: 'monospace', color: '#a5b4fc', margin: '12px 0' }}>
-                Intensidad<sub>carril</sub> = &sum; [x = X<sub>límite izq</sub> hasta X<sub>límite der</sub>] &sum; [y = 0 hasta Altura] I(x, y)
+              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 16px', borderRadius: '6px', textAlign: 'center', fontFamily: 'monospace', color: '#ef4444', margin: '12px 0' }}>
+                Volumen Neto (Net AUC) = &sum; [ I(x) - Fondo<sub>valle-a-valle</sub>(x) ]
               </div>
               <p>
-                Esto corresponde exactamente al área bajo la curva del perfil de picos 1D proyectado horizontalmente.
+                Este volumen neto (<code style={{ color: '#ef4444' }}>Volumen_Neto</code> en el CSV) elimina el ruido de la membrana y representa la verdadera abundancia molecular de la proteína. En el gráfico del perfil de picos, esta línea base se observa claramente como una <strong>línea roja punteada</strong> debajo de la curva morada.
               </p>
 
-              <h5 style={{ color: '#fff', margin: '16px 0 6px 0' }}>3. Normalización Interna (Housekeeping Ratio)</h5>
+              <h5 style={{ color: '#fff', margin: '16px 0 6px 0' }}>3. Normalización: Proteína Total vs Housekeeping</h5>
               <p>
-                Para corregir errores experimentales (diferencias de pipeteo, transferencia electroforética incompleta), el software divide la intensidad cruda de la proteína objetivo entre la proteína de referencia interna (ej. &beta;-actina, GAPDH) medida exactamente en el mismo carril:
+                Aunque el software permite normalizar por proteínas housekeeping tradicionales (&beta;-actina, GAPDH, Tubulina), las directrices editoriales contemporáneas recomiendan enfáticamente la <strong>Normalización por Proteína Total (Total Protein Normalization - TPN)</strong> mediante tinciones como Ponceau S o fluorescencia in situ:
               </p>
+              <ul>
+                <li><strong>Estabilidad del rango dinámico:</strong> Las proteínas housekeeping suelen expresarse en niveles masivos que se saturan fácilmente en el sensor, distorsionando el ratio normalizado. La proteína total no sufre de este artefacto.</li>
+                <li><strong>Invarianza biológica:</strong> En tratamientos farmacológicos severos o noxas celulares, la expresión de actina o GAPDH puede fluctuar. La carga de proteína total intracelular permanece como el denominador más robusto e insesgado.</li>
+              </ul>
               <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 16px', borderRadius: '6px', textAlign: 'center', fontFamily: 'monospace', color: '#ffcc00', margin: '12px 0' }}>
-                Ratio Normalizado = Intensidad<sub>cruda</sub>(Target) / Intensidad<sub>cruda</sub>(Housekeeping)
+                Ratio Normalizado = Volumen Neto(Target) / Volumen Neto(Referencia TPN / Housekeeping)
               </div>
             </div>
           )}

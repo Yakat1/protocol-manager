@@ -34,12 +34,12 @@ export default function Dashboard({ state, setActiveTab, updateState, showToast 
   }, []);
 
   // 1. Cálculos de Inventario Bajo
-  const inventory = state?.inventory || [];
+  const inventory = (state?.inventory || []).filter(i => !i.deletedAt);
   const lowInventory = inventory.filter(item => item.quantity <= 5).sort((a,b) => a.quantity - b.quantity);
 
   // 2. Cálculos de Cultivos y Semáforo de Días
-  const activeCultures = (state?.cultures || []).filter(c => c.status === 'Activo');
-  const allLogs = state?.cultureLogs || [];
+  const activeCultures = (state?.cultures || []).filter(c => c.status === 'Activo' && !c.deletedAt);
+  const allLogs = (state?.cultureLogs || []).filter(l => !l.deletedAt);
 
   const cultureStatusList = activeCultures.map(c => {
     // Obtener logs del cultivo y ordenar descendente
@@ -86,7 +86,7 @@ export default function Dashboard({ state, setActiveTab, updateState, showToast 
   const todayEvents = [];
   
   // Jaulas
-  (state?.cages || []).forEach(cage => {
+  (state?.cages || []).filter(c => !c.deletedAt).forEach(cage => {
     if (!cage.startDate || cage.recurrencePattern === 'none' || !cage.recurrencePattern) return;
     const start = new Date(cage.startDate);
     start.setHours(0,0,0,0);
@@ -111,7 +111,7 @@ export default function Dashboard({ state, setActiveTab, updateState, showToast 
   });
 
   // Manuales
-  (state?.calendarEvents || []).forEach(ev => {
+  (state?.calendarEvents || []).filter(e => !e.deletedAt).forEach(ev => {
     if (!ev.isRecurring) {
       if (ev.date === todayDateStr) {
         todayEvents.push({ id: ev.id, title: ev.title, type: ev.type, isDone: ev.status === 'done' });

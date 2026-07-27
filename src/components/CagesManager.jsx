@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, Calendar, Pill, CheckSquare, Square, Save, Activity, X, Share2 } from 'lucide-react';
 
 export default function CagesManager({ state, updateState }) {
-  const cages = state.cages || [];
+  const cages = (state.cages || []).filter(c => !c.deletedAt);
 
   // Extract all existing unique group/treatment names to populate the dropdown
   const allGroups = new Set(['Control']);
@@ -32,14 +32,16 @@ export default function CagesManager({ state, updateState }) {
 
   const removeCage = (id) => {
     if (confirm('¿Seguro que deseas eliminar esta jaula?')) {
-      updateState({ cages: cages.filter(c => c.id !== id) });
+      updateState({
+        cages: (state.cages || []).map(c => c.id === id ? { ...c, deletedAt: new Date().toISOString(), deletedBy: 'system' } : c)
+      }, { immediate: true });
     }
   };
 
   const updateCage = (id, newProps) => {
     updateState({
-      cages: cages.map(c => c.id === id ? { ...c, ...newProps } : c)
-    });
+      cages: (state.cages || []).map(c => c.id === id ? { ...c, ...newProps } : c)
+    }, { immediate: true });
   };
 
   const getAgeText = (startDate) => {

@@ -87,8 +87,8 @@ export default function Charts({ subjects, variables, cultures: culturesProp, cu
   const [activeView, setActiveView] = useState('analysis'); // 'analysis' | 'growth'
   const [selectedCultures, setSelectedCultures] = useState([]);
 
-  const cultures = culturesProp || [];
-  const cultureLogs = cultureLogsProp || [];
+  const cultures = (culturesProp || []).filter(c => !c.deletedAt);
+  const cultureLogs = (cultureLogsProp || []).filter(l => !l.deletedAt);
 
   const addGroup = () => {
     const idx = groups.length % COLORS.length;
@@ -119,11 +119,12 @@ export default function Charts({ subjects, variables, cultures: culturesProp, cu
   };
 
   const importFromSubjects = (varId, varName, unit) => {
-    if (!subjects) return;
+    const activeSubjects = (subjects || []).filter(s => !s.deletedAt);
+    if (!activeSubjects.length) return;
     
     // Agrupar sujetos por "Grupo Experimental"
     const groupsMap = {}; 
-    subjects.forEach(sub => {
+    activeSubjects.forEach(sub => {
       const gName = sub.group || 'Sin Grupo';
       const val = sub.measurements?.[varId];
       if (val !== undefined && val !== '') {

@@ -23,8 +23,8 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
     setCustomPrompt({ message, defaultValue, onConfirm });
   };
   
-  const cultures = state?.cultures || [];
-  const logs = state?.cultureLogs || [];
+  const cultures = (state?.cultures || []).filter(c => !c.deletedAt);
+  const logs = (state?.cultureLogs || []).filter(l => !l.deletedAt);
   const actionsList = state?.cultureActions || DEFAULT_ACTIONS;
   const inventory = state?.inventory || [];
   
@@ -82,9 +82,14 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
     if (can && !can.deleteCulture) return;
     const culture = cultures.find(c => c.id === id);
     if (confirm('¿Eliminar cultivo y toda su cronología? Esta acción es irreversible.')) {
-      updateState({ cultures: cultures.filter(c => c.id !== id), cultureLogs: logs.filter(l => l.cultureId !== id) });
+      const now = new Date().toISOString();
+      const by = user?.email || 'unknown';
+      updateState({
+        cultures: (state?.cultures || []).map(c => c.id === id ? { ...c, deletedAt: now, deletedBy: by } : c),
+        cultureLogs: (state?.cultureLogs || []).map(l => l.cultureId === id ? { ...l, deletedAt: now, deletedBy: by } : l)
+      }, { immediate: true });
       if (activeCultureId === id) setActiveCultureId(null);
-      audit('culture_delete', culture?.cellLine || id, { note: 'Cultivo eliminado con toda su cronología' });
+      audit('culture_delete', culture?.cellLine || id, { note: 'Soft delete' });
     }
   };
   const convertToSubject = (culture) => {
@@ -141,8 +146,10 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
     const log = logs.find(l => l.id === id);
     const culture = cultures.find(c => c.id === log?.cultureId);
     if (confirm('¿Eliminar este evento de la línea de tiempo?')) {
-      updateState({ cultureLogs: logs.filter(l => l.id !== id) });
-      audit('culture_log_delete', culture?.cellLine || 'Evento', { note: `Evento ${log?.action} eliminado` });
+      updateState({
+        cultureLogs: (state?.cultureLogs || []).map(l => l.id === id ? { ...l, deletedAt: new Date().toISOString(), deletedBy: user?.email || 'unknown' } : l)
+      }, { immediate: true });
+      audit('culture_log_delete', culture?.cellLine || 'Evento', { note: 'Soft delete' });
     }
   };
 
@@ -195,7 +202,7 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
         return { ...l, images: newImgs };
       }
       return l;
-    })});
+    })}, { immediate: true });
   };
 
   const activeLogs = logs.filter(l => l.cultureId === activeCultureId).sort((a,b) => new Date(b.date) - new Date(a.date));

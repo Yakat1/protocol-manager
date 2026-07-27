@@ -60,6 +60,7 @@ export default function App() {
   const firestoreUnsubRef = useRef(null);
   const saveTimerRef = useRef(null);
   const sessionIdRef = useRef(uuidv4());
+  const isLocalUpdateRef = useRef(false);
   const [isSuspended, setIsSuspended] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [emailVerified, setEmailVerified] = useState(true);
@@ -76,22 +77,64 @@ export default function App() {
   const visibleTabs = userRole === 'admin' ? [...TABS, ADMIN_TAB] : TABS;
 
   // ── Slice updaters (estables vía useCallback + functional setState) ────────
-  const setInventory = useCallback((inventory) => {
-    setState(prev => ({ ...prev, inventory }));
-  }, []);
+  // Todos soportan { immediate: true } para guardado instantáneo (eliminaciones)
+  const setInventory = useCallback((inventory, { immediate = false } = {}) => {
+    isLocalUpdateRef.current = true;
+    setState(prev => {
+      const next = { ...prev, inventory };
+      if (immediate && activeLabId && !isSuspended && user) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        saveStateLocal(next);
+        saveLabState(activeLabId, next, sessionIdRef.current, user.uid).catch(console.error);
+      }
+      return next;
+    });
+  }, [activeLabId, isSuspended, user]);
 
-  const setCultureProtocols = useCallback((cultureProtocols) => {
-    setState(prev => ({ ...prev, cultureProtocols }));
-  }, []);
+  const setCultureProtocols = useCallback((cultureProtocols, { immediate = false } = {}) => {
+    isLocalUpdateRef.current = true;
+    setState(prev => {
+      const next = { ...prev, cultureProtocols };
+      if (immediate && activeLabId && !isSuspended && user) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        saveStateLocal(next);
+        saveLabState(activeLabId, next, sessionIdRef.current, user.uid).catch(console.error);
+      }
+      return next;
+    });
+  }, [activeLabId, isSuspended, user]);
 
-  const setBufferRecipes = useCallback((bufferRecipes) => {
-    setState(prev => ({ ...prev, bufferRecipes }));
-  }, []);
+  const setBufferRecipes = useCallback((bufferRecipes, { immediate = false } = {}) => {
+    isLocalUpdateRef.current = true;
+    setState(prev => {
+      const next = { ...prev, bufferRecipes };
+      if (immediate && activeLabId && !isSuspended && user) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        saveStateLocal(next);
+        saveLabState(activeLabId, next, sessionIdRef.current, user.uid).catch(console.error);
+      }
+      return next;
+    });
+  }, [activeLabId, isSuspended, user]);
 
   // Updater genérico para componentes que modifican múltiples slices
-  const updateState = useCallback((partial) => {
-    setState(prev => ({ ...prev, ...partial }));
-  }, []);
+  // { immediate: true } guarda al servidor sin esperar debounce (usar para eliminaciones)
+  const updateState = useCallback((partial, { immediate = false } = {}) => {
+    isLocalUpdateRef.current = true;
+    setState(prev => {
+      const next = { ...prev, ...partial };
+      if (immediate && activeLabId && !isSuspended && user) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        saveStateLocal(next);
+        saveLabState(activeLabId, next, sessionIdRef.current, user.uid).catch(console.error);
+      }
+      return next;
+    });
+  }, [activeLabId, isSuspended, user]);
 
   // 0) PWA install prompt
   useEffect(() => {
@@ -176,6 +219,15 @@ export default function App() {
     // Subscribe to real-time
     if (firestoreUnsubRef.current) firestoreUnsubRef.current();
     firestoreUnsubRef.current = subscribeToLabState(activeLabId, (remoteData) => {
+      // Logging de diagnóstico
+      console.log('[SYNC] snapshot', {
+        remoteSession: remoteData.sessionId?.slice(0, 8),
+        localSession: sessionIdRef.current.slice(0, 8),
+        isOwnEcho: remoteData.sessionId === sessionIdRef.current,
+        hasPendingSave: !!saveTimerRef.current,
+        remoteCultures: remoteData.state?.cultures?.filter(c => !c.deletedAt)?.length,
+      });
+
       if (
         remoteData.activeUserId === user.uid &&
         remoteData.sessionId && 
@@ -183,6 +235,20 @@ export default function App() {
       ) {
         setIsSuspended(true);
       }
+      
+      // Ignorar ecos de nuestra propia sesión
+      if (remoteData.sessionId === sessionIdRef.current) {
+        return;
+      }
+
+      // Si hay un guardado local pendiente, no sobrescribir el estado local.
+      // Cuando el save local se ejecute y su echo regrese, será ignorado por
+      // el filtro de sessionId, y el SIGUIENTE snapshot remoto sí se aplicará.
+      if (saveTimerRef.current) {
+        console.log('[SYNC] ignorando snapshot remoto — hay save local pendiente');
+        return;
+      }
+
       const remoteState = remoteData.state;
       setState(prev => {
         const mergedSubjects = (remoteState.subjects || []).map(rs => {
@@ -203,8 +269,19 @@ export default function App() {
   // ── 3) Auto-save debounce (5s) ────────────────────────────────────────────
   useEffect(() => {
     if (!state) return;
+
+    if (!isLocalUpdateRef.current) {
+      // La actualización vino de Firebase o de la carga inicial.
+      // No programar un nuevo save, pero NO cancelar saves pendientes
+      // para que las ediciones locales en curso lleguen al servidor.
+      return;
+    }
+
+    isLocalUpdateRef.current = false;
+
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null; // Limpiar ref para que snapshots remotos puedan fluir
       if (!isSuspended) {
         // Always save locally
         saveStateLocal(state);
@@ -285,6 +362,7 @@ export default function App() {
       try {
         const json = JSON.parse(event.target.result);
         if (json.protocolName && json.subjects) {
+          isLocalUpdateRef.current = true;
           setState(json); setActiveSubjectId(null); showToast('Respaldo cargado');
         } else throw new Error("Format invalid");
       } catch { alert('El archivo no es un respaldo válido.'); }

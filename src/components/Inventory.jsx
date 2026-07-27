@@ -382,12 +382,16 @@ export default function Inventory({ inventory: inventoryProp, setInventory, can,
     if (!can?.deleteInventory) return;
     const item = inventory.find(i => i.id === id);
     if (confirm('¿Seguro que deseas eliminar este ítem del inventario?')) {
-      setInventory(inventory.filter(i => i.id !== id));
-      audit('inventory_delete', item?.name || id, { note: 'Ítem eliminado del inventario' });
+      setInventory(
+        inventory.map(i => i.id === id ? { ...i, deletedAt: new Date().toISOString(), deletedBy: user?.email || 'unknown' } : i),
+        { immediate: true }
+      );
+      audit('inventory_delete', item?.name || id, { note: 'Soft delete' });
     }
   };
 
-  const filteredInventory = inventory.filter(item => {
+  const activeInventory = inventory.filter(i => !i.deletedAt);
+  const filteredInventory = activeInventory.filter(item => {
     const matchSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                         (item.location && item.location.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchType = typeFilter ? item.type === typeFilter : true;
@@ -428,7 +432,7 @@ export default function Inventory({ inventory: inventoryProp, setInventory, can,
               <Plus size={16} /> Nuevo Ítem
             </button>
           )}
-          <button className="btn" onClick={() => exportInventoryCSV(inventory)} title="Exportar a CSV">
+          <button className="btn" onClick={() => exportInventoryCSV(activeInventory)} title="Exportar a CSV">
             <Download size={16} /> Excel (CSV)
           </button>
         </div>

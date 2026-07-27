@@ -21,6 +21,8 @@ export default function Workspace({
   const [activeMainTab, setActiveMainTab] = useState("subjects");
   const [dossierTab, setDossierTab] = useState("clinical");
 
+  const activeSubjects = (state?.subjects || []).filter(s => !s.deletedAt);
+
   const addSubject = () => {
     const newSubject = {
       id: uuidv4(),
@@ -41,8 +43,9 @@ export default function Workspace({
         "¿Seguro que deseas eliminar este sujeto? Sus datos e imágenes serán borrados de este protocolo.",
       )
     ) {
-      const newSubjects = state.subjects.filter((s) => s.id !== id);
-      updateState({ subjects: newSubjects });
+      updateState({
+        subjects: (state?.subjects || []).map(s => s.id === id ? { ...s, deletedAt: new Date().toISOString(), deletedBy: 'system' } : s)
+      }, { immediate: true });
       if (activeSubjectId === id) setActiveSubjectId(null);
     }
   };
@@ -169,7 +172,7 @@ export default function Workspace({
             </div>
 
             <div className="culture-list">
-              {state.subjects.map((s) => (
+              {activeSubjects.map((s) => (
                 <div
                   key={s.id}
                   className={`culture-list-item ${activeSubjectId === s.id ? "active" : ""}`}
@@ -203,7 +206,7 @@ export default function Workspace({
                   </div>
                 </div>
               ))}
-              {state.subjects.length === 0 && (
+              {activeSubjects.length === 0 && (
                 <div className="empty-mini">
                   No hay sujetos. Añade uno con el botón +.
                 </div>

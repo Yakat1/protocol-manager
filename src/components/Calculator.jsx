@@ -224,7 +224,10 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
   const handleDeleteRecipe = (id) => {
     if (pendingDelete === id) {
       if (confirm('¿Estas seguro de que deseas eliminar esta receta? Esta acción no se puede deshacer.')) {
-        setBufferRecipes(bufferRecipes.filter(r => r.id !== id));
+        setBufferRecipes(
+          bufferRecipes.map(r => r.id === id ? { ...r, deletedAt: new Date().toISOString(), deletedBy: user?.email || 'unknown' } : r),
+          { immediate: true }
+        );
       }
       setPendingDelete(null);
     } else {
@@ -234,6 +237,7 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
 
   // Grouped by category for display
   const groupedRecipes = bufferRecipes
+    .filter(r => !r.deletedAt)
     .filter(r => !recipeSearch || r.name.toLowerCase().includes(recipeSearch.toLowerCase()) || r.category.toLowerCase().includes(recipeSearch.toLowerCase()))
     .reduce((acc, r) => { acc[r.category] = [...(acc[r.category] || []), r]; return acc; }, {});
 
@@ -459,7 +463,7 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
                   <label className="input-label" style={{fontSize: '0.75rem'}}>Categoría</label>
                   <input className="input-field" type="text" placeholder="Ej. Electroforesis, Lisis" value={recipeToSave.category} onChange={e => setRecipeToSave({...recipeToSave, category: e.target.value})} list="recipe-categories" />
                   <datalist id="recipe-categories">
-                    {[...new Set(bufferRecipes.map(r => r.category))].map(cat => <option key={cat} value={cat}/>)}
+                    {[...new Set(bufferRecipes.filter(r => !r.deletedAt).map(r => r.category))].map(cat => <option key={cat} value={cat}/>)}
                     {['Electroforesis','Lisis','Purificación','Inmunoensayo','General'].map(c => <option key={c} value={c}/>)}
                   </datalist>
                 </div>
