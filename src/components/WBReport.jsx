@@ -128,9 +128,9 @@ const recalcAllStrips = (strips, columns, grayMode = 'average') => strips.map((s
 
 const normalizedRatio = (strip, col, normStrip) => {
   if (!normStrip || strip.id === normStrip.id) return null;
-  const t = strip.laneIntensities?.[col.id]?.net ?? (typeof strip.laneIntensities?.[col.id] === 'number' ? strip.laneIntensities[col.id] : 0);
-  const r = normStrip?.laneIntensities?.[col.id]?.net ?? (typeof normStrip?.laneIntensities?.[col.id] === 'number' ? normStrip.laneIntensities[col.id] : 0);
-  if (!t || !r) return null;
+  const t = strip.laneIntensities?.[col.id]?.net ?? (typeof strip.laneIntensities?.[col.id] === 'number' ? strip.laneIntensities[col.id] : null);
+  const r = normStrip?.laneIntensities?.[col.id]?.net ?? (typeof normStrip?.laneIntensities?.[col.id] === 'number' ? normStrip.laneIntensities[col.id] : null);
+  if (t === null || r === null || r === 0) return null;
   return +(t / r).toFixed(2);
 };
 
@@ -307,11 +307,7 @@ export default function WBReport() {
   const globalHeaderRef = useRef(null);
 
   const activeImage = imageLibrary.find((img) => img.id === activeImageId) ?? null;
-  const normStrip = strips.find((s) => {
-    if (normMode === 'totalProtein') return s.normRole === 'totalProtein';
-    if (normMode === 'housekeeping') return s.normRole === 'housekeeping' || s.isHousekeeping;
-    return false;
-  }) || null;
+  const normStrip = strips.find((s) => s.normRole === 'totalProtein' || s.normRole === 'housekeeping' || s.isHousekeeping) || null;
   const hkStrip = normStrip;
 
   /* ─── Recalcular al soltar columna ─── */
@@ -402,12 +398,39 @@ export default function WBReport() {
   const updateKda = (sid, kid, value) => setStrips(strips.map((s) => s.id !== sid ? s : { ...s, kdaMarkers: s.kdaMarkers.map((k) => k.id === kid ? { ...k, value } : k) }));
   const addKda = (sid) => setStrips(strips.map((s) => s.id !== sid ? s : { ...s, kdaMarkers: [...s.kdaMarkers, { id: uuidv4(), value: '-- kDa', y: 50 }] }));
   const removeKda = (sid, kid) => setStrips(strips.map((s) => s.id !== sid ? s : { ...s, kdaMarkers: s.kdaMarkers.filter((k) => k.id !== kid) }));
-  const setHousekeeping = (id) => setStrips(strips.map((s) => ({ ...s, isHousekeeping: s.id === id ? !s.isHousekeeping : false, normRole: s.id === id && !s.isHousekeeping ? 'housekeeping' : 'none' })));
-  const setNormRole = (id, role) => setStrips(strips.map((s) => ({
-    ...s,
-    normRole: s.id === id ? (s.normRole === role ? 'none' : role) : (role !== 'none' ? 'none' : s.normRole),
-    isHousekeeping: s.id === id ? role === 'housekeeping' : false,
-  })));
+  const setHousekeeping = (id) => {
+    const target = strips.find((s) => s.id === id);
+    const willBeHk = !target?.isHousekeeping;
+    if (willBeHk) setNormMode('housekeeping');
+    setStrips(strips.map((s) => ({
+      ...s,
+      isHousekeeping: s.id === id ? willBeHk : false,
+      normRole: s.id === id && willBeHk ? 'housekeeping' : (willBeHk ? 'none' : s.normRole),
+    })));
+  };
+  const setNormRole = (id, role) => {
+    if (role !== 'none') setNormMode(role);
+    setStrips(strips.map((s) => ({
+      ...s,
+      normRole: s.id === id ? role : (role !== 'none' ? 'none' : s.normRole),
+      isHousekeeping: s.id === id ? role === 'housekeeping' : (role !== 'none' ? false : s.isHousekeeping),
+    })));
+  };
+  const handleNormModeChange = (mode) => {
+    setNormMode(mode);
+    if (mode === 'none') {
+      setStrips(strips.map((s) => ({ ...s, normRole: 'none', isHousekeeping: false })));
+    } else {
+      setStrips(strips.map((s) => {
+        const isRef = s.normRole !== 'none' || s.isHousekeeping;
+        return {
+          ...s,
+          normRole: isRef ? mode : 'none',
+          isHousekeeping: isRef ? mode === 'housekeeping' : false,
+        };
+      }));
+    }
+  };
 
   /* ─── CRUD Columnas Globales ─── */
   const addGlobalColumn = () => {
@@ -496,11 +519,11 @@ export default function WBReport() {
 
   /* ─── getRatioDisplay ─── */
   const getRatioDisplay = (strip, col) => {
-    if (!hkStrip) return null;
-    const t = strip.laneIntensities?.[col.id];
-    const h = hkStrip.laneIntensities?.[col.id];
-    if (!t || !h) return null;
-    return <div style={{ color: '#ffcc00', fontWeight: 'bold', fontSize: '0.6rem' }}>Rat: {(t / h).toFixed(2)}</div>;
+    if (!normStrip || strip.id === normStrip.id) return null;
+    const t = strip.laneIntensities?.[col.id]?.net ?? (typeof strip.laneIntensities?.[col.id] === 'number' ? strip.laneIntensities[col.id] : null);
+    const h = normStrip.laneIntensities?.[col.id]?.net ?? (typeof normStrip.laneIntensities?.[col.id] === 'number' ? normStrip.laneIntensities[col.id] : null);
+    if (t === null || h === null || h === 0) return null;
+    return <div style={{ color: '#ffcc00', fontWeight: 'bold', fontSize: '0.65rem', textShadow: '0 0 2px rgba(0,0,0,0.8)' }}>Rat: {(t / h).toFixed(2)}</div>;
   };
 
   const sortedColumns = [...globalColumns].sort((a, b) => a.x - b.x);
@@ -571,7 +594,7 @@ export default function WBReport() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Normalización:</span>
-                <select value={normMode} onChange={(e) => setNormMode(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '4px 8px', fontSize: '0.8rem' }}>
+                <select value={normMode} onChange={(e) => handleNormModeChange(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '4px 8px', fontSize: '0.8rem' }}>
                   <option value="totalProtein">Proteína Total (Recomendado)</option>
                   <option value="housekeeping">Proteína Housekeeping (Actina/Tubulina)</option>
                   <option value="none">Sin Normalizar (Solo vol. netos)</option>
