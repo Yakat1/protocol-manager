@@ -382,7 +382,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
 
       {activeTab === 'calibration' && (
         <>
-          <div className="curves-tabs" style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <div className="curves-tabs">
             {processedCurves.map((curve, idx) => (
               <button 
                 key={curve.id} 
@@ -480,7 +480,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
               <div className="spectro-card sticky-card">
                 <h3>📊 Resultados de {activeCurve.name}</h3>
                 
-                <div className="dual-math-stats" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                <div className="dual-math-stats">
                   <div className="math-box">
                     <div className="math-box-title">Regresión Lineal</div>
                     {activeCurve.results.m !== null ? (
@@ -676,7 +676,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
                 </div>
               </div>
 
-              <div className="curves-tabs" style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+              <div className="curves-tabs">
                 {adminCurves.map((curve, idx) => (
                   <button 
                     key={curve.id} 

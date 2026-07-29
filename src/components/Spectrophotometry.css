@@ -142,6 +142,7 @@
 /* ── Main Tabs ─────────────────────────────────────────────── */
 .spectro-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   margin-bottom: 24px;
   border-bottom: 1px solid var(--border-color);
@@ -181,8 +182,13 @@
 /* ── Curve Sub-Tabs ─────────────────────────────────────────── */
 .curves-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 16px;
+}
+.curves-tabs .btn {
+  flex: 1;
+  min-width: 100px;
 }
 
 /* ── Admin Actions Bar ──────────────────────────────────────── */
@@ -473,3 +479,43 @@
     min-width: 100%;
   }
 }
+
+@media (max-width: 600px) {
+  .spectro-container {
+    padding: 12px;
+  }
+  .spectro-header h2 {
+    font-size: 1.2rem;
+  }
+  .protocol-bar {
+    padding: 12px;
+  }
+  .spectro-card {
+    padding: 12px;
+  }
+  .spectro-tab-btn {
+    flex: 1 1 100%;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 4px;
+  }
+  .spectro-tab-btn.active {
+    border-radius: 6px;
+  }
+  .spectro-tabs {
+    border-bottom: none;
+  }
+  .dual-math-stats {
+    grid-template-columns: 1fr;
+  }
+  .card-header-flex {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .card-header-flex .btn {
+    width: 100%;
+  }
+}
+
