@@ -174,7 +174,17 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
     if (activeCurve.results && activeCurve.results.m !== null && activeCurve.results.m !== 0) {
       const minX = 0;
       const maxX = Math.max(...pts.map(s => s.x)) * 1.1 || 100;
-      data.push({ concentration: minX, trendAbs: activeCurve.results.m * minX + activeCurve.results.b });
+      
+      // Assign trendAbs to all existing points so the Line is continuous
+      data = data.map(d => ({
+        ...d,
+        trendAbs: activeCurve.results.m * d.concentration + activeCurve.results.b
+      }));
+
+      // Add boundary points to extend the line beautifully
+      if (!data.some(d => d.concentration === minX)) {
+        data.push({ concentration: minX, trendAbs: activeCurve.results.m * minX + activeCurve.results.b });
+      }
       data.push({ concentration: maxX, trendAbs: activeCurve.results.m * maxX + activeCurve.results.b });
     }
 
