@@ -1,1 +1,0 @@
-import{x as e}from"./index-BYiKJFAE.js";var t=(t,n,r,i,a={})=>!t||!n?Promise.resolve():e(t,{userId:n.uid,displayName:n.displayName||n.email,action:r,target:i,details:a}).catch(e=>console.error(`Audit write failed:`,e));export{t};
