@@ -7,7 +7,7 @@ export default function Sidebar() {
     state,
     updateState,
     activeTab,
-    setActiveTab,
+    navigateTab,
     visibleTabs,
     user,
     userRole,
@@ -26,7 +26,7 @@ export default function Sidebar() {
   };
 
   const openTab = (tabId) => {
-    setActiveTab(tabId);
+    navigateTab(tabId);
     setSidebarOpen(false);
   };
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Activity, AlertTriangle, Box, Clock, Microscope, TrendingUp, CloudUpload, HardDriveDownload, Calendar as CalendarIcon, CheckCircle2, Download } from 'lucide-react';
 import { exportBackup } from '../utils/export';
 import { matchesRecurrence } from '../utils/recurrence';
@@ -7,7 +8,8 @@ import { useLab } from '../context/LabContext';
 import './Dashboard.css';
 
 export default function Dashboard() {
-  const { state, setActiveTab, updateState, showToast } = useLab();
+  const { state, updateState, showToast } = useLab();
+  const navigate = useNavigate();
   const [timers, setTimers] = useState([]);
   const [now, setNow] = useState(Date.now());
 
@@ -155,7 +157,7 @@ export default function Dashboard() {
 
       {/* Tarjetas de Resumen Global */}
       <div className="dash-kpi-grid">
-        <div className="glass-panel kpi-card" onClick={() => setActiveTab('culture')} style={{cursor:'pointer'}}>
+        <div className="glass-panel kpi-card" onClick={() => navigate('/culture')} style={{cursor:'pointer'}}>
           <div className="kpi-icon" style={{background: 'rgba(59, 130, 246, 0.2)', color: 'var(--accent)'}}><Microscope size={24}/></div>
           <div className="kpi-info">
             <h3>{activeCultures.length}</h3>
@@ -163,7 +165,7 @@ export default function Dashboard() {
           </div>
         </div>
         
-        <div className="glass-panel kpi-card" onClick={() => setActiveTab('inventory')} style={{cursor:'pointer'}}>
+        <div className="glass-panel kpi-card" onClick={() => navigate('/inventory')} style={{cursor:'pointer'}}>
           <div className="kpi-icon" style={{background: lowInventory.length > 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)', color: lowInventory.length > 0 ? 'var(--danger)' : 'var(--success)'}}><Box size={24}/></div>
           <div className="kpi-info">
             <h3 style={{color: lowInventory.length > 0 ? 'var(--danger)' : 'inherit'}}>{lowInventory.length}</h3>
@@ -171,7 +173,7 @@ export default function Dashboard() {
           </div>
         </div>
         
-        <div className="glass-panel kpi-card" onClick={() => setActiveTab('timers')} style={{cursor:'pointer'}}>
+        <div className="glass-panel kpi-card" onClick={() => navigate('/timers')} style={{cursor:'pointer'}}>
           <div className="kpi-icon" style={{background: runningTimers.length > 0 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.1)', color: runningTimers.length > 0 ? '#f59e0b' : 'var(--text-secondary)'}}><Clock size={24}/></div>
           <div className="kpi-info">
             <h3>{runningTimers.length}</h3>
@@ -179,7 +181,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="glass-panel kpi-card" onClick={() => setActiveTab('scheduler')} style={{cursor:'pointer'}}>
+        <div className="glass-panel kpi-card" onClick={() => navigate('/scheduler')} style={{cursor:'pointer'}}>
           <div className="kpi-icon" style={{background: pendingEventsCount > 0 ? 'rgba(139, 92, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)', color: pendingEventsCount > 0 ? '#8b5cf6' : 'var(--success)'}}><CalendarIcon size={24}/></div>
           <div className="kpi-info">
             <h3 style={{color: pendingEventsCount > 0 ? '#8b5cf6' : 'inherit'}}>{pendingEventsCount}</h3>
@@ -201,7 +203,7 @@ export default function Dashboard() {
             ) : (
               <div className="dash-list">
                 {cultureStatusList.map(c => (
-                  <div key={c.id} className="dash-list-item" onClick={() => setActiveTab('culture')} title="Ir a Cultivos">
+                  <div key={c.id} className="dash-list-item" onClick={() => navigate('/culture')} title="Ir a Cultivos">
                     <div style={{display:'flex', flexDirection:'column'}}>
                       <span style={{fontWeight: 600, color: 'var(--text-primary)'}}>{c.cellLine}</span>
                       <span style={{fontSize: '0.8rem', color: 'var(--text-secondary)'}}>Último: {c.lastAction}</span>
@@ -227,7 +229,7 @@ export default function Dashboard() {
             ) : (
               <div className="dash-list">
                 {todayEvents.map((ev, i) => (
-                  <div key={i} className={`dash-list-item ${ev.isDone ? 'warning-item' : ''}`} onClick={() => setActiveTab('scheduler')} title="Ir al Cronograma" style={{ opacity: ev.isDone ? 0.5 : 1 }}>
+                  <div key={i} className={`dash-list-item ${ev.isDone ? 'warning-item' : ''}`} onClick={() => navigate('/scheduler')} title="Ir al Cronograma" style={{ opacity: ev.isDone ? 0.5 : 1 }}>
                     <div style={{display:'flex', alignItems: 'center', gap: '10px'}}>
                       {ev.isDone ? <CheckCircle2 size={16} color="var(--success)"/> : <Clock size={16} color="var(--text-secondary)"/>}
                       <div style={{display:'flex', flexDirection:'column'}}>
@@ -254,7 +256,7 @@ export default function Dashboard() {
                 {runningTimers.map(t => {
                   const totalElapsed = t.accumulatedMs + (now - t.startedAt);
                   return (
-                    <div key={t.id} className="dash-list-item live-timer-item" onClick={() => setActiveTab('timers')} title="Administrar Timer">
+                    <div key={t.id} className="dash-list-item live-timer-item" onClick={() => navigate('/timers')} title="Administrar Timer">
                       <div style={{display:'flex', flexDirection:'column'}}>
                         <span style={{fontWeight: 600, color: 'var(--text-primary)'}}>{t.label}</span>
                       </div>
@@ -280,7 +282,7 @@ export default function Dashboard() {
             ) : (
               <div className="dash-list">
                 {lowInventory.map(item => (
-                  <div key={item.id} className="dash-list-item warning-item" onClick={() => setActiveTab('inventory')} title="Ir al Inventario">
+                  <div key={item.id} className="dash-list-item warning-item" onClick={() => navigate('/inventory')} title="Ir al Inventario">
                     <div style={{display:'flex', flexDirection:'column'}}>
                       <span style={{fontWeight: 600, color: 'var(--text-primary)'}}>{item.name}</span>
                       <span style={{fontSize: '0.8rem', color: 'var(--text-secondary)'}}>{item.type}</span>

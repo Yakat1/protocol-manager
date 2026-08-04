@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { saveStateLocal } from '../utils/storage';
 import { exportCSV, exportBackup } from '../utils/export';
@@ -71,7 +72,6 @@ export function LabProvider({ children }) {
   }, []);
 
   const [activeSubjectId, setActiveSubjectId] = useState(null);
-  const [activeTab, setActiveTab] = useState('home');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isSuspended, setIsSuspended] = useState(false);
@@ -81,6 +81,16 @@ export function LabProvider({ children }) {
   const saveTimerRef = useRef(null);
   const isLocalUpdateRef = useRef(false);
   const firestoreUnsubRef = useRef(null);
+
+  // ── Navigation (HashRouter) ───────────────────────────────────────────────
+  // activeTab is derived from the URL so refresh/back-forward restore the tab.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const activeTab = location.pathname.slice(1) || 'home';
+
+  const navigateTab = useCallback((tabId) => {
+    navigate(tabId === 'home' ? '/' : `/${tabId}`);
+  }, [navigate]);
 
   // ── Auth + lab profile ────────────────────────────────────────────────────
   const {
@@ -270,7 +280,7 @@ export function LabProvider({ children }) {
     activeSubjectId,
     setActiveSubjectId,
     activeTab,
-    setActiveTab,
+    navigateTab,
     isSuspended,
     takeControl,
     toast,

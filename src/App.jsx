@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { LabProvider, useLab } from './context/LabContext';
 import { sendVerificationEmail, auth } from './utils/firebase';
 import AuthGate from './components/AuthGate';
@@ -134,52 +135,37 @@ function AppContent() {
     );
   }
 
-  // ── Render por pestaña ────────────────────────────────────────────────────
-  const renderMainContent = () => {
-    switch (activeTab) {
-      case 'home':
-        return <Dashboard />;
-      case 'plate':
-        return <PlateMapper state={state} updateState={updateState} />;
-      case 'calculator':
-        return <Calculator inventory={state.inventory} setInventory={setInventory} bufferRecipes={state.bufferRecipes || []} setBufferRecipes={setBufferRecipes} can={can} user={user} labId={activeLabId} />;
-      case 'timers':
-        return <Timers />;
-      case 'counter':
-        return <CellCounter />;
-      case 'charts':
-        return <Charts subjects={state.subjects} variables={state.variables} cultures={state.cultures} cultureLogs={state.cultureLogs} />;
-      case 'western':
-        return <WesternBlot subjects={state.subjects} variables={state.variables} updateState={updateState} />;
-      case 'wbreport':
-        return <WBReport />;
-      case 'inventory':
-        return <Inventory inventory={state.inventory} setInventory={setInventory} can={can} user={user} labId={activeLabId} />;
-      case 'protocols':
-        return <ProtocolsManager protocols={state.cultureProtocols} inventory={state.inventory} bufferRecipes={state.bufferRecipes} setCultureProtocols={setCultureProtocols} can={can} user={user} labId={activeLabId} />;
-      case 'culture':
-        return <CellCulture state={state} updateState={updateState} can={can} user={user} labId={activeLabId} />;
-      case 'scheduler':
-        return <Scheduler state={state} updateState={updateState} can={can} />;
-      case 'journal':
-        return <PersonalLog labId={activeLabId} user={user} can={can} />;
-      case 'spectro':
-        return <Spectrophotometry />;
-      case 'admin':
-        return userRole === 'admin' ? <LabAdmin labId={activeLabId} user={user} /> : null;
-      default:
-        return (
-          <Workspace
-            activeSubjectId={activeSubjectId}
-            setActiveSubjectId={setActiveSubjectId}
-            onExportCSV={handleExportCSV}
-            onExportBackup={handleExportBackup}
-            onImportBackup={handleImportBackup}
-            userRole={userRole}
-          />
-        );
-    }
-  };
+  // ── Render por ruta (HashRouter) ──────────────────────────────────────────
+  const renderRoutes = () => (
+    <Routes>
+      <Route path="/" element={<Dashboard />} />
+      <Route path="/subjects" element={
+        <Workspace
+          activeSubjectId={activeSubjectId}
+          setActiveSubjectId={setActiveSubjectId}
+          onExportCSV={handleExportCSV}
+          onExportBackup={handleExportBackup}
+          onImportBackup={handleImportBackup}
+          userRole={userRole}
+        />
+      } />
+      <Route path="/plate" element={<PlateMapper state={state} updateState={updateState} />} />
+      <Route path="/calculator" element={<Calculator inventory={state.inventory} setInventory={setInventory} bufferRecipes={state.bufferRecipes || []} setBufferRecipes={setBufferRecipes} can={can} user={user} labId={activeLabId} />} />
+      <Route path="/timers" element={<Timers />} />
+      <Route path="/counter" element={<CellCounter />} />
+      <Route path="/charts" element={<Charts subjects={state.subjects} variables={state.variables} cultures={state.cultures} cultureLogs={state.cultureLogs} />} />
+      <Route path="/western" element={<WesternBlot subjects={state.subjects} variables={state.variables} updateState={updateState} />} />
+      <Route path="/wbreport" element={<WBReport />} />
+      <Route path="/inventory" element={<Inventory inventory={state.inventory} setInventory={setInventory} can={can} user={user} labId={activeLabId} />} />
+      <Route path="/protocols" element={<ProtocolsManager protocols={state.cultureProtocols} inventory={state.inventory} bufferRecipes={state.bufferRecipes} setCultureProtocols={setCultureProtocols} can={can} user={user} labId={activeLabId} />} />
+      <Route path="/culture" element={<CellCulture state={state} updateState={updateState} can={can} user={user} labId={activeLabId} />} />
+      <Route path="/scheduler" element={<Scheduler state={state} updateState={updateState} can={can} />} />
+      <Route path="/journal" element={<PersonalLog labId={activeLabId} user={user} can={can} />} />
+      <Route path="/spectro" element={<Spectrophotometry />} />
+      <Route path="/admin" element={userRole === 'admin' ? <LabAdmin labId={activeLabId} user={user} /> : <Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
 
   return (
     <div className="app-container">
@@ -223,7 +209,7 @@ function AppContent() {
           </div>
         }>
           <GLPPrintLayout disabled={activeTab === 'plate'}>
-            {renderMainContent()}
+            {renderRoutes()}
           </GLPPrintLayout>
         </Suspense>
       </div>
