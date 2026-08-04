@@ -7,6 +7,7 @@ import LabSetup from './components/LabSetup';
 import Sidebar from './components/Sidebar';
 import ProfileSettings from './components/ProfileSettings';
 import GLPPrintLayout from './components/GLPPrintLayout';
+import ErrorBoundary from './components/ErrorBoundary';
 import './index.css';
 
 // ── Lazy-loaded modules ──
@@ -220,8 +221,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <LabProvider>
-      <AppContent />
-    </LabProvider>
+    <ErrorBoundary>
+      <LabProvider>
+        <AppContent />
+      </LabProvider>
+    </ErrorBoundary>
   );
 }
