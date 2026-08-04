@@ -9,7 +9,6 @@ import './CellCulture.css';
 const DEFAULT_ACTIONS = ['Descongelar', 'Pasaje / Split', 'Congelar', 'Cambio de Medio', 'Adición de Tratamiento', 'Observación'];
 
 export default function CellCulture({ state, updateState, can, user, labId }) {
-  const [showConfig, setShowConfig] = useState(false);
   const [activeCultureId, setActiveCultureId] = useState(null);
   const [printMode, setPrintMode] = useState(null);
   const [customPrompt, setCustomPrompt] = useState(null);
@@ -112,15 +111,15 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
       id: uuidv4(), cultureId: activeCultureId, date: new Date().toISOString().split('T')[0],
       passage: 1, action: 'Observación', protocolUsed: '', confluence: 50, observations: '', checkedMaterials: [], images: []
     };
-    updateState({ cultureLogs: [newLog, ...logs] });
+    updateState({ cultureLogs: [newLog, ...(state?.cultureLogs || [])] });
     audit('culture_log_add', culture?.cellLine || activeCultureId, { note: 'Evento de cultivo añadido' });
   };
   const updateLog = (id, field, value) => {
-    updateState({ cultureLogs: logs.map(l => l.id === id ? { ...l, [field]: value } : l) });
+    updateState({ cultureLogs: (state?.cultureLogs || []).map(l => l.id === id ? { ...l, [field]: value } : l) });
   };
   const toggleLogMaterial = (logId, materialId) => {
-    setState({
-      ...state, cultureLogs: logs.map(l => {
+    updateState({
+      cultureLogs: (state?.cultureLogs || []).map(l => {
         if (l.id === logId) {
           const checked = l.checkedMaterials || [];
           return { ...l, checkedMaterials: checked.includes(materialId) ? checked.filter(m => m !== materialId) : [...checked, materialId] };
@@ -182,12 +181,11 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
         files.map(file => compressImage(file, 1024, 0.75))
       );
       
-      setState(prevState => ({
-        ...prevState, 
-        cultureLogs: prevState.cultureLogs.map(l => 
-          l.id === logId ? { ...l, images: [...l.images, ...compressedImages] } : l
+      updateState({
+        cultureLogs: (state?.cultureLogs || []).map(l => 
+          l.id === logId ? { ...l, images: [...(l.images || []), ...compressedImages] } : l
         )
-      }));
+      });
     } catch (err) {
       console.error("Error comprimiendo imagen:", err);
       alert("Ocurrió un error al intentar optimizar la foto. Revisa que sea el formato correcto.");
@@ -204,8 +202,6 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
       return l;
     })}, { immediate: true });
   };
-
-  const activeLogs = logs.filter(l => l.cultureId === activeCultureId).sort((a,b) => new Date(b.date) - new Date(a.date));
 
   return (
     <div className="culture-container">

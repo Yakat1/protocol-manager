@@ -3,13 +3,12 @@ import * as XLSX from 'xlsx';
 export function linearRegression(pts) {
   const n = pts.length;
   if (n === 0) return { m: 0, b: 0, r2: 0 };
-  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0, sumYY = 0;
+  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
   for (let {x, y} of pts) {
     sumX += x;
     sumY += y;
     sumXY += x * y;
     sumXX += x * x;
-    sumYY += y * y;
   }
   const denominator = (n * sumXX - sumX * sumX);
   if (denominator === 0) return { m: 0, b: sumY / n, r2: 0 };

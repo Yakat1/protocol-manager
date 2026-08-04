@@ -1,6 +1,6 @@
 import { Plus, Trash2, Download, Upload, Save, User, ChevronDown } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { exportCSV, exportBackup } from '../utils/export';
+import { exportBackup } from '../utils/export';
 
 export default function Sidebar({ state, updateState, activeSubjectId, setActiveSubjectId, activeTab, setActiveTab, tabs, user, onLogout, onOpenProfile, isOpen, onClose, deferredPrompt, onInstallPWA, labProfile, activeLabId, onSwitchLab, userRole, can }) {
   const updateProtocolName = (e) => {

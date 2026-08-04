@@ -24,12 +24,36 @@ service cloud.firestore {
       return isMember(labId) && getMemberRole(labId) == 'admin';
     }
 
+    // Encodes an email the same way as encodeEmail() in src/utils/firebase.js
+    //   "user.name@gmail.com" -> "user_name_gmail_com"
+    // request.auth.token.email is already lowercase for email/password + Google.
+    function encodeEmail() {
+      let email = request.auth.token.email;
+      return email is string ? email.split('@').join('_').split('.').join('_') : '';
+    }
+
+    // Membership gate: an unexpired pending invite for THIS user (token email) in this lab,
+    // granting exactly the role requested in the member doc being created.
+    function hasValidInvitation(labId) {
+      let email = request.auth.token.email;
+      if (!(email is string) || email.size() == 0) return false;
+      let inv = get(/databases/$(database)/documents/labs/$(labId)/pendingInvites/$(encodeEmail()));
+      return inv.exists
+          && inv.data.role == request.resource.data.role
+          && inv.data.role in ['admin', 'student']
+          && (!('expiresAt' in inv.data) || inv.data.expiresAt > request.time);
+    }
+
+    // Lab-bootstrap path: the person who created the lab's meta/info is its first admin.
+    function isLabCreator(labId) {
+      return exists(/databases/$(database)/documents/labs/$(labId)/meta/info)
+          && get(/databases/$(database)/documents/labs/$(labId)/meta/info).data.createdBy == request.auth.uid;
+    }
+
     // ─── User Profiles ──────────────────────────────────────
-    // Readable by any authenticated user (needed for admin profile lookups)
-    // Writable only by the profile owner
+    // Readable/writable only by the profile owner (no user-directory leak).
     match /users/{userId} {
-      allow read: if isAuth();
-      allow write: if isOwner(userId);
+      allow read, write: if isOwner(userId);
     }
 
     // ─── Legacy Protocols (migration) ───────────────────────
@@ -40,13 +64,24 @@ service cloud.firestore {
     // ─── Labs ───────────────────────────────────────────────
     match /labs/{labId} {
 
-      // Members subcollection
+      // Members subcollection: self-enrollment only via a valid invitation
+      // (role must match the invite) or as the lab's bootstrap creator.
       match /members/{memberId} {
         allow read: if isMember(labId);
-        // Users can create their own membership (lab creation + invitation acceptance)
-        allow create: if isOwner(memberId);
-        // Only admins can update or delete members
+        allow create: if isOwner(memberId)
+                   && request.resource.data.role in ['admin', 'student']
+                   && (hasValidInvitation(labId) || isLabCreator(labId));
         allow update, delete: if isAdmin(labId);
+      }
+
+      // Pending invitations: single doc per (lab, invitee email).
+      // Admins create/update; invitees may read their own doc (email field) even before
+      // joining (needed for the collection-group inbox query); invitee declines or admin revokes.
+      match /pendingInvites/{emailKey} {
+        allow read: if isMember(labId)
+                 || (isAuth() && resource.data.email == request.auth.token.email);
+        allow create, update: if isAdmin(labId);
+        allow delete: if isAuth() && (emailKey == encodeEmail() || isAdmin(labId));
       }
 
       // Lab metadata (info + shared state)
@@ -56,27 +91,31 @@ service cloud.firestore {
         allow delete: if isAdmin(labId);
       }
 
+      // Lab creation bootstrap: the creator writes meta/info BEFORE their own member doc.
+      // (Rules-side get()/exists() are evaluated by the engine regardless of allow-read.)
+      match /meta/info {
+        allow read: if isMember(labId);
+        allow create: if isAuth()
+                   && request.resource.data.createdBy == request.auth.uid
+                   && !exists(/databases/$(database)/documents/labs/$(labId)/meta/info);
+        allow update: if isMember(labId);
+        allow delete: if isAdmin(labId);
+      }
+
       // Audit log — APPEND-ONLY (create only, no update/delete)
       match /auditLog/{entryId} {
         allow read: if isMember(labId);
         allow create: if isMember(labId);
-        // update and delete are implicitly denied
       }
 
-      // Personal logs (bitácora)
+      // Personal logs (bitácora): members create/read; owner or admin updates; admin deletes.
       match /personalLogs/{logId} {
         allow read: if isMember(labId);
         allow create: if isMember(labId);
-        allow update: if isMember(labId);
+        allow update: if isMember(labId)
+                   && (isAdmin(labId) || resource.data.userId == request.auth.uid);
         allow delete: if isAdmin(labId);
       }
-    }
-
-    // ─── Invitations ────────────────────────────────────────
-    match /invitations/{emailKey} {
-      allow read: if isAuth();
-      allow create, update: if isAuth();
-      allow delete: if isAuth();
     }
   }
 }

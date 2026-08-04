@@ -9,7 +9,6 @@ import "./CellCulture.css";
 
 export default function Workspace({
   state,
-  setState,
   updateState,
   activeSubjectId,
   setActiveSubjectId,

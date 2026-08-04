@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react';
-import { loadState, saveState, saveStateLocal, loadStateLocal, getDefaultState } from './utils/storage';
+import { saveStateLocal, loadStateLocal, getDefaultState } from './utils/storage';
 import { exportCSV, exportBackup } from './utils/export';
-import { onUserChange, logoutUser, subscribeToLabState, saveLabState, getUserProfile, setUserProfile, getLabMembers, getLabMemberRole, sendVerificationEmail, writeAuditEntry, auth } from './utils/firebase';
+import { onUserChange, logoutUser, subscribeToLabState, saveLabState, getUserProfile, setUserProfile, getLabMemberRole, sendVerificationEmail, auth } from './utils/firebase';
 import { v4 as uuidv4 } from 'uuid';
 import usePermissions from './hooks/usePermissions';
 import AuthGate from './components/AuthGate';

@@ -21,6 +21,7 @@ import {
   deleteDoc,
   onSnapshot,
   collection,
+  collectionGroup,
   addDoc,
   query,
   orderBy,
@@ -86,43 +87,19 @@ export const updateUserPassword = async (currentPassword, newPassword) => {
 const getUserDocRef = (userId) =>
   doc(db, 'protocols', userId);
 
-export async function saveStateToCloud(userId, state, sessionId = null) {
-  const stateWithoutImages = {
-    ...state,
-    subjects: state.subjects?.map(s => ({ ...s, images: [] })) || [],
-    cultureLogs: state.cultureLogs?.map(l => ({ ...l, images: [] })) || [],
-  };
-  const ref = getUserDocRef(userId);
-  await setDoc(ref, { 
-    state: JSON.stringify(stateWithoutImages),
-    sessionId: sessionId,
-    updatedAt: new Date().toISOString()
-  }, { merge: true });
-}
-
 export async function loadStateFromCloud(userId) {
   const ref = getUserDocRef(userId);
   const snap = await getDoc(ref);
   if (snap.exists()) {
     const data = snap.data();
-    return JSON.parse(data.state);
+    try {
+      return JSON.parse(data.state);
+    } catch (err) {
+      console.warn('Error parsing legacy state for user', userId, err);
+      return null;
+    }
   }
   return null;
-}
-
-export function subscribeToState(userId, callback) {
-  const ref = getUserDocRef(userId);
-  return onSnapshot(ref, (snap) => {
-    if (snap.exists()) {
-      const data = snap.data();
-      try {
-        const parsed = JSON.parse(data.state);
-        callback({ state: parsed, sessionId: data.sessionId });
-      } catch (e) {
-        console.error('Error parsing Firestore state:', e);
-      }
-    }
-  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -146,19 +123,19 @@ export async function createLab(user, labName) {
   const labRef = doc(collection(db, 'labs'));
   const labId = labRef.id;
 
-  // 1) Add creator as admin member FIRST (rules allow create for any auth user)
+  // 1) Create lab meta FIRST (bootstrap rule: createdBy == uid and no existing info doc)
+  await setDoc(doc(db, 'labs', labId, 'meta', 'info'), {
+    name: labName,
+    createdBy: user.uid,
+    createdAt: new Date().toISOString(),
+  });
+
+  // 2) Now self-enroll as admin (isLabCreator(labId) passes because meta/info exists)
   await setDoc(doc(db, 'labs', labId, 'members', user.uid), {
     role: 'admin',
     displayName: user.displayName || user.email,
     email: user.email,
     joinedAt: new Date().toISOString(),
-  });
-
-  // 2) Now create lab meta (isMember check passes because member doc exists)
-  await setDoc(doc(db, 'labs', labId, 'meta', 'info'), {
-    name: labName,
-    createdBy: user.uid,
-    createdAt: new Date().toISOString(),
   });
 
   // 3) Update user profile
@@ -233,7 +210,12 @@ export async function loadLabState(labId) {
   const ref = doc(db, 'labs', labId, 'meta', 'state');
   const snap = await getDoc(ref);
   if (snap.exists()) {
-    return JSON.parse(snap.data().state);
+    try {
+      return JSON.parse(snap.data().state);
+    } catch (err) {
+      console.warn('Error parsing lab state for', labId, err);
+      return null;
+    }
   }
   return null;
 }
@@ -257,6 +239,8 @@ export function subscribeToLabState(labId, callback) {
 }
 
 // ─── Invitations (by email) ──────────────────────────────────────────────────
+// One doc per (lab, invitee email) at labs/{labId}/pendingInvites/{emailKey}.
+// The invitee inbox is a collection-group query on the `email` field (see getMyInvitations).
 
 function encodeEmail(email) {
   return email.toLowerCase().replace(/[.@]/g, '_');
@@ -264,40 +248,39 @@ function encodeEmail(email) {
 
 export async function inviteMember(labId, labName, email, role, invitedByName) {
   const key = encodeEmail(email);
-  const ref = doc(db, 'invitations', key);
-  const snap = await getDoc(ref);
-  const existing = snap.exists() ? (snap.data().pending || []) : [];
+  const ref = doc(db, 'labs', labId, 'pendingInvites', key);
+  const existing = await getDoc(ref);
 
-  // Prevent duplicate invitation
-  if (existing.some(inv => inv.labId === labId)) {
+  if (existing.exists()) {
     throw new Error('Este usuario ya tiene una invitación pendiente para este laboratorio.');
   }
 
-  existing.push({
-    labId,
+  await setDoc(ref, {
+    email: email.toLowerCase(),
     labName,
     role,
     invitedBy: invitedByName,
     createdAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   });
-  await setDoc(ref, { pending: existing });
 }
 
 export async function getMyInvitations(email) {
-  const key = encodeEmail(email);
-  const snap = await getDoc(doc(db, 'invitations', key));
-  if (snap.exists()) {
-    const now = new Date().toISOString();
-    return (snap.data().pending || []).filter(inv => !inv.expiresAt || inv.expiresAt > now);
-  }
-  return [];
+  const q = query(
+    collectionGroup(db, 'pendingInvites'),
+    where('email', '==', email.toLowerCase())
+  );
+  const snap = await getDocs(q);
+  const now = new Date().toISOString();
+  return snap.docs
+    .map(d => ({ labId: d.ref.parent.parent.id, ...d.data() }))
+    .filter(inv => !inv.expiresAt || inv.expiresAt > now);
 }
 
 export async function acceptInvitation(user, invitation) {
   const { labId, labName, role } = invitation;
 
-  // Add as member
+  // Add as member (rules validate: matching pendingInvites doc + role equality)
   await setDoc(doc(db, 'labs', labId, 'members', user.uid), {
     role,
     displayName: user.displayName || user.email,
@@ -313,30 +296,12 @@ export async function acceptInvitation(user, invitation) {
   }
   await setUserProfile(user.uid, { labs, activeLab: profile.activeLab || labId });
 
-  // Remove this invitation
-  const key = encodeEmail(user.email);
-  const snap = await getDoc(doc(db, 'invitations', key));
-  if (snap.exists()) {
-    const remaining = (snap.data().pending || []).filter(i => i.labId !== labId);
-    if (remaining.length > 0) {
-      await setDoc(doc(db, 'invitations', key), { pending: remaining });
-    } else {
-      await deleteDoc(doc(db, 'invitations', key));
-    }
-  }
+  // Consume the invite (the invitee may delete their own pendingInvites doc)
+  await deleteDoc(doc(db, 'labs', labId, 'pendingInvites', encodeEmail(user.email)));
 }
 
 export async function declineInvitation(email, labId) {
-  const key = encodeEmail(email);
-  const snap = await getDoc(doc(db, 'invitations', key));
-  if (snap.exists()) {
-    const remaining = (snap.data().pending || []).filter(i => i.labId !== labId);
-    if (remaining.length > 0) {
-      await setDoc(doc(db, 'invitations', key), { pending: remaining });
-    } else {
-      await deleteDoc(doc(db, 'invitations', key));
-    }
-  }
+  await deleteDoc(doc(db, 'labs', labId, 'pendingInvites', encodeEmail(email)));
 }
 
 // ─── Audit Log (immutable) ───────────────────────────────────────────────────

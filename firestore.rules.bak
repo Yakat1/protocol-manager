@@ -1,0 +1,82 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper Functions ───────────────────────────────────
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuth() && request.auth.uid == userId;
+    }
+
+    function isMember(labId) {
+      return isAuth() && exists(/databases/$(database)/documents/labs/$(labId)/members/$(request.auth.uid));
+    }
+
+    function getMemberRole(labId) {
+      return get(/databases/$(database)/documents/labs/$(labId)/members/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin(labId) {
+      return isMember(labId) && getMemberRole(labId) == 'admin';
+    }
+
+    // ─── User Profiles ──────────────────────────────────────
+    // Readable by any authenticated user (needed for admin profile lookups)
+    // Writable only by the profile owner
+    match /users/{userId} {
+      allow read: if isAuth();
+      allow write: if isOwner(userId);
+    }
+
+    // ─── Legacy Protocols (migration) ───────────────────────
+    match /protocols/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ─── Labs ───────────────────────────────────────────────
+    match /labs/{labId} {
+
+      // Members subcollection
+      match /members/{memberId} {
+        allow read: if isMember(labId);
+        // Users can create their own membership (lab creation + invitation acceptance)
+        allow create: if isOwner(memberId);
+        // Only admins can update or delete members
+        allow update, delete: if isAdmin(labId);
+      }
+
+      // Lab metadata (info + shared state)
+      match /meta/{docId} {
+        allow read: if isMember(labId);
+        allow create, update: if isMember(labId);
+        allow delete: if isAdmin(labId);
+      }
+
+      // Audit log — APPEND-ONLY (create only, no update/delete)
+      match /auditLog/{entryId} {
+        allow read: if isMember(labId);
+        allow create: if isMember(labId);
+        // update and delete are implicitly denied
+      }
+
+      // Personal logs (bitácora)
+      match /personalLogs/{logId} {
+        allow read: if isMember(labId);
+        allow create: if isMember(labId);
+        allow update: if isMember(labId);
+        allow delete: if isAdmin(labId);
+      }
+    }
+
+    // ─── Invitations ────────────────────────────────────────
+    match /invitations/{emailKey} {
+      allow read: if isAuth();
+      allow create, update: if isAuth();
+      allow delete: if isAuth();
+    }
+  }
+}
