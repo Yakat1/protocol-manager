@@ -27,7 +27,8 @@ export function matchesRecurrence(date, startDate, pattern) {
 // Project the ISO dates (YYYY-MM-DD) matching a rule for the first `windowDays`
 // days starting at `startDate` (inclusive).
 export function projectRecurrence(startDate, recurrenceType, windowDays = 60) {
-  const start = new Date(startDate);
+  const [year, month, day] = startDate.split('-').map(Number);
+  const start = new Date(year, month - 1, day); // local midnight, timezone-independent
   start.setHours(0, 0, 0, 0);
   const dates = [];
   for (let i = 0; i < windowDays; i++) {

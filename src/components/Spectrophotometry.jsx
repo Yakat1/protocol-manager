@@ -1,52 +1,40 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Plus, Trash2, ClipboardPaste, Save, FileText, CheckCircle, Calculator, FlaskConical, Beaker, Calendar, BookOpen, Settings } from 'lucide-react';
-import {
-  ComposedChart, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts';
+import { Calculator, FlaskConical, Settings } from 'lucide-react';
 import { linearRegression, calculateFactor, computeAverageAbs, processSpectroSamples, generateSpectroXLSX } from './AssayAnalysisEngine';
 import { softDelete } from '../utils/softDelete';
+import { downloadFile } from '../utils/downloadFile';
 import { useLab } from '../context/LabContext';
 import './Spectrophotometry.css';
-
-function downloadFile(blob, filename) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}
-
-const DEFAULT_CURVES = () => [
-  { id: 'c1', name: 'Curva 1', points: [{ id: uuidv4(), concentration: '', abs1: '', abs2: '', abs3: '' }] },
-  { id: 'c2', name: 'Curva 2', points: [{ id: uuidv4(), concentration: '', abs1: '', abs2: '', abs3: '' }] },
-  { id: 'c3', name: 'Curva 3', points: [{ id: uuidv4(), concentration: '', abs1: '', abs2: '', abs3: '' }] }
-];
+import ProtocolBar from './spectro/ProtocolBar';
+import CalibrationPanel from './spectro/CalibrationPanel';
+import SamplesPanel from './spectro/SamplesPanel';
+import TemplatesPanel from './spectro/TemplatesPanel';
+import { DEFAULT_CURVES } from '../utils/spectroDefaults';
 
 export default function Spectrophotometry() {
   const { state, updateState, user, userRole } = useLab();
   const [activeTab, setActiveTab] = useState('calibration'); // 'calibration' | 'samples' | 'templates'
-  
+
   // Cloud data
   const savedProtocols = state?.spectroProtocols || [];
   const spectroTemplates = (state?.spectroTemplates || []).filter(t => !t.deletedAt);
-  
+
   const [activeProtocolId, setActiveProtocolId] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  
+
   // Current Working Session State
   const [protocolName, setProtocolName] = useState('Nuevo Protocolo');
   const [protocolNotes, setProtocolNotes] = useState('');
   const [isFromTemplate, setIsFromTemplate] = useState(false);
-  
+
   const [curves, setCurves] = useState(DEFAULT_CURVES());
   const [activeCurveIdx, setActiveCurveIdx] = useState(0);
 
   const [samples, setSamples] = useState([{ id: uuidv4(), name: 'Muestra 1', value: '', dilution: '', time: '' }]);
   const [globalDilution, setGlobalDilution] = useState(1);
   const [globalTime, setGlobalTime] = useState(1);
-  
+
   const [factorSource, setFactorSource] = useState('protocol'); // 'protocol' | 'manual'
   const [manualFactorInput, setManualFactorInput] = useState('');
 
@@ -60,7 +48,7 @@ export default function Spectrophotometry() {
     const pid = e.target.value;
     setActiveProtocolId(pid);
     setSelectedTemplateId('');
-    
+
     if (!pid) {
       setProtocolName('Nuevo Protocolo');
       setProtocolNotes('');
@@ -69,7 +57,7 @@ export default function Spectrophotometry() {
       setIsFromTemplate(false);
       return;
     }
-    
+
     const proto = savedProtocols.find(p => p.id === pid);
     if (proto) {
       setProtocolName(proto.nombre || 'Protocolo Cargado');
@@ -87,7 +75,7 @@ export default function Spectrophotometry() {
     const tid = e.target.value;
     setSelectedTemplateId(tid);
     setActiveProtocolId(''); // Deselect saved protocol
-    
+
     if (!tid) {
       setProtocolName('Nuevo Protocolo');
       setCurves(DEFAULT_CURVES());
@@ -99,7 +87,7 @@ export default function Spectrophotometry() {
     if (template) {
       setProtocolName(`${template.nombre} - ${new Date().toLocaleDateString()}`);
       setIsFromTemplate(true);
-      
+
       // Load curves from template, initializing absorbances as empty
       const initializedCurves = template.curvas.map(c => ({
         ...c,
@@ -122,7 +110,7 @@ export default function Spectrophotometry() {
         const absPromedio = computeAverageAbs(p.abs1, p.abs2, p.abs3);
         return { ...p, absPromedio };
       });
-      
+
       const validMathPts = pointsWithAvg
         .map(p => ({ x: parseFloat(p.concentration), y: p.absPromedio }))
         .filter(p => !isNaN(p.x) && p.y !== null);
@@ -137,7 +125,7 @@ export default function Spectrophotometry() {
           factor: calculateFactor(validMathPts)
         };
       }
-      
+
       return { ...curve, points: pointsWithAvg, validMathPts, results };
     });
   }, [curves]);
@@ -167,7 +155,7 @@ export default function Spectrophotometry() {
   const chartData = useMemo(() => {
     const pts = activeCurve.validMathPts;
     if (!pts || pts.length === 0) return [];
-    
+
     let data = pts.map(s => ({
       concentration: s.x,
       absorbance: s.y,
@@ -177,7 +165,7 @@ export default function Spectrophotometry() {
     if (activeCurve.results && activeCurve.results.m !== null && activeCurve.results.m !== 0) {
       const minX = 0;
       const maxX = Math.max(...pts.map(s => s.x)) * 1.1 || 100;
-      
+
       // Assign trendAbs to all existing points so the Line is continuous
       data = data.map(d => ({
         ...d,
@@ -198,7 +186,7 @@ export default function Spectrophotometry() {
   // Operations
   const handleSaveToCloud = () => {
     if (!protocolName.trim()) return alert("Debes ingresar un nombre para el protocolo.");
-    
+
     const newProtocol = {
       id: activeProtocolId || uuidv4(),
       nombre: protocolName,
@@ -221,7 +209,7 @@ export default function Spectrophotometry() {
       updatedProtocols.push(newProtocol);
       setActiveProtocolId(newProtocol.id);
     }
-    
+
     updateState({ spectroProtocols: updatedProtocols });
     alert("Protocolo guardado exitosamente.");
   };
@@ -243,7 +231,7 @@ export default function Spectrophotometry() {
     try {
       const text = await navigator.clipboard.readText();
       const rows = text.trim().split('\n').map(r => r.split('\t'));
-      
+
       const newPoints = rows.map(r => {
         return {
           id: uuidv4(),
@@ -311,60 +299,20 @@ export default function Spectrophotometry() {
         <p>Crea sesiones de trabajo con 3 curvas por triplicado o carga plantillas oficiales para estandarizar tus cálculos.</p>
       </div>
 
-      {/* PROTOCOL & TEMPLATE BAR */}
-      <div className="protocol-bar">
-        {/* Row 1: selectors */}
-        <div className="protocol-selector-row">
-          <div className="protocol-selector-group">
-            <FileText size={18} style={{color: '#10b981', flexShrink: 0}}/>
-            <select className="protocol-select" value={selectedTemplateId} onChange={handleLoadTemplate} style={{borderColor: '#10b981'}}>
-              <option value="">-- Cargar desde Plantilla Oficial --</option>
-              {spectroTemplates.map(t => (
-                <option key={t.id} value={t.id}>{t.nombre}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="protocol-selector-group">
-            <BookOpen size={18} style={{color: '#6366f1', flexShrink: 0}}/>
-            <select className="protocol-select" value={activeProtocolId} onChange={handleLoadProtocol}>
-              <option value="">-- Abrir Sesión Guardada --</option>
-              {savedProtocols.map(p => (
-                <option key={p.id} value={p.id}>{p.nombre} ({new Date(p.fecha).toLocaleDateString()}) – {p.autor}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Row 2: name + notes + save */}
-        <div className="protocol-meta-row">
-          <input
-            type="text"
-            placeholder="Nombre de Sesión (Ej: Lowry Lote 4)"
-            value={protocolName}
-            onChange={e => setProtocolName(e.target.value)}
-            className="input-field"
-            style={{ flex: '1', minWidth: '180px' }}
-            disabled={isReadOnly}
-          />
-          <input
-            type="text"
-            placeholder="Notas u Observaciones..."
-            value={protocolNotes}
-            onChange={e => setProtocolNotes(e.target.value)}
-            className="input-field"
-            style={{ flex: '2', minWidth: '180px' }}
-            disabled={isReadOnly}
-          />
-          <div className="admin-actions">
-            {!isReadOnly && (
-              <button className="btn btn-primary" onClick={handleSaveToCloud}>
-                <Save size={16}/> Guardar Sesión
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+      <ProtocolBar
+        selectedTemplateId={selectedTemplateId}
+        spectroTemplates={spectroTemplates}
+        activeProtocolId={activeProtocolId}
+        savedProtocols={savedProtocols}
+        onLoadTemplate={handleLoadTemplate}
+        onLoadProtocol={handleLoadProtocol}
+        protocolName={protocolName}
+        setProtocolName={setProtocolName}
+        protocolNotes={protocolNotes}
+        setProtocolNotes={setProtocolNotes}
+        isReadOnly={isReadOnly}
+        onSaveToCloud={handleSaveToCloud}
+      />
 
       {isReadOnly && (
         <div className="locked-alert">
@@ -394,376 +342,54 @@ export default function Spectrophotometry() {
       </div>
 
       {activeTab === 'calibration' && (
-        <>
-          <div className="curves-tabs">
-            {processedCurves.map((curve, idx) => (
-              <button 
-                key={curve.id} 
-                className={`btn ${activeCurveIdx === idx ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setActiveCurveIdx(idx)}
-              >
-                {curve.name} {curve.results.factor ? '✅' : ''}
-              </button>
-            ))}
-          </div>
-
-          <div className="spectro-grid">
-            {/* Left Column: Calibration Table for Active Curve */}
-            <div className="spectro-left">
-              <div className="spectro-card" style={{overflowX: 'auto'}}>
-                <div className="card-header-flex">
-                  <h3>🧪 Puntos de {activeCurve.name} {isConcentrationLocked && '🔒'}</h3>
-                  {!isReadOnly && !isFromTemplate && (
-                    <button className="btn btn-small" onClick={handlePasteCurve}><ClipboardPaste size={14}/> Pegar de Excel</button>
-                  )}
-                </div>
-                
-                <table className="spectro-table">
-                  <thead>
-                    <tr>
-                      <th>Concentración</th>
-                      <th>Abs 1</th>
-                      <th>Abs 2</th>
-                      <th>Abs 3</th>
-                      <th style={{color:'#8b5cf6'}}>Promedio</th>
-                      {!isConcentrationLocked && <th width="30"></th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activeCurve.points.map((p, i) => (
-                      <tr key={p.id}>
-                        <td>
-                          <input type="number" step="any" value={p.concentration} onChange={e => {
-                            const newCurves = [...curves];
-                            newCurves[activeCurveIdx].points[i].concentration = e.target.value;
-                            setCurves(newCurves);
-                          }} placeholder="[ ]" disabled={isConcentrationLocked} style={isConcentrationLocked ? {backgroundColor: 'var(--bg-primary)'} : {}} />
-                        </td>
-                        <td>
-                          <input type="number" step="any" value={p.abs1} onChange={e => {
-                            const newCurves = [...curves];
-                            newCurves[activeCurveIdx].points[i].abs1 = e.target.value;
-                            setCurves(newCurves);
-                          }} placeholder="Abs 1" disabled={isReadOnly} />
-                        </td>
-                        <td>
-                          <input type="number" step="any" value={p.abs2} onChange={e => {
-                            const newCurves = [...curves];
-                            newCurves[activeCurveIdx].points[i].abs2 = e.target.value;
-                            setCurves(newCurves);
-                          }} placeholder="Abs 2" disabled={isReadOnly} />
-                        </td>
-                        <td>
-                          <input type="number" step="any" value={p.abs3} onChange={e => {
-                            const newCurves = [...curves];
-                            newCurves[activeCurveIdx].points[i].abs3 = e.target.value;
-                            setCurves(newCurves);
-                          }} placeholder="Abs 3" disabled={isReadOnly} />
-                        </td>
-                        <td>
-                          <strong style={{fontSize:'0.9rem', color:'#8b5cf6'}}>{p.absPromedio !== null ? p.absPromedio.toFixed(4) : '-'}</strong>
-                        </td>
-                        {!isConcentrationLocked && (
-                          <td>
-                            <button className="btn-icon" onClick={() => {
-                              const newCurves = [...curves];
-                              newCurves[activeCurveIdx].points = newCurves[activeCurveIdx].points.filter(pt => pt.id !== p.id);
-                              setCurves(newCurves);
-                            }}><Trash2 size={16}/></button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {!isConcentrationLocked && (
-                  <button className="btn btn-outline" style={{marginTop:'10px', width:'100%'}} onClick={() => {
-                    const newCurves = [...curves];
-                    newCurves[activeCurveIdx].points.push({ id: uuidv4(), concentration: '', abs1: '', abs2: '', abs3: '' });
-                    setCurves(newCurves);
-                  }}>
-                    <Plus size={16}/> Agregar Fila
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Right Column: Visualization & Results for Active Curve */}
-            <div className="spectro-right">
-              <div className="spectro-card sticky-card">
-                <h3>📊 Resultados de {activeCurve.name}</h3>
-                
-                <div className="dual-math-stats">
-                  <div className="math-box">
-                    <div className="math-box-title">Regresión Lineal</div>
-                    {activeCurve.results.m !== null ? (
-                      <>
-                        <div className="stat-text">y = {activeCurve.results.m.toFixed(4)}x + {activeCurve.results.b.toFixed(4)}</div>
-                        <div className="stat-text">R² = {activeCurve.results.r2.toFixed(4)}</div>
-                      </>
-                    ) : <div className="stat-text text-muted">-</div>}
-                  </div>
-
-                  <div className="math-box math-box-active">
-                    <div className="math-box-title">Factor de Curva</div>
-                    {activeCurve.results.factor ? (
-                      <div className="stat-text">Factor = {activeCurve.results.factor.toFixed(4)}</div>
-                    ) : <div className="stat-text text-muted">-</div>}
-                  </div>
-                </div>
-
-                <div className="chart-container">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <ComposedChart data={chartData} margin={{ top: 10, right: 20, bottom: 0, left: -20 }}>
-                      <CartesianGrid stroke="#f5f5f5" strokeDasharray="3 3" />
-                      <XAxis dataKey="concentration" type="number" />
-                      <YAxis yAxisId="left" type="number" />
-                      <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                      <Line yAxisId="left" type="monotone" dataKey="trendAbs" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={false} />
-                      <Scatter yAxisId="left" name="Estándar" dataKey="absorbance" fill="#8b5cf6" />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-                
-                <div style={{ marginTop: '16px', padding: '16px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', borderRadius: '8px', textAlign: 'center' }}>
-                  <h4 style={{ margin: '0 0 8px 0', color: '#047857' }}>FACTOR FINAL (PROMEDIO DEL PROTOCOLO)</h4>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>
-                    {protocolFactor ? protocolFactor.toFixed(5) : '0.00000'}
-                  </div>
-                  <small style={{ color: '#065f46' }}>Promedio de las {processedCurves.filter(c => c.results.factor).length} curvas válidas.</small>
-                </div>
-
-              </div>
-            </div>
-          </div>
-        </>
+        <CalibrationPanel
+          processedCurves={processedCurves}
+          activeCurveIdx={activeCurveIdx}
+          onCurveSelect={setActiveCurveIdx}
+          curves={curves}
+          onCurvesChange={setCurves}
+          isConcentrationLocked={isConcentrationLocked}
+          isReadOnly={isReadOnly}
+          isFromTemplate={isFromTemplate}
+          onPasteCurve={handlePasteCurve}
+          chartData={chartData}
+          protocolFactor={protocolFactor}
+        />
       )}
 
       {activeTab === 'samples' && (
-        <div className="spectro-grid">
-          {/* Left Column: Samples Config & Table */}
-          <div className="spectro-left">
-            <div className="spectro-card">
-              <h3>⚙️ Configuración de Muestras</h3>
-              <div className="settings-row" style={{marginBottom: '16px'}}>
-                <div className="field">
-                  <label>Origen del Factor Matemático</label>
-                  <select value={factorSource} onChange={e => setFactorSource(e.target.value)}>
-                    <option value="protocol">Factor Promedio del Protocolo ({protocolFactor.toFixed(4)})</option>
-                    <option value="manual">Ingresar Factor Manual</option>
-                  </select>
-                </div>
-                {factorSource === 'manual' && (
-                  <div className="field" style={{width:'150px'}}>
-                    <label>Factor Manual</label>
-                    <input type="number" step="any" value={manualFactorInput} onChange={e => setManualFactorInput(e.target.value)} placeholder="Ej: 45.20" />
-                  </div>
-                )}
-              </div>
-              <div className="settings-row">
-                <div className="field" style={{width:'100px'}}>
-                  <label>Dil. Global</label>
-                  <input type="number" step="any" value={globalDilution} onChange={e => setGlobalDilution(e.target.value)} disabled={isReadOnly} />
-                </div>
-                <div className="field" style={{width:'100px'}}>
-                  <label>T (min)</label>
-                  <input type="number" step="any" value={globalTime} onChange={e => setGlobalTime(e.target.value)} disabled={isReadOnly} />
-                </div>
-              </div>
-            </div>
-
-            <div className="spectro-card" style={{overflowX: 'auto'}}>
-              <div className="card-header-flex" style={{marginBottom: '8px'}}>
-                <h3>🧬 Muestras</h3>
-                {!isReadOnly && <button className="btn btn-small" onClick={handlePasteSamples}><ClipboardPaste size={14}/> Pegar de Excel</button>}
-              </div>
-              
-              <div className="sample-math-toggle" style={{justifyContent: 'center', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: '#10b981', color: '#047857'}}>
-                <strong>Factor Aplicado: {finalFactor ? finalFactor.toFixed(5) : '0.00000'}</strong>
-              </div>
-
-              <table className="spectro-table samples-table" style={{marginTop:'16px'}}>
-                <thead>
-                  <tr>
-                    <th>Nombre</th>
-                    <th>Absorbancia</th>
-                    <th>Dil. (Opc)</th>
-                    <th>T (Opc)</th>
-                    {!isReadOnly && <th width="30"></th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {samples.map((s, i) => (
-                    <tr key={s.id}>
-                      <td>
-                        <input type="text" value={s.name} onChange={e => {
-                          const newS = [...samples]; newS[i].name = e.target.value; setSamples(newS);
-                        }} placeholder="Muestra" style={{width:'100px'}} disabled={isReadOnly} />
-                      </td>
-                      <td>
-                        <input type="number" step="any" value={s.value} onChange={e => {
-                          const newS = [...samples]; newS[i].value = e.target.value; setSamples(newS);
-                        }} placeholder="Abs" disabled={isReadOnly} />
-                      </td>
-                      <td>
-                        <input type="number" step="any" value={s.dilution} onChange={e => {
-                          const newS = [...samples]; newS[i].dilution = e.target.value; setSamples(newS);
-                        }} placeholder={`(${globalDilution})`} style={{width:'60px'}} disabled={isReadOnly} />
-                      </td>
-                      <td>
-                        <input type="number" step="any" value={s.time} onChange={e => {
-                          const newS = [...samples]; newS[i].time = e.target.value; setSamples(newS);
-                        }} placeholder={`(${globalTime})`} style={{width:'60px'}} disabled={isReadOnly} />
-                      </td>
-                      {!isReadOnly && (
-                        <td>
-                          <button className="btn-icon" onClick={() => setSamples(samples.filter(st => st.id !== s.id))}><Trash2 size={16}/></button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {!isReadOnly && (
-                <button className="btn btn-outline" style={{marginTop:'10px', width:'100%'}} onClick={() => setSamples([...samples, { id: uuidv4(), name: `Muestra ${samples.length+1}`, value: '', dilution: '', time: '' }])}>
-                  <Plus size={16}/> Agregar Fila
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Right Column: Samples Results & Export */}
-          <div className="spectro-right">
-            <div className="spectro-card sticky-card">
-              <h3>📝 Resultados de Muestras</h3>
-              
-              <div className="results-preview">
-                <div className="results-table-container" style={{maxHeight: '400px'}}>
-                  <table className="spectro-results-table">
-                    <thead>
-                      <tr>
-                        <th>Muestra</th>
-                        <th>Abs</th>
-                        <th>[ ]</th>
-                        <th>Actividad</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {processedSamples.map(s => (
-                        <tr key={s.id}>
-                          <td title={s.name}>{s.name.substring(0, 10) || '—'}</td>
-                          <td>{s.value || '—'}</td>
-                          <td>{s.calculated_concentration !== null ? s.calculated_concentration.toFixed(3) : '—'}</td>
-                          <td><strong>{s.final_activity !== null ? s.final_activity.toFixed(3) : '—'}</strong></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <button className="btn btn-primary btn-large" style={{width:'100%', marginTop:'16px'}} onClick={handleExport}>
-                <Download size={18}/> Exportar Reporte GLP Completo
-              </button>
-            </div>
-          </div>
-        </div>
+        <SamplesPanel
+          protocolFactor={protocolFactor}
+          finalFactor={finalFactor}
+          factorSource={factorSource}
+          setFactorSource={setFactorSource}
+          manualFactorInput={manualFactorInput}
+          setManualFactorInput={setManualFactorInput}
+          globalDilution={globalDilution}
+          setGlobalDilution={setGlobalDilution}
+          globalTime={globalTime}
+          setGlobalTime={setGlobalTime}
+          samples={samples}
+          setSamples={setSamples}
+          isReadOnly={isReadOnly}
+          processedSamples={processedSamples}
+          onPasteSamples={handlePasteSamples}
+          onExport={handleExport}
+        />
       )}
 
       {activeTab === 'templates' && userRole === 'admin' && (
-        <div className="spectro-grid">
-          <div className="spectro-left">
-            <div className="spectro-card">
-              <h3>⚙️ Crear Plantilla de Concentraciones</h3>
-              <p className="text-muted" style={{marginBottom: '16px'}}>Define las concentraciones oficiales para estandarizar el cálculo. Los usuarios no podrán modificar estas concentraciones cuando usen la plantilla.</p>
-              
-              <div className="settings-row" style={{marginBottom: '16px'}}>
-                <div className="field" style={{flex: 1}}>
-                  <label>Nombre de la Plantilla</label>
-                  <input type="text" value={adminTemplateName} onChange={e => setAdminTemplateName(e.target.value)} placeholder="Ej: Método de Lowry Oficial" />
-                </div>
-                <div style={{display: 'flex', alignItems: 'flex-end'}}>
-                  <button className="btn btn-primary" onClick={handleSaveAdminTemplate}>
-                    <Save size={16}/> Guardar Plantilla
-                  </button>
-                </div>
-              </div>
-
-              <div className="curves-tabs">
-                {adminCurves.map((curve, idx) => (
-                  <button 
-                    key={curve.id} 
-                    className={`btn ${adminActiveCurveIdx === idx ? 'btn-primary' : 'btn-outline'}`}
-                    onClick={() => setAdminActiveCurveIdx(idx)}
-                  >
-                    {curve.name} ({curve.points.length} pts)
-                  </button>
-                ))}
-              </div>
-
-              <table className="spectro-table">
-                <thead>
-                  <tr>
-                    <th>Concentración [ ]</th>
-                    <th width="30"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {adminCurves[adminActiveCurveIdx].points.map((p, i) => (
-                    <tr key={p.id}>
-                      <td>
-                        <input type="number" step="any" value={p.concentration} onChange={e => {
-                          const newCurves = [...adminCurves];
-                          newCurves[adminActiveCurveIdx].points[i].concentration = e.target.value;
-                          setAdminCurves(newCurves);
-                        }} placeholder="Ej: 5.0" />
-                      </td>
-                      <td>
-                        <button className="btn-icon" onClick={() => {
-                          const newCurves = [...adminCurves];
-                          newCurves[adminActiveCurveIdx].points = newCurves[adminActiveCurveIdx].points.filter(pt => pt.id !== p.id);
-                          setAdminCurves(newCurves);
-                        }}><Trash2 size={16}/></button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <button className="btn btn-outline" style={{marginTop:'10px', width:'100%'}} onClick={() => {
-                const newCurves = [...adminCurves];
-                newCurves[adminActiveCurveIdx].points.push({ id: uuidv4(), concentration: '', abs1: '', abs2: '', abs3: '' });
-                setAdminCurves(newCurves);
-              }}>
-                <Plus size={16}/> Agregar Concentración
-              </button>
-            </div>
-          </div>
-          
-          <div className="spectro-right">
-            <div className="spectro-card sticky-card">
-              <h3>📂 Plantillas Oficiales Existentes</h3>
-              {spectroTemplates.length === 0 ? (
-                <p className="text-muted">No hay plantillas creadas.</p>
-              ) : (
-                <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
-                  {spectroTemplates.map(t => (
-                    <div key={t.id} style={{padding: '12px', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                      <div>
-                        <strong>{t.nombre}</strong>
-                        <div style={{fontSize: '0.85rem', color: 'var(--text-secondary)'}}>
-                          C1: {t.curvas?.[0]?.points?.length || 0} pts | C2: {t.curvas?.[1]?.points?.length || 0} pts | C3: {t.curvas?.[2]?.points?.length || 0} pts
-                        </div>
-                      </div>
-                      <button className="btn-icon" style={{color: '#ef4444'}} onClick={() => handleDeleteTemplate(t.id)}>
-                        <Trash2 size={18}/>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <TemplatesPanel
+          adminTemplateName={adminTemplateName}
+          setAdminTemplateName={setAdminTemplateName}
+          adminCurves={adminCurves}
+          setAdminCurves={setAdminCurves}
+          adminActiveCurveIdx={adminActiveCurveIdx}
+          setAdminActiveCurveIdx={setAdminActiveCurveIdx}
+          spectroTemplates={spectroTemplates}
+          onSaveTemplate={handleSaveAdminTemplate}
+          onDeleteTemplate={handleDeleteTemplate}
+        />
       )}
 
     </div>

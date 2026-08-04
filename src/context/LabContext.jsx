@@ -31,16 +31,7 @@ export const TABS = [
 
 export const ADMIN_TAB = { id: 'admin', label: 'Admin', icon: '🛡️' };
 
-function labStateReducer(prevState, action) {
-  switch (action.type) {
-    case 'SET':
-      return action.payload;
-    case 'FUNC':
-      return action.updater(prevState);
-    default:
-      return prevState;
-  }
-}
+import { labStateReducer } from '../utils/labStateReducer';
 
 const LabContext = createContext(null);
 
