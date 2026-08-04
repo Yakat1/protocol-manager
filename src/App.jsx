@@ -70,6 +70,8 @@ export default function App() {
   const [activeLabId, setActiveLabId] = useState(null);
   const [userRole, setUserRole] = useState(null); // 'admin' | 'student'
   const [needsLabSetup, setNeedsLabSetup] = useState(false);
+  const [retrying, setRetrying] = useState(false); // offline profile-retry loop
+  const retryTimerRef = useRef(null);
 
   const { can } = usePermissions(userRole);
 
@@ -162,6 +164,7 @@ export default function App() {
         // Check if user has a lab profile
         try {
           const profile = await getUserProfile(firebaseUser.uid);
+          setRetrying(false);
           if (profile?.labs?.length > 0) {
             setLabProfile(profile);
             const labId = profile.activeLab || profile.labs[0].labId;
@@ -174,10 +177,23 @@ export default function App() {
             setNeedsLabSetup(true);
           }
         } catch (err) {
-          console.warn('Could not load lab profile, falling back:', err);
-          setNeedsLabSetup(true);
+          const isNetworkErr = ['unavailable', 'network-request-failed', 'resource-exhausted'].includes(err?.code);
+          if (isNetworkErr) {
+            // Transient network/offline: stay in the loading state and retry.
+            // Toggling `retrying` re-runs this effect, which re-subscribes to
+            // auth and re-fires onUserChange with the current user.
+            console.warn('Sin conexión con la nube, reintentando perfil:', err);
+            if (!retrying) showToast('Sin conexión con la nube. Reintentando…');
+            clearTimeout(retryTimerRef.current);
+            retryTimerRef.current = setTimeout(() => setRetrying(v => !v), retrying ? 3000 : 1000);
+          } else {
+            console.warn('Could not load lab profile, falling back:', err);
+            setRetrying(false);
+            setNeedsLabSetup(true);
+          }
         }
       } else {
+        setRetrying(false);
         if (firestoreUnsubRef.current) { firestoreUnsubRef.current(); firestoreUnsubRef.current = null; }
         const loaded = await loadStateLocal();
         setState(loaded || getDefaultState());
@@ -188,8 +204,12 @@ export default function App() {
       }
     });
 
-    return () => { unsubAuth(); if (firestoreUnsubRef.current) firestoreUnsubRef.current(); };
-  }, []);
+    return () => {
+      unsubAuth();
+      clearTimeout(retryTimerRef.current);
+      if (firestoreUnsubRef.current) firestoreUnsubRef.current();
+    };
+  }, [retrying]);
 
   // ── 2) Subscribe to active lab state ───────────────────────────────────────
   useEffect(() => {
@@ -219,15 +239,6 @@ export default function App() {
     // Subscribe to real-time
     if (firestoreUnsubRef.current) firestoreUnsubRef.current();
     firestoreUnsubRef.current = subscribeToLabState(activeLabId, (remoteData) => {
-      // Logging de diagnóstico
-      console.log('[SYNC] snapshot', {
-        remoteSession: remoteData.sessionId?.slice(0, 8),
-        localSession: sessionIdRef.current.slice(0, 8),
-        isOwnEcho: remoteData.sessionId === sessionIdRef.current,
-        hasPendingSave: !!saveTimerRef.current,
-        remoteCultures: remoteData.state?.cultures?.filter(c => !c.deletedAt)?.length,
-      });
-
       if (
         remoteData.activeUserId === user.uid &&
         remoteData.sessionId && 
@@ -245,7 +256,6 @@ export default function App() {
       // Cuando el save local se ejecute y su echo regrese, será ignorado por
       // el filtro de sessionId, y el SIGUIENTE snapshot remoto sí se aplicará.
       if (saveTimerRef.current) {
-        console.log('[SYNC] ignorando snapshot remoto — hay save local pendiente');
         return;
       }
 
@@ -331,14 +341,19 @@ export default function App() {
   // ── Lab switching ──────────────────────────────────────────────────────────
   const switchLab = async (labId) => {
     if (labId === activeLabId) return;
-    setActiveLabId(labId);
-    // Read authoritative role from members
-    const role = await getLabMemberRole(labId, user.uid);
-    setUserRole(role || 'student');
-    setState(null); // triggers loading state
-    // Update user profile with active lab
-    if (user?.uid) {
-      setUserProfile(user.uid, { activeLab: labId }).catch(console.error);
+    // Read authoritative role from members BEFORE switching so a failure
+    // never leaves the lab half-switched (old role, new lab).
+    try {
+      const role = await getLabMemberRole(labId, user.uid);
+      setActiveLabId(labId);
+      setUserRole(role || 'student');
+      setState(null); // triggers loading state
+      // Update user profile with active lab
+      if (user?.uid) {
+        setUserProfile(user.uid, { activeLab: labId }).catch(console.error);
+      }
+    } catch {
+      showToast('No se pudo verificar el rol; revisa tu conexión.');
     }
   };
 
@@ -346,8 +361,13 @@ export default function App() {
     setLabProfile(profile);
     const labId = profile.activeLab || profile.labs[0]?.labId;
     setActiveLabId(labId);
-    const role = await getLabMemberRole(labId, user.uid);
-    setUserRole(role || 'student');
+    try {
+      const role = await getLabMemberRole(labId, user.uid);
+      setUserRole(role || 'student');
+    } catch {
+      // Fall back to the role cached in the user profile
+      setUserRole(profile.labs?.find(l => l.labId === labId)?.role || 'student');
+    }
     setNeedsLabSetup(false);
   };
 
