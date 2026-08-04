@@ -1,16 +1,44 @@
-import { Plus, Trash2, Download, Upload, Save, User, ChevronDown } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
+import { Save, User, ChevronDown } from 'lucide-react';
 import { exportBackup } from '../utils/export';
+import { useLab } from '../context/LabContext';
 
-export default function Sidebar({ state, updateState, activeSubjectId, setActiveSubjectId, activeTab, setActiveTab, tabs, user, onLogout, onOpenProfile, isOpen, onClose, deferredPrompt, onInstallPWA, labProfile, activeLabId, onSwitchLab, userRole, can }) {
+export default function Sidebar() {
+  const {
+    state,
+    updateState,
+    activeTab,
+    setActiveTab,
+    visibleTabs,
+    user,
+    userRole,
+    labProfile,
+    activeLabId,
+    switchLab,
+    sidebarOpen,
+    setSidebarOpen,
+    setShowProfileModal,
+    deferredPrompt,
+    handleInstallPWA,
+  } = useLab();
+
   const updateProtocolName = (e) => {
     updateState({ protocolName: e.target.value });
+  };
+
+  const openTab = (tabId) => {
+    setActiveTab(tabId);
+    setSidebarOpen(false);
+  };
+
+  const openProfile = () => {
+    setShowProfileModal(true);
+    setSidebarOpen(false);
   };
 
   const labs = labProfile?.labs || [];
 
   return (
-    <div className={`sidebar ${isOpen ? 'open' : ''}`}>
+    <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
       <div className="sidebar-header">
         {/* Lab Switcher */}
         {labs.length > 0 && (
@@ -18,7 +46,7 @@ export default function Sidebar({ state, updateState, activeSubjectId, setActive
             <select
               className="input-field"
               value={activeLabId || ''}
-              onChange={e => onSwitchLab && onSwitchLab(e.target.value)}
+              onChange={e => switchLab && switchLab(e.target.value)}
               style={{
                 width: '100%', fontSize: '0.8rem', padding: '6px 8px',
                 background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)',
@@ -69,7 +97,7 @@ export default function Sidebar({ state, updateState, activeSubjectId, setActive
           { label: 'Reportes WB', items: ['western', 'wbreport'] },
           { label: 'Ajustes', items: ['admin'] } // admin tab is conditional
         ].map((group, idx) => {
-          const groupTabs = group.items.map(tid => tabs.find(t => t.id === tid)).filter(Boolean);
+          const groupTabs = group.items.map(tid => visibleTabs.find(t => t.id === tid)).filter(Boolean);
           if (groupTabs.length === 0) return null;
           
           return (
@@ -80,7 +108,7 @@ export default function Sidebar({ state, updateState, activeSubjectId, setActive
                   <button 
                     key={tab.id}
                     className={`sidebar-tab ${activeTab === tab.id ? 'active' : ''}`}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => openTab(tab.id)}
                     title={tab.label}
                   >
                     <span className="sidebar-tab-icon">{tab.icon}</span>
@@ -97,7 +125,7 @@ export default function Sidebar({ state, updateState, activeSubjectId, setActive
 
       <div className="sidebar-footer">
         {deferredPrompt && (
-          <button className="btn btn-primary" style={{width: '100%', justifyContent: 'center', fontSize: '0.9rem', marginBottom: '8px'}} onClick={onInstallPWA}>
+          <button className="btn btn-primary" style={{width: '100%', justifyContent: 'center', fontSize: '0.9rem', marginBottom: '8px'}} onClick={handleInstallPWA}>
              📱 Instalar App
           </button>
         )}
@@ -122,7 +150,7 @@ export default function Sidebar({ state, updateState, activeSubjectId, setActive
               borderRadius: '8px',
               boxShadow: '0 4px 12px rgba(234, 88, 12, 0.3)'
             }} 
-            onClick={onOpenProfile}
+            onClick={openProfile}
           >
             <div style={{ background: 'rgba(255,255,255,0.2)', color: 'white', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <User size={18}/>

@@ -6,11 +6,10 @@ import CagesManager from "./CagesManager";
 import SubjectSamples from "./SubjectSamples";
 import { Download, Save, Plus, Users, Box, Trash2, TestTube, Activity, ImageIcon } from "lucide-react";
 import { softDelete } from "../utils/softDelete";
+import { useLab } from "../context/LabContext";
 import "./CellCulture.css";
 
 export default function Workspace({
-  state,
-  updateState,
   activeSubjectId,
   setActiveSubjectId,
   onExportCSV,
@@ -18,6 +17,7 @@ export default function Workspace({
   onImportBackup,
   userRole
 }) {
+  const { state, updateState } = useLab();
   const [activeMainTab, setActiveMainTab] = useState("subjects");
   const [dossierTab, setDossierTab] = useState("clinical");
 

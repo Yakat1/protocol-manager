@@ -1,7 +1,9 @@
 import React from 'react';
+import { useLab } from '../context/LabContext';
 import './GLPPrintLayout.css';
 
-export default function GLPPrintLayout({ children, state, user, labProfile, activeLabId, disabled }) {
+export default function GLPPrintLayout({ children, disabled }) {
+  const { state, user, labProfile, activeLabId } = useLab();
   if (disabled) return <>{children}</>;
 
   // Configuración para el GLP Header

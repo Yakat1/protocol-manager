@@ -3,9 +3,11 @@ import { Activity, AlertTriangle, Box, Clock, Microscope, TrendingUp, CloudUploa
 import { exportBackup } from '../utils/export';
 import { matchesRecurrence } from '../utils/recurrence';
 import { formatDuration } from '../utils/format';
+import { useLab } from '../context/LabContext';
 import './Dashboard.css';
 
-export default function Dashboard({ state, setActiveTab, updateState, showToast }) {
+export default function Dashboard() {
+  const { state, setActiveTab, updateState, showToast } = useLab();
   const [timers, setTimers] = useState([]);
   const [now, setNow] = useState(Date.now());
 

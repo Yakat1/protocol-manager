@@ -2,9 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { updateUserPassword, getMyInvitations, acceptInvitation, declineInvitation, getUserProfile, createLab, getPersonalLogs, validatePassword, writeAuditEntry } from '../utils/firebase';
 import { exportLocalBackup } from '../utils/backupExport';
 import { X, Lock, LogOut, Code, User, Inbox, Check, Plus, HardDriveDownload } from 'lucide-react';
+import { useLab } from '../context/LabContext';
 import './AuthGate.css'; // Reuse glass-panel and overlay styles
 
-export default function ProfileSettings({ user, state, updateState, onClose, onLogout, showToast, onProfileUpdate, activeLabId, activeLabName }) {
+export default function ProfileSettings() {
+  const {
+    user,
+    state,
+    updateState,
+    showToast,
+    activeLabId,
+    activeLabName,
+    handleLabReady,
+    handleLogout,
+    setShowProfileModal,
+  } = useLab();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,7 +45,7 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
     try {
       await acceptInvitation(user, inv);
       const profile = await getUserProfile(user.uid);
-      if (onProfileUpdate) onProfileUpdate(profile);
+      handleLabReady(profile);
       showToast('Invitación aceptada. Laboratorio añadido a tu cuenta.');
       setInvitations(prev => prev.filter(i => i.labId !== inv.labId));
     } catch (err) {
@@ -63,7 +75,7 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
     try {
       await createLab(user, newLabName.trim());
       const profile = await getUserProfile(user.uid);
-      if (onProfileUpdate) onProfileUpdate(profile);
+      handleLabReady(profile);
       showToast(`Laboratorio "${newLabName.trim()}" creado exitosamente.`);
       setNewLabName('');
     } catch (err) {
@@ -139,7 +151,7 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
     <div className="auth-overlay">
       <div className="auth-card glass-panel" style={{ width: '100%', maxWidth: '400px', position: 'relative' }}>
         <button 
-          onClick={onClose}
+          onClick={() => setShowProfileModal(false)}
           style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
         >
           <X size={20} />
@@ -305,8 +317,8 @@ export default function ProfileSettings({ user, state, updateState, onClose, onL
           className="btn" 
           style={{ width: '100%', justifyContent: 'center', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)' }}
           onClick={() => {
-            onClose();
-            onLogout();
+            setShowProfileModal(false);
+            handleLogout();
           }}
         >
           <LogOut size={16} style={{ marginRight: '8px' }} /> Cerrar Sesión

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Download, Plus, Trash2, ClipboardPaste, Save, FileText, CheckCircle, Calculator, FlaskConical, Beaker, Calendar, BookOpen, Settings } from 'lucide-react';
 import {
@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import { linearRegression, calculateFactor, computeAverageAbs, processSpectroSamples, generateSpectroXLSX } from './AssayAnalysisEngine';
 import { softDelete } from '../utils/softDelete';
+import { useLab } from '../context/LabContext';
 import './Spectrophotometry.css';
 
 function downloadFile(blob, filename) {
@@ -23,7 +24,8 @@ const DEFAULT_CURVES = () => [
   { id: 'c3', name: 'Curva 3', points: [{ id: uuidv4(), concentration: '', abs1: '', abs2: '', abs3: '' }] }
 ];
 
-export default function Spectrophotometry({ state, updateState, user, userRole }) {
+export default function Spectrophotometry() {
+  const { state, updateState, user, userRole } = useLab();
   const [activeTab, setActiveTab] = useState('calibration'); // 'calibration' | 'samples' | 'templates'
   
   // Cloud data
