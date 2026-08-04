@@ -1,0 +1,1 @@
+var e=(e=[],t,n)=>e.map(e=>e.id===t?{...e,deletedAt:new Date().toISOString(),deletedBy:n?.email||`system`}:e);export{e as t};
