@@ -3,7 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { Plus, Trash2, Copy, FileText, Search, AlertCircle, Save, Download, Upload } from 'lucide-react';
-import { writeAuditEntry } from '../utils/firebase';
+import { audit } from '../utils/audit';
+import { softDelete } from '../utils/softDelete';
 import './ProtocolsManager.css';
 
 const QUILL_MODULES = {
@@ -42,7 +43,7 @@ export default function ProtocolsManager({ protocols: protocolsProp, inventory: 
       recipeIds: []
     };
     setCultureProtocols([...protocols, newP]);
-    if (user?.uid && labId) writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action: 'protocol_created', target: newP.name || 'Protocolo', details: {} }).catch(console.error);
+    audit(labId, user, 'protocol_created', newP.name || 'Protocolo', {});
     setActiveProtoId(newP.id);
   };
 
@@ -51,10 +52,10 @@ export default function ProtocolsManager({ protocols: protocolsProp, inventory: 
     if (confirm('¿Eliminar protocolo? Esta acción no se puede deshacer.')) {
       const deletedName = protocols.find(p => p.id === id)?.name;
       setCultureProtocols(
-        protocols.map(p => p.id === id ? { ...p, deletedAt: new Date().toISOString(), deletedBy: user?.email || 'unknown' } : p),
+        softDelete(protocols, id, user),
         { immediate: true }
       );
-      if (user?.uid && labId) writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action: 'protocol_deleted', target: deletedName || 'Protocolo', details: {} }).catch(console.error);
+      audit(labId, user, 'protocol_deleted', deletedName || 'Protocolo', {});
       if (activeProtoId === id) setActiveProtoId(null);
     }
   };
@@ -108,7 +109,7 @@ export default function ProtocolsManager({ protocols: protocolsProp, inventory: 
     dlAnchorElem.setAttribute("href", dataStr);
     dlAnchorElem.setAttribute("download", `Protocolo_${protocol.name.replace(/\\s+/g, '_')}.json`);
     dlAnchorElem.click();
-    if (user?.uid && labId) writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action: 'protocol_exported', target: protocol.name, details: {} }).catch(console.error);
+    audit(labId, user, 'protocol_exported', protocol.name, {});
   };
 
   const handleImportJson = (e) => {
@@ -154,7 +155,7 @@ export default function ProtocolsManager({ protocols: protocolsProp, inventory: 
         };
         setCultureProtocols([...protocols, newP]);
         setActiveProtoId(newP.id);
-        if (user?.uid && labId) writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action: 'protocol_imported', target: newP.name, details: {} }).catch(console.error);
+        audit(labId, user, 'protocol_imported', newP.name, {});
       } catch (err) {
         alert("Error al importar el protocolo. Asegúrate de que sea un archivo JSON válido exportado desde esta app.");
       }

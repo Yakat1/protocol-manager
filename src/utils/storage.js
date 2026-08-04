@@ -58,6 +58,24 @@ export async function loadStateLocal() {
   });
 }
 
+// ─── Merge de imágenes desde caché local ─────────────────────────────────────
+// Conserva las imágenes locales (offline) al recibir estado remoto: para cada
+// subject/cultureLog del estado de la nube, se copian las imágenes que el
+// usuario tenga localmente si el id coincide.
+
+export function mergeCloudWithLocalImages(cloudState, localState) {
+  if (!localState) return cloudState;
+  const mergedSubjects = (cloudState.subjects || []).map(cs => {
+    const ls = (localState.subjects || []).find(s => s.id === cs.id);
+    return ls ? { ...cs, images: ls.images || [] } : cs;
+  });
+  const mergedLogs = (cloudState.cultureLogs || []).map(cl => {
+    const ll = (localState.cultureLogs || []).find(l => l.id === cl.id);
+    return ll ? { ...cl, images: ll.images || [] } : cl;
+  });
+  return { ...cloudState, subjects: mergedSubjects, cultureLogs: mergedLogs };
+}
+
 // ─── Estado por defecto ──────────────────────────────────────────────────────
 
 export function getDefaultState() {

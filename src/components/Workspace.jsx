@@ -5,6 +5,7 @@ import ImageGallery from "./ImageGallery";
 import CagesManager from "./CagesManager";
 import SubjectSamples from "./SubjectSamples";
 import { Download, Save, Plus, Users, Box, Trash2, TestTube, Activity, ImageIcon } from "lucide-react";
+import { softDelete } from "../utils/softDelete";
 import "./CellCulture.css";
 
 export default function Workspace({
@@ -43,7 +44,7 @@ export default function Workspace({
       )
     ) {
       updateState({
-        subjects: (state?.subjects || []).map(s => s.id === id ? { ...s, deletedAt: new Date().toISOString(), deletedBy: 'system' } : s)
+        subjects: softDelete(state?.subjects || [], id)
       }, { immediate: true });
       if (activeSubjectId === id) setActiveSubjectId(null);
     }

@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, Box, Droplet, Search, Download, Grid } from 'lucide-react';
 import { exportInventoryCSV } from '../utils/export';
-import { writeAuditEntry } from '../utils/firebase';
+import { audit } from '../utils/audit';
+import { softDelete } from '../utils/softDelete';
 import './Inventory.css';
 
 const ITEM_TYPES = ['Reactivo', 'Solución Stock', 'Anticuerpo 1°', 'Anticuerpo 2°', 'Medio de Cultivo', 'Material'];
@@ -348,11 +349,6 @@ export default function Inventory({ inventory: inventoryProp, setInventory, can,
   
   const inventory = inventoryProp || [];
 
-  const audit = (action, target, details) => {
-    if (!labId || !user) return;
-    writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action, target, details }).catch(console.error);
-  };
-
   const addItem = () => {
     const newItem = {
       id: uuidv4(),
@@ -366,7 +362,7 @@ export default function Inventory({ inventory: inventoryProp, setInventory, can,
       notes: ''
     };
     setInventory([newItem, ...inventory]);
-    audit('inventory_add', 'Nuevo Item', { note: 'Ítem creado' });
+    audit(labId, user, 'inventory_add', 'Nuevo Item', { note: 'Ítem creado' });
   };
 
   const updateItem = (id, field, value) => {
@@ -383,10 +379,10 @@ export default function Inventory({ inventory: inventoryProp, setInventory, can,
     const item = inventory.find(i => i.id === id);
     if (confirm('¿Seguro que deseas eliminar este ítem del inventario?')) {
       setInventory(
-        inventory.map(i => i.id === id ? { ...i, deletedAt: new Date().toISOString(), deletedBy: user?.email || 'unknown' } : i),
+        softDelete(inventory, id, user),
         { immediate: true }
       );
-      audit('inventory_delete', item?.name || id, { note: 'Soft delete' });
+      audit(labId, user, 'inventory_delete', item?.name || id, { note: 'Soft delete' });
     }
   };
 

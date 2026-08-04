@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, Microscope, Image as ImageIcon, Archive, Clock, Search, Box, ExternalLink } from 'lucide-react';
 import { compressImage } from '../utils/imageCompressor';
-import { writeAuditEntry } from '../utils/firebase';
+import { audit } from '../utils/audit';
+import { softDelete } from '../utils/softDelete';
 import DOMPurify from 'dompurify';
 import './CellCulture.css';
 
@@ -12,11 +13,6 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
   const [activeCultureId, setActiveCultureId] = useState(null);
   const [printMode, setPrintMode] = useState(null);
   const [customPrompt, setCustomPrompt] = useState(null);
-
-  const audit = (action, target, details) => {
-    if (!labId || !user) return;
-    writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action, target, details }).catch(console.error);
-  };
 
   const askUser = (message, defaultValue, onConfirm) => {
     setCustomPrompt({ message, defaultValue, onConfirm });
@@ -70,7 +66,7 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
         const newC = { id: uuidv4(), cellLine: name, dateStarted: new Date().toISOString().split('T')[0], status: 'Activo' };
         updateState({ cultures: [newC, ...cultures] });
         setActiveCultureId(newC.id);
-        audit('culture_add', name, { note: 'Cultivo creado' });
+        audit(labId, user, 'culture_add', name, { note: 'Cultivo creado' });
       }
     });
   };
@@ -81,14 +77,12 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
     if (can && !can.deleteCulture) return;
     const culture = cultures.find(c => c.id === id);
     if (confirm('¿Eliminar cultivo y toda su cronología? Esta acción es irreversible.')) {
-      const now = new Date().toISOString();
-      const by = user?.email || 'unknown';
       updateState({
-        cultures: (state?.cultures || []).map(c => c.id === id ? { ...c, deletedAt: now, deletedBy: by } : c),
-        cultureLogs: (state?.cultureLogs || []).map(l => l.cultureId === id ? { ...l, deletedAt: now, deletedBy: by } : l)
+        cultures: softDelete(state?.cultures || [], id, user),
+        cultureLogs: (state?.cultureLogs || []).map(l => l.cultureId === id ? { ...l, deletedAt: new Date().toISOString(), deletedBy: user?.email || 'system' } : l)
       }, { immediate: true });
       if (activeCultureId === id) setActiveCultureId(null);
-      audit('culture_delete', culture?.cellLine || id, { note: 'Soft delete' });
+      audit(labId, user, 'culture_delete', culture?.cellLine || id, { note: 'Soft delete' });
     }
   };
   const convertToSubject = (culture) => {
@@ -112,7 +106,7 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
       passage: 1, action: 'Observación', protocolUsed: '', confluence: 50, observations: '', checkedMaterials: [], images: []
     };
     updateState({ cultureLogs: [newLog, ...(state?.cultureLogs || [])] });
-    audit('culture_log_add', culture?.cellLine || activeCultureId, { note: 'Evento de cultivo añadido' });
+    audit(labId, user, 'culture_log_add', culture?.cellLine || activeCultureId, { note: 'Evento de cultivo añadido' });
   };
   const updateLog = (id, field, value) => {
     updateState({ cultureLogs: (state?.cultureLogs || []).map(l => l.id === id ? { ...l, [field]: value } : l) });
@@ -146,9 +140,9 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
     const culture = cultures.find(c => c.id === log?.cultureId);
     if (confirm('¿Eliminar este evento de la línea de tiempo?')) {
       updateState({
-        cultureLogs: (state?.cultureLogs || []).map(l => l.id === id ? { ...l, deletedAt: new Date().toISOString(), deletedBy: user?.email || 'unknown' } : l)
+        cultureLogs: softDelete(state?.cultureLogs || [], id, user)
       }, { immediate: true });
-      audit('culture_log_delete', culture?.cellLine || 'Evento', { note: 'Soft delete' });
+      audit(labId, user, 'culture_log_delete', culture?.cellLine || 'Evento', { note: 'Soft delete' });
     }
   };
 

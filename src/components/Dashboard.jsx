@@ -1,16 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, AlertTriangle, Box, Clock, Microscope, TrendingUp, CloudUpload, HardDriveDownload, Calendar as CalendarIcon, CheckCircle2, Download } from 'lucide-react';
 import { exportBackup } from '../utils/export';
+import { matchesRecurrence } from '../utils/recurrence';
+import { formatDuration } from '../utils/format';
 import './Dashboard.css';
-
-function formatDuration(ms) {
-  if (ms < 0) ms = 0;
-  const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-}
 
 export default function Dashboard({ state, setActiveTab, updateState, showToast }) {
   const [timers, setTimers] = useState([]);
@@ -93,17 +86,7 @@ export default function Dashboard({ state, setActiveTab, updateState, showToast 
     const today = new Date(todayDateStr + "T00:00:00");
     if (today < start) return;
     
-    let shouldAdd = false;
-    if (cage.recurrencePattern === 'daily') shouldAdd = true;
-    if (cage.recurrencePattern === 'every_2_days') {
-      const diff = Math.floor((today - start) / (1000*60*60*24));
-      if (diff % 2 === 0) shouldAdd = true;
-    }
-    if (cage.recurrencePattern === 'every_3_days') {
-      const diff = Math.floor((today - start) / (1000*60*60*24));
-      if (diff % 3 === 0) shouldAdd = true;
-    }
-    if (cage.recurrencePattern === 'weekly' && today.getDay() === start.getDay()) shouldAdd = true;
+    let shouldAdd = matchesRecurrence(today, start, cage.recurrencePattern);
 
     if (shouldAdd) {
       todayEvents.push({ id: cage.id, title: `Check: ${cage.name}`, type: 'cage', isDone: false });
@@ -123,14 +106,7 @@ export default function Dashboard({ state, setActiveTab, updateState, showToast 
     const today = new Date(todayDateStr + "T00:00:00");
     if (today < start) return;
 
-    let shouldAdd = false;
-    if (ev.recurrencePattern === 'daily') shouldAdd = true;
-    if (ev.recurrencePattern === 'weekdays' && today.getDay() >= 1 && today.getDay() <= 5) shouldAdd = true;
-    if (ev.recurrencePattern === 'every_3_days') {
-      const diff = Math.floor((today - start) / (1000*60*60*24));
-      if (diff % 3 === 0) shouldAdd = true;
-    }
-    if (ev.recurrencePattern === 'weekly' && today.getDay() === start.getDay()) shouldAdd = true;
+    const shouldAdd = matchesRecurrence(today, start, ev.recurrencePattern);
 
     if (shouldAdd) {
       const isDone = ev.completedDates && ev.completedDates.includes(todayDateStr);

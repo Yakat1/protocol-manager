@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react';
-import { saveStateLocal, loadStateLocal, getDefaultState } from './utils/storage';
+import { saveStateLocal, loadStateLocal, getDefaultState, mergeCloudWithLocalImages } from './utils/storage';
 import { exportCSV, exportBackup } from './utils/export';
 import { onUserChange, logoutUser, subscribeToLabState, saveLabState, getUserProfile, setUserProfile, getLabMemberRole, sendVerificationEmail, auth } from './utils/firebase';
 import { v4 as uuidv4 } from 'uuid';
@@ -78,49 +78,46 @@ export default function App() {
   // Determine active tabs based on role
   const visibleTabs = userRole === 'admin' ? [...TABS, ADMIN_TAB] : TABS;
 
+  // ── Immediate-save helper ──────────────────────────────────────────────────
+  // Persiste una actualización al servidor (y en caché local) sin esperar el
+  // debounce de autosave. Usado para eliminaciones y ediciones instantáneas.
+  const saveNow = useCallback((next) => {
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = null;
+    if (activeLabId && !isSuspended && user) {
+      saveStateLocal(next);
+      saveLabState(activeLabId, next, sessionIdRef.current, user.uid).catch(console.error);
+    }
+  }, [activeLabId, isSuspended, user]);
+
   // ── Slice updaters (estables vía useCallback + functional setState) ────────
   // Todos soportan { immediate: true } para guardado instantáneo (eliminaciones)
   const setInventory = useCallback((inventory, { immediate = false } = {}) => {
     isLocalUpdateRef.current = true;
     setState(prev => {
       const next = { ...prev, inventory };
-      if (immediate && activeLabId && !isSuspended && user) {
-        clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-        saveStateLocal(next);
-        saveLabState(activeLabId, next, sessionIdRef.current, user.uid).catch(console.error);
-      }
+      if (immediate) saveNow(next);
       return next;
     });
-  }, [activeLabId, isSuspended, user]);
+  }, [saveNow]);
 
   const setCultureProtocols = useCallback((cultureProtocols, { immediate = false } = {}) => {
     isLocalUpdateRef.current = true;
     setState(prev => {
       const next = { ...prev, cultureProtocols };
-      if (immediate && activeLabId && !isSuspended && user) {
-        clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-        saveStateLocal(next);
-        saveLabState(activeLabId, next, sessionIdRef.current, user.uid).catch(console.error);
-      }
+      if (immediate) saveNow(next);
       return next;
     });
-  }, [activeLabId, isSuspended, user]);
+  }, [saveNow]);
 
   const setBufferRecipes = useCallback((bufferRecipes, { immediate = false } = {}) => {
     isLocalUpdateRef.current = true;
     setState(prev => {
       const next = { ...prev, bufferRecipes };
-      if (immediate && activeLabId && !isSuspended && user) {
-        clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-        saveStateLocal(next);
-        saveLabState(activeLabId, next, sessionIdRef.current, user.uid).catch(console.error);
-      }
+      if (immediate) saveNow(next);
       return next;
     });
-  }, [activeLabId, isSuspended, user]);
+  }, [saveNow]);
 
   // Updater genérico para componentes que modifican múltiples slices
   // { immediate: true } guarda al servidor sin esperar debounce (usar para eliminaciones)
@@ -128,15 +125,10 @@ export default function App() {
     isLocalUpdateRef.current = true;
     setState(prev => {
       const next = { ...prev, ...partial };
-      if (immediate && activeLabId && !isSuspended && user) {
-        clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-        saveStateLocal(next);
-        saveLabState(activeLabId, next, sessionIdRef.current, user.uid).catch(console.error);
-      }
+      if (immediate) saveNow(next);
       return next;
     });
-  }, [activeLabId, isSuspended, user]);
+  }, [saveNow]);
 
   // 0) PWA install prompt
   useEffect(() => {
@@ -223,7 +215,7 @@ export default function App() {
         if (labState) {
           const localCache = await loadStateLocal();
           // Merge images from local cache
-          const merged = mergeImages(labState, localCache);
+          const merged = mergeCloudWithLocalImages(labState, localCache);
           setState(merged);
         } else {
           setState(getDefaultState());
@@ -260,17 +252,7 @@ export default function App() {
       }
 
       const remoteState = remoteData.state;
-      setState(prev => {
-        const mergedSubjects = (remoteState.subjects || []).map(rs => {
-          const local = (prev?.subjects || []).find(s => s.id === rs.id);
-          return local ? { ...rs, images: local.images || [] } : rs;
-        });
-        const mergedLogs = (remoteState.cultureLogs || []).map(rl => {
-          const local = (prev?.cultureLogs || []).find(l => l.id === rl.id);
-          return local ? { ...rl, images: local.images || [] } : rl;
-        });
-        return { ...remoteState, subjects: mergedSubjects, cultureLogs: mergedLogs };
-      });
+      setState(prev => mergeCloudWithLocalImages(remoteState, prev));
     });
 
     return () => { if (firestoreUnsubRef.current) firestoreUnsubRef.current(); };
@@ -602,17 +584,4 @@ export default function App() {
       {toast && <div className="toaster">{toast}</div>}
     </div>
   );
-}
-
-function mergeImages(cloudState, localState) {
-  if (!localState) return cloudState;
-  const mergedSubjects = (cloudState.subjects || []).map(cs => {
-    const ls = (localState.subjects || []).find(s => s.id === cs.id);
-    return ls ? { ...cs, images: ls.images || [] } : cs;
-  });
-  const mergedLogs = (cloudState.cultureLogs || []).map(cl => {
-    const ll = (localState.cultureLogs || []).find(l => l.id === cl.id);
-    return ll ? { ...cl, images: ll.images || [] } : cl;
-  });
-  return { ...cloudState, subjects: mergedSubjects, cultureLogs: mergedLogs };
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Beaker, FlaskConical, MinusCircle, ArrowRightLeft, FlaskRound, Plus, Trash2, Box, TestTubes } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { softDelete } from '../utils/softDelete';
 import './Calculator.css';
 
 // ── Conversion factor tables (ported from lab/calculations.py) ──────────────
@@ -225,7 +226,7 @@ export default function Calculator({ inventory: inventoryProp, setInventory, buf
     if (pendingDelete === id) {
       if (confirm('¿Estas seguro de que deseas eliminar esta receta? Esta acción no se puede deshacer.')) {
         setBufferRecipes(
-          bufferRecipes.map(r => r.id === id ? { ...r, deletedAt: new Date().toISOString(), deletedBy: user?.email || 'unknown' } : r),
+          softDelete(bufferRecipes, id, user),
           { immediate: true }
         );
       }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Trash2, Plus, Clock, X, RotateCcw } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { formatDuration } from '../utils/format';
 import './Timers.css';
 
 const DEFAULT_TIMEPOINTS = [
@@ -22,15 +23,6 @@ function loadTimers() {
 
 function saveTimers(timers) {
   localStorage.setItem(LS_KEY, JSON.stringify(timers));
-}
-
-function formatDuration(ms) {
-  if (ms < 0) ms = 0;
-  const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
 
 function TimerCard({ timer, removeTimer, updateTimer, now }) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getLabMembers, inviteMember, updateMemberRole, removeMember, subscribeToAuditLog, getLabInfo, writeAuditEntry } from '../utils/firebase';
+import { getLabMembers, inviteMember, updateMemberRole, removeMember, subscribeToAuditLog, getLabInfo } from '../utils/firebase';
+import { audit } from '../utils/audit';
 import { Shield, Users, FileText, Trash2, Download } from 'lucide-react';
 
 const ACTION_LABELS = {
@@ -51,7 +52,7 @@ export default function LabAdmin({ labId, user }) {
     setInviteLoading(true); setInviteMsg('');
     try {
       await inviteMember(labId, labInfo?.name || 'Lab', inviteEmail.trim(), inviteRole, user.displayName || user.email);
-      writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action: 'member_invited', target: inviteEmail.trim(), details: { role: inviteRole } }).catch(console.error);
+      audit(labId, user, 'member_invited', inviteEmail.trim(), { role: inviteRole });
       setInviteMsg(`✅ Invitación enviada a ${inviteEmail}`);
       setInviteEmail('');
     } catch (err) {
@@ -64,7 +65,7 @@ export default function LabAdmin({ labId, user }) {
     if (!confirm(`¿Cambiar rol a "${newRole === 'admin' ? 'Administrador' : 'Estudiante'}"?`)) return;
     try {
       await updateMemberRole(labId, memberId, newRole);
-      writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action: 'member_role_change', target: memberId, details: { newRole } }).catch(console.error);
+      audit(labId, user, 'member_role_change', memberId, { newRole });
       loadMembers();
     } catch (err) {
       alert('Error: ' + err.message);
@@ -76,7 +77,7 @@ export default function LabAdmin({ labId, user }) {
     if (!confirm(`¿Remover a "${member.displayName || member.email}" del laboratorio? Esta acción es irreversible.`)) return;
     try {
       await removeMember(labId, member.id);
-      writeAuditEntry(labId, { userId: user.uid, displayName: user.displayName || user.email, action: 'member_removed', target: member.displayName || member.email, details: {} }).catch(console.error);
+      audit(labId, user, 'member_removed', member.displayName || member.email, {});
       loadMembers();
     } catch (err) {
       alert('Error: ' + err.message);

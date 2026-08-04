@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Calendar as CalendarIcon, Clock, CheckCircle2, Circle, Microscope, Activity, Plus, Trash2, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { softDelete } from '../utils/softDelete';
+import { matchesRecurrence } from '../utils/recurrence';
 import './Scheduler.css';
 
 export default function Scheduler({ state, updateState, can }) {
@@ -38,20 +40,7 @@ export default function Scheduler({ state, updateState, can }) {
 
       while (current <= lookahead) {
         // Verificar regla de recurrencia
-        let shouldAdd = false;
-        
-        if (cage.recurrencePattern === 'daily') shouldAdd = true;
-        if (cage.recurrencePattern === 'every_2_days') {
-          const diff = Math.floor((current - start) / (1000*60*60*24));
-          if (diff % 2 === 0) shouldAdd = true;
-        }
-        if (cage.recurrencePattern === 'every_3_days') {
-          const diff = Math.floor((current - start) / (1000*60*60*24));
-          if (diff % 3 === 0) shouldAdd = true;
-        }
-        if (cage.recurrencePattern === 'weekly') {
-          if (current.getDay() === start.getDay()) shouldAdd = true;
-        }
+        const shouldAdd = matchesRecurrence(current, start, cage.recurrencePattern);
 
         if (shouldAdd) {
           events.push({
@@ -92,20 +81,7 @@ export default function Scheduler({ state, updateState, can }) {
       if (current < lookback) current = new Date(lookback);
 
       while (current <= lookahead) {
-        let shouldAdd = false;
-        
-        if (ev.recurrencePattern === 'daily') shouldAdd = true;
-        if (ev.recurrencePattern === 'weekdays') {
-          const dayOfWeek = current.getDay();
-          if (dayOfWeek >= 1 && dayOfWeek <= 5) shouldAdd = true; // Lun-Vie
-        }
-        if (ev.recurrencePattern === 'every_3_days') {
-          const diff = Math.floor((current - start) / (1000*60*60*24));
-          if (diff % 3 === 0) shouldAdd = true;
-        }
-        if (ev.recurrencePattern === 'weekly') {
-          if (current.getDay() === start.getDay()) shouldAdd = true;
-        }
+        const shouldAdd = matchesRecurrence(current, start, ev.recurrencePattern);
 
         if (shouldAdd) {
           const dStr = current.toISOString().split('T')[0];
@@ -238,7 +214,7 @@ export default function Scheduler({ state, updateState, can }) {
     const msg = ev.isRecurringInstance ? '¿Eliminar toda la serie de este evento recurrente?' : '¿Eliminar evento?';
     if (confirm(msg)) {
       updateState({
-        calendarEvents: (state?.calendarEvents || []).map(mEv => mEv.id === targetId ? { ...mEv, deletedAt: new Date().toISOString(), deletedBy: 'system' } : mEv)
+        calendarEvents: softDelete(state?.calendarEvents || [], targetId)
       }, { immediate: true });
     }
   };

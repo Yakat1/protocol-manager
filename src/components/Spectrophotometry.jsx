@@ -5,6 +5,7 @@ import {
   ComposedChart, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { linearRegression, calculateFactor, computeAverageAbs, processSpectroSamples, generateSpectroXLSX } from './AssayAnalysisEngine';
+import { softDelete } from '../utils/softDelete';
 import './Spectrophotometry.css';
 
 function downloadFile(blob, filename) {
@@ -293,7 +294,7 @@ export default function Spectrophotometry({ state, updateState, user, userRole }
   const handleDeleteTemplate = (id) => {
     if(confirm('¿Seguro que deseas eliminar esta plantilla oficial del laboratorio?')) {
       updateState({
-        spectroTemplates: (state?.spectroTemplates || []).map(t => t.id === id ? { ...t, deletedAt: new Date().toISOString(), deletedBy: user?.email || 'unknown' } : t)
+        spectroTemplates: softDelete(state?.spectroTemplates || [], id, user)
       }, { immediate: true });
     }
   };
