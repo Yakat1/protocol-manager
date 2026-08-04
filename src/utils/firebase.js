@@ -239,24 +239,30 @@ export function subscribeToLabState(labId, callback) {
 }
 
 // ─── Invitations (by email) ──────────────────────────────────────────────────
-// One doc per (lab, invitee email) at labs/{labId}/pendingInvites/{emailKey}.
+// One doc per (lab, invitee email) at labs/{labId}/pendingInvites/{randomId}.
 // The invitee inbox is a collection-group query on the `email` field (see getMyInvitations).
+// The invitee's doc id is carried into the member doc as `inviteId` so the Firestore
+// rules can validate membership via a get() path built from a function parameter.
 
 function encodeEmail(email) {
   return email.toLowerCase().replace(/[.@]/g, '_');
 }
 
 export async function inviteMember(labId, labName, email, role, invitedByName) {
-  const key = encodeEmail(email);
-  const ref = doc(db, 'labs', labId, 'pendingInvites', key);
-  const existing = await getDoc(ref);
+  const emailKey = encodeEmail(email);
+  const ref = doc(collection(db, 'labs', labId, 'pendingInvites'));
 
-  if (existing.exists()) {
+  const existing = await getDocs(query(
+    collection(db, 'labs', labId, 'pendingInvites'),
+    where('emailKey', '==', emailKey)
+  ));
+  if (!existing.empty) {
     throw new Error('Este usuario ya tiene una invitación pendiente para este laboratorio.');
   }
 
   await setDoc(ref, {
     email: email.toLowerCase(),
+    emailKey,
     labName,
     role,
     invitedBy: invitedByName,
@@ -273,15 +279,16 @@ export async function getMyInvitations(email) {
   const snap = await getDocs(q);
   const now = new Date().toISOString();
   return snap.docs
-    .map(d => ({ labId: d.ref.parent.parent.id, ...d.data() }))
+    .map(d => ({ id: d.id, labId: d.ref.parent.parent.id, ...d.data() }))
     .filter(inv => !inv.expiresAt || inv.expiresAt > now);
 }
 
 export async function acceptInvitation(user, invitation) {
-  const { labId, labName, role } = invitation;
+  const { id, labId, labName, role } = invitation;
 
   // Add as member (rules validate: matching pendingInvites doc + role equality)
   await setDoc(doc(db, 'labs', labId, 'members', user.uid), {
+    inviteId: id,
     role,
     displayName: user.displayName || user.email,
     email: user.email,
@@ -297,11 +304,16 @@ export async function acceptInvitation(user, invitation) {
   await setUserProfile(user.uid, { labs, activeLab: profile.activeLab || labId });
 
   // Consume the invite (the invitee may delete their own pendingInvites doc)
-  await deleteDoc(doc(db, 'labs', labId, 'pendingInvites', encodeEmail(user.email)));
+  await deleteDoc(doc(db, 'labs', labId, 'pendingInvites', id));
 }
 
 export async function declineInvitation(email, labId) {
-  await deleteDoc(doc(db, 'labs', labId, 'pendingInvites', encodeEmail(email)));
+  const q = query(
+    collection(db, 'labs', labId, 'pendingInvites'),
+    where('email', '==', email.toLowerCase())
+  );
+  const snap = await getDocs(q);
+  await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
 }
 
 // ─── Audit Log (immutable) ───────────────────────────────────────────────────

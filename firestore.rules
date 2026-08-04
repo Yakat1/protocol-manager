@@ -24,21 +24,18 @@ service cloud.firestore {
       return isMember(labId) && getMemberRole(labId) == 'admin';
     }
 
-    // Encodes an email the same way as encodeEmail() in src/utils/firebase.js
-    //   "user.name@gmail.com" -> "user_name_gmail_com"
-    // request.auth.token.email is already lowercase for email/password + Google.
-    function encodeEmail() {
-      let email = request.auth.token.email;
-      return email is string ? email.split('@').join('_').split('.').join('_') : '';
-    }
-
     // Membership gate: an unexpired pending invite for THIS user (token email) in this lab,
     // granting exactly the role requested in the member doc being created.
-    function hasValidInvitation(labId) {
+    // inviteId comes from request.resource.data so the get() path can use a function parameter.
+    function hasValidInvitation(labId, inviteId) {
       let email = request.auth.token.email;
-      if (!(email is string) || email.size() == 0) return false;
-      let inv = get(/databases/$(database)/documents/labs/$(labId)/pendingInvites/$(encodeEmail()));
-      return inv.exists
+      let inv = get(/databases/$(database)/documents/labs/$(labId)/pendingInvites/$(inviteId));
+      return email is string
+          && email.size() > 0
+          && inviteId is string
+          && inviteId.size() > 0
+          && inv.exists
+          && inv.data.email == email
           && inv.data.role == request.resource.data.role
           && inv.data.role in ['admin', 'student']
           && (!('expiresAt' in inv.data) || inv.data.expiresAt > request.time);
@@ -70,18 +67,20 @@ service cloud.firestore {
         allow read: if isMember(labId);
         allow create: if isOwner(memberId)
                    && request.resource.data.role in ['admin', 'student']
-                   && (hasValidInvitation(labId) || isLabCreator(labId));
+                   && (isLabCreator(labId)
+                       || ('inviteId' in request.resource.data
+                           && hasValidInvitation(labId, request.resource.data.inviteId)));
         allow update, delete: if isAdmin(labId);
       }
 
-      // Pending invitations: single doc per (lab, invitee email).
-      // Admins create/update; invitees may read their own doc (email field) even before
+      // Pending invitations: one doc per (lab, invitee email) with a random doc id.
+      // Admins create/update; invitees may read/delete their own doc (email field) even before
       // joining (needed for the collection-group inbox query); invitee declines or admin revokes.
-      match /pendingInvites/{emailKey} {
+      match /pendingInvites/{inviteId} {
         allow read: if isMember(labId)
                  || (isAuth() && resource.data.email == request.auth.token.email);
         allow create, update: if isAdmin(labId);
-        allow delete: if isAuth() && (emailKey == encodeEmail() || isAdmin(labId));
+        allow delete: if isAuth() && (isAdmin(labId) || resource.data.email == request.auth.token.email);
       }
 
       // Lab metadata (info + shared state)
