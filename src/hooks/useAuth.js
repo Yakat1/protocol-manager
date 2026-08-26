@@ -61,7 +61,7 @@ export function useAuth({ setState, showToast, firestoreUnsubRef }) {
           firestoreUnsubRef.current();
           firestoreUnsubRef.current = null;
         }
-        const loaded = await loadStateLocal();
+        const loaded = await loadStateLocal(null);
         setState(loaded || getDefaultState());
         setLabProfile(null);
         setActiveLabId(null);

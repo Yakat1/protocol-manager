@@ -9,6 +9,7 @@ import usePermissions from '../hooks/usePermissions';
 import { useAuth } from '../hooks/useAuth';
 import { useLabSync } from '../hooks/useLabSync';
 import { useAutoSave } from '../hooks/useAutoSave';
+import { useFlushOnExit } from '../hooks/useFlushOnExit';
 import { useInactivityLogout } from '../hooks/useInactivityLogout';
 
 export const TABS = [
@@ -112,33 +113,38 @@ export function LabProvider({ children }) {
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = null;
     if (activeLabId && !isSuspended && user) {
-      saveStateLocal(next);
+      saveStateLocal(next, activeLabId);
       saveLabState(activeLabId, next, sessionIdRef.current, user.uid).catch(console.error);
     }
   }, [activeLabId, isSuspended, user]);
 
   // ── Slice updaters (estables vía useCallback) ──────────────────────────────
-  // Todos soportan { immediate: true } para guardado instantáneo (eliminaciones)
+  // Todos soportan { immediate: true } para guardado instantáneo (eliminaciones).
+  // El guardado LOCAL es INMEDIATO en cada edición (durable); la nube se
+  // debouncea en useAutoSave y se flushea en useFlushOnExit.
   const setInventory = useCallback((inventory, { immediate = false } = {}) => {
     isLocalUpdateRef.current = true;
     const next = { ...stateRef.current, inventory };
     setState(next);
+    saveStateLocal(next, activeLabId).catch(() => {});
     if (immediate) saveNow(next);
-  }, [setState, saveNow]);
+  }, [setState, saveNow, activeLabId]);
 
   const setCultureProtocols = useCallback((cultureProtocols, { immediate = false } = {}) => {
     isLocalUpdateRef.current = true;
     const next = { ...stateRef.current, cultureProtocols };
     setState(next);
+    saveStateLocal(next, activeLabId).catch(() => {});
     if (immediate) saveNow(next);
-  }, [setState, saveNow]);
+  }, [setState, saveNow, activeLabId]);
 
   const setBufferRecipes = useCallback((bufferRecipes, { immediate = false } = {}) => {
     isLocalUpdateRef.current = true;
     const next = { ...stateRef.current, bufferRecipes };
     setState(next);
+    saveStateLocal(next, activeLabId).catch(() => {});
     if (immediate) saveNow(next);
-  }, [setState, saveNow]);
+  }, [setState, saveNow, activeLabId]);
 
   // Updater genérico para componentes que modifican múltiples slices
   // { immediate: true } guarda al servidor sin esperar debounce (usar para eliminaciones)
@@ -146,12 +152,14 @@ export function LabProvider({ children }) {
     isLocalUpdateRef.current = true;
     const next = { ...stateRef.current, ...partial };
     setState(next);
+    saveStateLocal(next, activeLabId).catch(() => {});
     if (immediate) saveNow(next);
-  }, [setState, saveNow]);
+  }, [setState, saveNow, activeLabId]);
 
   // ── Realtime sync + autosave + inactivity ─────────────────────────────────
   useLabSync({ activeLabId, user, setState, setIsSuspended, sessionIdRef, saveTimerRef, firestoreUnsubRef });
   useAutoSave({ state, activeLabId, isSuspended, user, saveTimerRef, isLocalUpdateRef, sessionIdRef });
+  useFlushOnExit({ stateRef, activeLabId, user, isSuspended, saveTimerRef, sessionIdRef });
 
   // 0) PWA install prompt
   useEffect(() => {
@@ -228,6 +236,7 @@ export function LabProvider({ children }) {
         if (json.protocolName && json.subjects) {
           isLocalUpdateRef.current = true;
           setState(json);
+          saveStateLocal(json, activeLabId).catch(() => {});
           setActiveSubjectId(null);
           showToast('Respaldo cargado');
         } else throw new Error("Format invalid");
@@ -235,12 +244,12 @@ export function LabProvider({ children }) {
     };
     reader.readAsText(file);
     e.target.value = '';
-  }, [setState, setActiveSubjectId, showToast]);
+  }, [setState, setActiveSubjectId, showToast, activeLabId]);
 
   const takeControl = useCallback(() => {
     sessionIdRef.current = uuidv4();
     setIsSuspended(false);
-    saveStateLocal(state);
+    saveStateLocal(state, activeLabId);
     if (activeLabId) {
       saveLabState(activeLabId, state, sessionIdRef.current, user.uid).catch(console.error);
     }

@@ -2,9 +2,19 @@
 // En modo .exe (Electron) → usa IndexedDB local
 // En modo PWA / Web → usa Firestore para sincronización en tiempo real
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// IndexedDB es SIEMPRE el caché local de primer nivel. Desde el multi-lab, el
+// estado local se guarda por laboratorio (clave `current_protocol:<labId>`) para
+// que cambiar de laboratorio NO sobrescriba (y pierda) las imágenes locales de
+// otro laboratorio. La clave legacy `current_protocol` se conserva para el modo
+// invitado y como fuente de una migración única hacia la clave del lab.
 
 export const DB_NAME = 'ProtocolAssistantDB';
 export const STORE_NAME = 'app_state';
+
+const LEGACY_KEY = 'current_protocol';
+const keyFor = (labId) => (labId ? `current_protocol:${labId}` : LEGACY_KEY);
+const migratedFlag = (labId) => `lims_migrated:${labId}`;
 
 // ─── IndexedDB (siempre disponible como caché local offline) ─────────────────
 
@@ -22,40 +32,71 @@ export function openDB() {
   });
 }
 
-export async function saveStateLocal(state) {
-  const db = await openDB();
+function requestToPromise(req) {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    store.put(state, 'current_protocol');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// Migraciones de forma del estado para compatibilidad con versiones previas.
+function normalizeState(result) {
+  if (!result) return null;
+  if (!result.inventory) result.inventory = [];
+  if (!result.cultureProtocols) result.cultureProtocols = [];
+  if (!result.cultureLogs) result.cultureLogs = [];
+  if (!result.cultures) result.cultures = [];
+  if (!result.settings) result.settings = { theme: 'dark' };
+  if (!result.bufferRecipes) result.bufferRecipes = [];
+  return result;
+}
+
+export async function saveStateLocal(state, labId) {
+  const db = await openDB();
+  const tx = db.transaction(STORE_NAME, 'readwrite');
+  const store = tx.objectStore(STORE_NAME);
+  store.put(state, keyFor(labId));
+  return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
-export async function loadStateLocal() {
+export async function loadStateLocal(labId) {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const store = tx.objectStore(STORE_NAME);
-    const request = store.get('current_protocol');
-    request.onsuccess = (e) => {
-      const result = e.target.result;
-      if (result) {
-        // Migración de datos para mantener compatibilidad con versiones anteriores
-        if (!result.inventory) result.inventory = [];
-        if (!result.cultureProtocols) result.cultureProtocols = [];
-        if (!result.cultureLogs) result.cultureLogs = [];
-        if (!result.cultures) result.cultures = [];
-        if (!result.settings) result.settings = { theme: 'dark' };
-        if (!result.bufferRecipes) result.bufferRecipes = [];
-        resolve(result);
-      } else {
-        resolve(getDefaultState());
+  const key = keyFor(labId);
+
+  let result = await requestToPromise(
+    db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(key)
+  );
+
+  // Migración única: copia el estado legacy (clave única) a la clave del lab.
+  // Solo para usuarios con lab; en modo invitado (labId null) no se migra para
+  // no contaminar un laboratorio con datos de invitado.
+  if (!result && labId) {
+    const flag = migratedFlag(labId);
+    const alreadyMigrated = await requestToPromise(
+      db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(flag)
+    );
+    if (!alreadyMigrated) {
+      const legacy = await requestToPromise(
+        db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(LEGACY_KEY)
+      );
+      if (legacy) {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.put(legacy, key);
+        store.put(true, flag);
+        await new Promise((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+        result = legacy;
       }
-    };
-    request.onerror = (e) => reject(e.target.error);
-  });
+    }
+  }
+
+  return normalizeState(result) || getDefaultState();
 }
 
 // ─── Merge de imágenes desde caché local ─────────────────────────────────────

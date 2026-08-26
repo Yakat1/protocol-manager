@@ -17,7 +17,7 @@ export function useLabSync({ activeLabId, user, setState, setIsSuspended, sessio
       try {
         const labState = await loadLabState(activeLabId);
         if (labState) {
-          const localCache = await loadStateLocal();
+          const localCache = await loadStateLocal(activeLabId);
           // Merge images from local cache
           setState(mergeCloudWithLocalImages(labState, localCache));
         } else {
@@ -25,7 +25,7 @@ export function useLabSync({ activeLabId, user, setState, setIsSuspended, sessio
         }
       } catch (err) {
         console.warn('Failed to load lab state, using local cache:', err);
-        const localCache = await loadStateLocal();
+        const localCache = await loadStateLocal(activeLabId);
         setState(localCache || getDefaultState());
       }
     };
