@@ -10,7 +10,12 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       VitePWA({
-        registerType: 'autoUpdate',
+        // 'prompt' en vez de 'autoUpdate': con autoUpdate + skipWaiting el SW nuevo
+        // se activa en silencio pero la página sigue con el index.html viejo, que
+        // referencia chunks ya borrados de gh-pages → 404 → ErrorBoundary.
+        // Con 'prompt' mostramos un aviso de actualización y recargamos con el
+        // SW nuevo, evitando el estado roto.
+        registerType: 'prompt',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icons/*.png'],
         manifest: {
           name: 'LIMS Protocol Manager',

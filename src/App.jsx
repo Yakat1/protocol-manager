@@ -9,6 +9,7 @@ import ProfileSettings from './components/ProfileSettings';
 import GLPPrintLayout from './components/GLPPrintLayout';
 import ErrorBoundary from './components/ErrorBoundary';
 import ConflictBanner from './components/ConflictBanner';
+import PWAUpdatePrompt from './components/PWAUpdatePrompt';
 import './index.css';
 
 // ── Lazy-loaded modules ──
@@ -217,6 +218,7 @@ function AppContent() {
         </Suspense>
       </div>
       {toast && <div className="toaster">{toast}</div>}
+      <PWAUpdatePrompt />
     </div>
   );
 }
