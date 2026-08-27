@@ -4,5 +4,6 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
-  saveBackup: (path, data) => ipcRenderer.invoke('fs:saveBackup', path, data)
+  saveBackup: (path, data) => ipcRenderer.invoke('fs:saveBackup', path, data),
+  saveDiagnostic: (data) => ipcRenderer.invoke('fs:saveDiagnostic', data)
 });

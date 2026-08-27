@@ -61,6 +61,19 @@ app.whenReady().then(() => {
       return { success: false, error: err.message };
     }
   });
+
+  // Diagnóstico temporal: guarda el .txt de error en el Escritorio automáticamente.
+  ipcMain.handle('fs:saveDiagnostic', async (event, data) => {
+    try {
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      const fullPath = path.join(app.getPath('desktop'), `LIMS_diagnostico_${ts}.txt`);
+      fs.writeFileSync(fullPath, data, 'utf-8');
+      return { success: true, path: fullPath };
+    } catch (err) {
+      console.error(err);
+      return { success: false, error: err.message };
+    }
+  });
   // --- FIN DE TÚNELES ---
 
   createWindow();

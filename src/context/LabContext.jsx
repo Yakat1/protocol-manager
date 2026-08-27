@@ -155,6 +155,11 @@ export function LabProvider({ children }) {
 
   const { can } = usePermissions(userRole);
 
+  // Contexto para el diagnóstico temporal de errores (utils/diagnostics.js).
+  useEffect(() => {
+    window.__LIMS_USER__ = user ? { uid: user.uid, email: user.email, labId: activeLabId } : null;
+  }, [user, activeLabId]);
+
   const visibleTabs = userRole === 'admin' ? [...TABS, ADMIN_TAB] : TABS;
 
   // Presencia en vivo: qué módulo estoy editando ahora (para el bloqueo por
