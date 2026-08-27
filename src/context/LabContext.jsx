@@ -41,11 +41,16 @@ export const ADMIN_TAB = { id: 'admin', label: 'Admin', icon: '🛡️' };
 // presencia; los demás usuarios ven ese módulo bloqueado (pero el resto de la
 // app sigue funcionando). Tabs no listados (timers, counter, charts, journal,
 // wbreport, admin, home) no editan slices compartidos → no bloquean nada.
+//
+// NOTA: el Cronograma (scheduler) NO se bloquea a propósito. Es una herramienta
+// de planeación compartida: los eventos se agregan de forma concurrente y los
+// choques reales de versión los resuelve ConflictBanner. Bloquear calendarEvents
+// por presencia hacía que tener Cultivos abierto "congelara" el calendario de
+// los demás (calendarEvents estaba en ambos tabs).
 export const TAB_SLICES = {
   subjects: ['subjects', 'variables', 'modelTypes'],
   plate: ['plateLayouts'],
-  culture: ['cultures', 'cultureLogs', 'cultureActions', 'calendarEvents'],
-  scheduler: ['calendarEvents'],
+  culture: ['cultures', 'cultureLogs', 'cultureActions'],
   inventory: ['inventory'],
   protocols: ['cultureProtocols', 'bufferRecipes'],
   calculator: ['inventory', 'bufferRecipes'],

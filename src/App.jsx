@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { LabProvider, useLab, TABS } from './context/LabContext';
+import { LabProvider, useLab } from './context/LabContext';
 import { sendVerificationEmail, auth } from './utils/firebase';
 import AuthGate from './components/AuthGate';
 import LabSetup from './components/LabSetup';
@@ -175,15 +175,10 @@ function AppContent() {
         <ProfileSettings />
       )}
       {lockedModule && (
-        <div style={{
-          position: 'sticky', top: 0, zIndex: 50,
-          background: 'rgba(245,158,11,0.14)', borderBottom: '1px solid rgba(245,158,11,0.45)',
-          color: '#fbbf24', padding: '10px 16px', fontSize: '0.85rem',
-          display: 'flex', alignItems: 'center', gap: '8px'
-        }}>
-          <span>🔒</span>
+        <div className="module-lock-chip" title="Módulo bloqueado">
+          <span style={{ flexShrink: 0, fontSize: '0.9rem' }}>🔒</span>
           <span>
-            <strong>{lockedModule.by}</strong> está editando este módulo ({TABS.find(t => t.id === activeTab)?.label || 'este módulo'}). Los cambios están desactivados aquí para evitar sobrescritura.
+            <strong>{lockedModule.by}</strong> está editando este módulo. Los cambios están desactivados aquí.
           </span>
         </div>
       )}

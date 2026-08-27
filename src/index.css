@@ -587,6 +587,30 @@ option {
   animation: slideUp 0.3s ease;
 }
 
+/* Aviso discreto de módulo bloqueado (esquina inferior izquierda).
+   Pequeño y no bloqueante: deja visible el resto de la pantalla para seguir
+   revisando archivos/cultivos mientras otro usuario edita un módulo. */
+.module-lock-chip {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 340px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  animation: slideUp 0.3s ease;
+}
+
 @keyframes slideUp {
   from { transform: translateY(100px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
