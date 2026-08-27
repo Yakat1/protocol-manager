@@ -50,9 +50,14 @@ export function useLabSync({
     // Subscribe to real-time
     if (firestoreUnsubRef.current) firestoreUnsubRef.current();
     firestoreUnsubRef.current = subscribeToLabState(activeLabId, (remoteData) => {
-      // Cross-tab suspension (mismo uid, distinta sesión)
+      // Cross-tab suspension: SOLO si el editor activo es OTRO usuario.
+      // NO comparar sessionId del mismo uid: con StrictMode + autosave + el doc
+      // de sesión reescrito en cada save (merge:false), el snapshot remoto puede
+      // llegar con un sessionId que no coincide con el ref local aunque sea la
+      // misma única pestaña → falsos positivos de "Sesión Suspendida" a cada rato.
       if (
-        remoteData.activeUserId === user.uid &&
+        remoteData.activeUserId &&
+        remoteData.activeUserId !== user.uid &&
         remoteData.sessionId &&
         remoteData.sessionId !== sessionIdRef.current
       ) {
