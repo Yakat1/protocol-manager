@@ -29,6 +29,7 @@ export function usePresence({ labId, user, presenceInfo }) {
   const [activeEditors, setActiveEditors] = useState([]);
   const lastTouchRef = useRef(0);
   const lastSlicesKeyRef = useRef('');
+  const lastListKeyRef = useRef('');
 
   useEffect(() => {
     if (!labId || !user) return;
@@ -55,7 +56,18 @@ export function usePresence({ labId, user, presenceInfo }) {
       const active = list.filter(
         (e) => e.uid !== user.uid && now - lastSeenTs(e) < TTL_MS
       );
-      setActiveEditors(active);
+      // GUARDA DE RENDER: no disparar setState si la lista visible no cambió.
+      // Cada snapshot (incluido el eco de NUESTRO propio heartbeat) llegaba con
+      // un array nuevo y re-renderizaba TODA la app cada 30s → presión de render
+      // que, en móvil, podía chocar con el montaje de un módulo lazy (Suspense)
+      // y producir "removeChild is not a child" en la fase de commit de React.
+      const key = active
+        .map((e) => `${e.uid}|${(e.activeSlices || []).join(',')}|${e.displayName || ''}`)
+        .join(';;');
+      if (key !== lastListKeyRef.current) {
+        lastListKeyRef.current = key;
+        setActiveEditors(active);
+      }
     });
     touch(true);
 

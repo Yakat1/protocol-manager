@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, Microscope, Image as ImageIcon, Archive, Clock, Search, Box, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, Microscope, Image as ImageIcon, Archive, Clock, Search, Box, ExternalLink, X } from 'lucide-react';
 import { compressImage } from '../utils/imageCompressor';
 import { audit } from '../utils/audit';
 import { softDelete } from '../utils/softDelete';

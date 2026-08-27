@@ -22,6 +22,13 @@ export default class ErrorBoundary extends Component {
     if (this.state.txt) downloadDiagnosticTxt(this.state.txt);
   };
 
+  handleRetry = () => {
+    // Reintenta renderizando de nuevo el subtree. Si el error fue transitorio
+    // (carrera de commits, red, etc.) se recupera sin recargar; si persiste, el
+    // boundary vuelve a atrapar el error y se muestra otra vez este mensaje.
+    this.setState({ hasError: false, savedPath: null, txt: '' });
+  };
+
   render() {
     if (this.state.hasError) {
       return (
@@ -31,7 +38,7 @@ export default class ErrorBoundary extends Component {
               <div style={{ fontSize: '3rem', marginBottom: '16px' }}>⚠️</div>
               <h2 style={{ marginBottom: '8px' }}>Algo salió mal</h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '20px' }}>
-                Ocurrió un error inesperado al cargar el módulo. Recarga la página para continuar.
+                Ocurrió un error inesperado al cargar el módulo. Reintenta o recarga la página para continuar.
               </p>
 
               {/* Diagnóstico temporal */}
@@ -57,6 +64,9 @@ export default class ErrorBoundary extends Component {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={this.handleDownload}>
                   📥 Descargar diagnóstico (.txt)
+                </button>
+                <button className="btn" style={{ width: '100%', justifyContent: 'center' }} onClick={this.handleRetry}>
+                  🔁 Reintentar
                 </button>
                 <button className="btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => window.location.reload()}>
                   🔄 Recargar
