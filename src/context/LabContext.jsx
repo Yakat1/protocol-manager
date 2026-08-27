@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { saveStateLocal, mergeCloudWithLocalImages } from '../utils/storage';
@@ -34,6 +34,47 @@ export const TABS = [
 ];
 
 export const ADMIN_TAB = { id: 'admin', label: 'Admin', icon: '🛡️' };
+
+// ── Bloqueo por módulo ───────────────────────────────────────────────────────
+// Mapea cada módulo (tab) a los slices de estado compartido que edita. Cuando
+// un usuario tiene un módulo abierto, reporta esos slices en su doc de
+// presencia; los demás usuarios ven ese módulo bloqueado (pero el resto de la
+// app sigue funcionando). Tabs no listados (timers, counter, charts, journal,
+// wbreport, admin, home) no editan slices compartidos → no bloquean nada.
+export const TAB_SLICES = {
+  subjects: ['subjects', 'variables', 'modelTypes'],
+  plate: ['plateLayouts'],
+  culture: ['cultures', 'cultureLogs', 'cultureActions', 'calendarEvents'],
+  scheduler: ['calendarEvents'],
+  inventory: ['inventory'],
+  protocols: ['cultureProtocols', 'bufferRecipes'],
+  calculator: ['inventory', 'bufferRecipes'],
+  spectro: ['spectroProtocols', 'spectroTemplates'],
+  western: ['subjects', 'variables'],
+};
+
+const SLICE_LABELS = {
+  subjects: 'Sujetos',
+  variables: 'Variables',
+  settings: 'Ajustes',
+  protocolName: 'Protocolo',
+  inventory: 'Inventario',
+  cultures: 'Cultivos',
+  cultureLogs: 'Bitácora de Cultivos',
+  cultureProtocols: 'Protocolos',
+  bufferRecipes: 'Recetas de Buffer',
+  cages: 'Jaulas',
+  calendarEvents: 'Cronograma',
+  cultureActions: 'Acciones de Cultivo',
+  plateLayouts: 'Microplaca',
+  modelTypes: 'Modelos',
+  spectroProtocols: 'Protocolos de Espectro',
+  spectroTemplates: 'Plantillas de Espectro',
+};
+
+export function sliceLabel(slice) {
+  return SLICE_LABELS[slice] || slice;
+}
 
 import { labStateReducer } from '../utils/labStateReducer';
 
@@ -74,7 +115,6 @@ export function LabProvider({ children }) {
   const [activeSubjectId, setActiveSubjectId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [isSuspended, setIsSuspended] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
 
   const sessionIdRef = useRef(uuidv4());
@@ -112,8 +152,61 @@ export function LabProvider({ children }) {
 
   const visibleTabs = userRole === 'admin' ? [...TABS, ADMIN_TAB] : TABS;
 
-  // Presencia en vivo (quién más está editando este lab)
-  const { activeEditors } = usePresence({ labId: activeLabId, user });
+  // Presencia en vivo: qué módulo estoy editando ahora (para el bloqueo por
+  // módulo). Solo cambia al navegar entre tabs, para no re-suscribir a cada render.
+  const presenceInfo = useMemo(
+    () => ({
+      slices: TAB_SLICES[activeTab] || [],
+      tab: activeTab,
+      sessionId: sessionIdRef.current,
+    }),
+    [activeTab]
+  );
+  const { activeEditors } = usePresence({ labId: activeLabId, user, presenceInfo });
+
+  // Slices bloqueados por OTROS usuarios: los slices que reportan en su doc de
+  // presencia (los del módulo que tienen abierto). El resto de la app sigue
+  // funcionando; solo esos módulos quedan en solo-lectura.
+  const lockedSlices = useMemo(() => {
+    const locked = {};
+    for (const editor of activeEditors) {
+      for (const s of editor.activeSlices || []) {
+        if (!locked[s]) locked[s] = { by: editor.displayName || 'Otro usuario', uid: editor.uid };
+      }
+    }
+    return locked;
+  }, [activeEditors]);
+  const lockedSlicesRef = useRef(lockedSlices);
+  lockedSlicesRef.current = lockedSlices;
+
+  // Helpers de bloqueo (estables vía ref, para usarlos en useCallback).
+  const isSliceLocked = useCallback((slice) => !!lockedSlicesRef.current[slice], []);
+  const isModuleLocked = useCallback((tabId) => {
+    const slices = TAB_SLICES[tabId] || [];
+    return slices.some((s) => lockedSlicesRef.current[s]);
+  }, []);
+
+  // Módulo actual bloqueado → { by, uid } para el banner de App.
+  const lockedModule = useMemo(() => {
+    const slices = TAB_SLICES[activeTab] || [];
+    for (const s of slices) {
+      const lock = lockedSlices[s];
+      if (lock) return lock;
+    }
+    return null;
+  }, [activeTab, lockedSlices]);
+
+  // Rechaza una edición si el slice está bloqueado por otro usuario.
+  const assertSlicesEditable = useCallback((partial) => {
+    for (const key of Object.keys(partial)) {
+      const lock = lockedSlicesRef.current[key];
+      if (lock) {
+        showToast(`🔒 ${lock.by} está editando ${sliceLabel(key)}. Este módulo está bloqueado para ti en este momento.`);
+        return false;
+      }
+    }
+    return true;
+  }, [showToast]);
 
   // ── Guardado en nube centralizado (versiones + conflictos) ────────────────
   const runCloudSave = useCallback((next) => {
@@ -149,55 +242,61 @@ export function LabProvider({ children }) {
   const saveNow = useCallback((next) => {
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = null;
-    if (activeLabId && !isSuspended && user) {
+    if (activeLabId && user) {
       saveStateLocal(next, activeLabId);
       runCloudSave(next);
     }
-  }, [activeLabId, isSuspended, user, runCloudSave]);
+  }, [activeLabId, user, runCloudSave]);
 
   // ── Slice updaters (estables vía useCallback) ──────────────────────────────
   // El guardado LOCAL es INMEDIATO en cada edición (durable); la nube se
-  // debouncea en useAutoSave y se flushea en useFlushOnExit.
+  // debouncea en useAutoSave y se flushea en useFlushOnExit. Si el slice que se
+  // intenta editar está bloqueado por OTRO usuario (presencia), la edición se
+  // rechaza con un aviso — sin suspender el resto de la app.
   const setInventory = useCallback((inventory, { immediate = false } = {}) => {
+    if (!assertSlicesEditable({ inventory })) return;
     isLocalUpdateRef.current = true;
     const next = { ...stateRef.current, inventory };
     setState(next);
     saveStateLocal(next, activeLabId).catch(() => {});
     if (immediate) saveNow(next);
-  }, [setState, saveNow, activeLabId]);
+  }, [setState, saveNow, activeLabId, assertSlicesEditable]);
 
   const setCultureProtocols = useCallback((cultureProtocols, { immediate = false } = {}) => {
+    if (!assertSlicesEditable({ cultureProtocols })) return;
     isLocalUpdateRef.current = true;
     const next = { ...stateRef.current, cultureProtocols };
     setState(next);
     saveStateLocal(next, activeLabId).catch(() => {});
     if (immediate) saveNow(next);
-  }, [setState, saveNow, activeLabId]);
+  }, [setState, saveNow, activeLabId, assertSlicesEditable]);
 
   const setBufferRecipes = useCallback((bufferRecipes, { immediate = false } = {}) => {
+    if (!assertSlicesEditable({ bufferRecipes })) return;
     isLocalUpdateRef.current = true;
     const next = { ...stateRef.current, bufferRecipes };
     setState(next);
     saveStateLocal(next, activeLabId).catch(() => {});
     if (immediate) saveNow(next);
-  }, [setState, saveNow, activeLabId]);
+  }, [setState, saveNow, activeLabId, assertSlicesEditable]);
 
   const updateState = useCallback((partial, { immediate = false } = {}) => {
+    if (!assertSlicesEditable(partial)) return;
     isLocalUpdateRef.current = true;
     const next = { ...stateRef.current, ...partial };
     setState(next);
     saveStateLocal(next, activeLabId).catch(() => {});
     if (immediate) saveNow(next);
-  }, [setState, saveNow, activeLabId]);
+  }, [setState, saveNow, activeLabId, assertSlicesEditable]);
 
   // ── Realtime sync + autosave + flush + inactivity + presence ──────────────
   useLabSync({
-    activeLabId, user, setState, setIsSuspended,
+    activeLabId, user, setState,
     sessionIdRef, saveTimerRef, firestoreUnsubRef,
     versionRef, remoteStateRef, baselineRef, pendingSlicesRef, stateRef,
   });
-  useAutoSave({ state, activeLabId, isSuspended, saveTimerRef, isLocalUpdateRef, onSave: runCloudSave });
-  useFlushOnExit({ stateRef, activeLabId, user, isSuspended, saveTimerRef, onFlush: runCloudSave });
+  useAutoSave({ state, stateRef, activeLabId, saveTimerRef, isLocalUpdateRef, onSave: runCloudSave });
+  useFlushOnExit({ stateRef, activeLabId, user, saveTimerRef, onFlush: runCloudSave });
 
   // 0) PWA install prompt
   useEffect(() => {
@@ -225,7 +324,7 @@ export function LabProvider({ children }) {
   const switchLab = useCallback(async (labId) => {
     if (labId === activeLabId) return;
     // Flush del save pendiente del lab ACTUAL antes de cambiarlo
-    if (stateRef.current && activeLabId && !isSuspended && user) {
+    if (stateRef.current && activeLabId && user) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
       runCloudSave(stateRef.current);
@@ -245,7 +344,7 @@ export function LabProvider({ children }) {
     } catch {
       showToast('No se pudo verificar el rol; revisa tu conexión.');
     }
-  }, [activeLabId, user, isSuspended, runCloudSave, setState, setUserRole, setActiveLabId, showToast]);
+  }, [activeLabId, user, runCloudSave, setState, setUserRole, setActiveLabId, showToast]);
 
   const handleLabReady = useCallback(async (profile) => {
     setLabProfile(profile);
@@ -289,15 +388,6 @@ export function LabProvider({ children }) {
     reader.readAsText(file);
     e.target.value = '';
   }, [setState, setActiveSubjectId, showToast, activeLabId]);
-
-  const takeControl = useCallback(() => {
-    sessionIdRef.current = uuidv4();
-    setIsSuspended(false);
-    saveStateLocal(state, activeLabId);
-    if (activeLabId) {
-      runCloudSave(state);
-    }
-  }, [activeLabId, state, runCloudSave]);
 
   // ── Resolución de conflicto (1.4) ─────────────────────────────────────────
   // Vista para el banner: qué cambió TÚ (local vs baseline) y qué cambió el
@@ -369,8 +459,6 @@ export function LabProvider({ children }) {
     setActiveSubjectId,
     activeTab,
     navigateTab,
-    isSuspended,
-    takeControl,
     toast,
     showToast,
     sidebarOpen,
@@ -379,7 +467,11 @@ export function LabProvider({ children }) {
     setShowProfileModal,
     deferredPrompt,
     handleInstallPWA,
-    // concurrencia
+    // concurrencia: bloqueo por módulo (en vez de suspensión global)
+    lockedSlices,
+    lockedModule,
+    isSliceLocked,
+    isModuleLocked,
     conflict,
     conflictView,
     resolveConflict,

@@ -15,6 +15,10 @@ export const STATE_SLICES = [
   'cultureProtocols',
   'bufferRecipes',
   'cages',
+  'calendarEvents',
+  'cultureActions',
+  'plateLayouts',
+  'modelTypes',
   'spectroProtocols',
   'spectroTemplates',
 ];
@@ -34,6 +38,10 @@ export const SLICE_DEFAULTS = {
   cultureProtocols: [],
   bufferRecipes: [],
   cages: [],
+  calendarEvents: [],
+  cultureActions: [],
+  plateLayouts: [],
+  modelTypes: [],
   spectroProtocols: [],
   spectroTemplates: [],
 };

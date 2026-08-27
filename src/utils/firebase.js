@@ -386,10 +386,14 @@ export function subscribeToLabState(labId, callback) {
 
 // ─── Presence (quién está editando el lab) ───────────────────────────────────
 
-export async function touchPresence(labId, user) {
+export async function touchPresence(labId, user, extra = {}) {
   await setDoc(doc(db, 'labs', labId, 'editors', user.uid), {
     displayName: user.displayName || user.email,
     lastSeen: serverTimestamp(),
+    // Qué módulo/slices está editando este usuario (para bloqueo por módulo)
+    activeSlices: Array.isArray(extra.activeSlices) ? extra.activeSlices : [],
+    tab: extra.tab || null,
+    sessionId: extra.sessionId || null,
   });
 }
 

@@ -20,6 +20,7 @@ export default function Sidebar() {
     deferredPrompt,
     handleInstallPWA,
     activeEditors,
+    isModuleLocked,
   } = useLab();
 
   const updateProtocolName = (e) => {
@@ -105,17 +106,22 @@ export default function Sidebar() {
             <div key={idx}>
               <span className="nav-group-label">{group.label}</span>
               <div className="sidebar-tabs">
-                {groupTabs.map(tab => (
-                  <button 
-                    key={tab.id}
-                    className={`sidebar-tab ${activeTab === tab.id ? 'active' : ''}`}
-                    onClick={() => openTab(tab.id)}
-                    title={tab.label}
-                  >
-                    <span className="sidebar-tab-icon">{tab.icon}</span>
-                    <span className="sidebar-tab-label">{tab.label}</span>
-                  </button>
-                ))}
+                {groupTabs.map(tab => {
+                  const locked = isModuleLocked(tab.id);
+                  return (
+                    <button
+                      key={tab.id}
+                      className={`sidebar-tab ${activeTab === tab.id ? 'active' : ''} ${locked ? 'locked' : ''}`}
+                      onClick={() => openTab(tab.id)}
+                      title={locked ? `${tab.label} (bloqueado por otro usuario)` : tab.label}
+                      style={locked ? { opacity: 0.75 } : undefined}
+                    >
+                      <span className="sidebar-tab-icon">{tab.icon}</span>
+                      <span className="sidebar-tab-label">{tab.label}</span>
+                      {locked && <span className="sidebar-tab-lock" title="Bloqueado">🔒</span>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           );

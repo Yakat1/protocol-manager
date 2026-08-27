@@ -13,12 +13,15 @@ import { STATE_SLICES } from '../utils/firestoreSync';
  *   remota" al resolver un conflicto).
  * - baselineRef guarda el último estado remoto ACEPTADO (para describir qué
  *   cambió en el banner de conflicto).
- * - Guardas: eco de sessionId, save pendiente y suspensión cross-tab.
+ * - Guardas: eco de sessionId y save pendiente.
  * - Merge por slice: los slices con edición local pendiente conservan el
  *   estado local; el resto toma la versión remota.
+ *
+ * NOTA: ya NO hay suspensión de sesión aquí. El bloqueo es POR MÓDULO (qué
+ * slices está editando otro usuario, vía presencia), manejado en LabContext.
  */
 export function useLabSync({
-  activeLabId, user, setState, setIsSuspended,
+  activeLabId, user, setState,
   sessionIdRef, saveTimerRef, firestoreUnsubRef,
   versionRef, remoteStateRef, baselineRef, pendingSlicesRef, stateRef,
 }) {
@@ -50,20 +53,6 @@ export function useLabSync({
     // Subscribe to real-time
     if (firestoreUnsubRef.current) firestoreUnsubRef.current();
     firestoreUnsubRef.current = subscribeToLabState(activeLabId, (remoteData) => {
-      // Cross-tab suspension: SOLO si el editor activo es OTRO usuario.
-      // NO comparar sessionId del mismo uid: con StrictMode + autosave + el doc
-      // de sesión reescrito en cada save (merge:false), el snapshot remoto puede
-      // llegar con un sessionId que no coincide con el ref local aunque sea la
-      // misma única pestaña → falsos positivos de "Sesión Suspendida" a cada rato.
-      if (
-        remoteData.activeUserId &&
-        remoteData.activeUserId !== user.uid &&
-        remoteData.sessionId &&
-        remoteData.sessionId !== sessionIdRef.current
-      ) {
-        setIsSuspended(true);
-      }
-
       // SIEMPRE trackear versiones remotas y estado remoto completo
       // (incluido el eco de nuestra propia sesión).
       versionRef.current = { ...versionRef.current, ...(remoteData.versions || {}) };
@@ -99,6 +88,6 @@ export function useLabSync({
     });
 
     return () => { if (firestoreUnsubRef.current) firestoreUnsubRef.current(); };
-  }, [activeLabId, user, setState, setIsSuspended, sessionIdRef, saveTimerRef, firestoreUnsubRef,
+  }, [activeLabId, user, setState, sessionIdRef, saveTimerRef, firestoreUnsubRef,
       versionRef, remoteStateRef, baselineRef, pendingSlicesRef, stateRef]);
 }

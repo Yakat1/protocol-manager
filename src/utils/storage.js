@@ -48,6 +48,11 @@ function normalizeState(result) {
   if (!result.cultures) result.cultures = [];
   if (!result.settings) result.settings = { theme: 'dark' };
   if (!result.bufferRecipes) result.bufferRecipes = [];
+  if (!result.cages) result.cages = [];
+  if (!result.calendarEvents) result.calendarEvents = [];
+  if (!result.cultureActions) result.cultureActions = [];
+  if (!result.plateLayouts) result.plateLayouts = [];
+  if (!result.modelTypes) result.modelTypes = [];
   return result;
 }
 
@@ -136,5 +141,10 @@ export function getDefaultState() {
       theme: 'dark'
     },
     bufferRecipes: [],
+    cages: [],
+    calendarEvents: [],
+    cultureActions: [],
+    plateLayouts: [],
+    modelTypes: [],
   };
 }

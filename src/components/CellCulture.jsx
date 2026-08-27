@@ -64,7 +64,7 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
     askUser('Nombre de la Placa o Línea (Ej. HUVEC P3)', '', (name) => {
       if (name) {
         const newC = { id: uuidv4(), cellLine: name, dateStarted: new Date().toISOString().split('T')[0], status: 'Activo' };
-        updateState({ cultures: [newC, ...cultures] });
+        updateState({ cultures: [newC, ...cultures] }, { immediate: true });
         setActiveCultureId(newC.id);
         audit(labId, user, 'culture_add', name, { note: 'Cultivo creado' });
       }
@@ -105,7 +105,7 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
       id: uuidv4(), cultureId: activeCultureId, date: new Date().toISOString().split('T')[0],
       passage: 1, action: 'Observación', protocolUsed: '', confluence: 50, observations: '', checkedMaterials: [], images: []
     };
-    updateState({ cultureLogs: [newLog, ...(state?.cultureLogs || [])] });
+    updateState({ cultureLogs: [newLog, ...(state?.cultureLogs || [])] }, { immediate: true });
     audit(labId, user, 'culture_log_add', culture?.cellLine || activeCultureId, { note: 'Evento de cultivo añadido' });
   };
   const updateLog = (id, field, value) => {
@@ -163,7 +163,7 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
       status: 'pending'
     };
     
-    updateState({ calendarEvents: [...(state.calendarEvents || []), newEvent] });
+    updateState({ calendarEvents: [...(state.calendarEvents || []), newEvent] }, { immediate: true });
     alert(`Tarea agendada exitosamente para el ${dateStr} en el Cronograma.`);
   };
   const handleImageUpload = async (e, logId) => {

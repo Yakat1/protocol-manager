@@ -92,4 +92,22 @@ describe('firestoreSync: counts & diffs', () => {
     expect(STATE_SLICES).toContain('subjects');
     expect(STATE_SLICES).toContain('spectroProtocols');
   });
+
+  it('keeps scheduler/culture/plate/model data as real slices (bug: agenda lost events)', () => {
+    const state = {
+      calendarEvents: [{ id: 'e1', title: 'Cambio de medio', date: '2026-09-01' }],
+      cultureActions: ['Descongelar'],
+      plateLayouts: [{ id: 'p1', name: 'Layout A' }],
+      modelTypes: [{ id: 'm1', name: 'Tratado' }],
+    };
+    const slices = splitState(state);
+    expect(slices.calendarEvents).toEqual(state.calendarEvents);
+    expect(slices.cultureActions).toEqual(state.cultureActions);
+    expect(slices.plateLayouts).toEqual(state.plateLayouts);
+    expect(slices.modelTypes).toEqual(state.modelTypes);
+
+    const reassembled = assembleState(slices);
+    expect(reassembled.calendarEvents).toEqual(state.calendarEvents);
+    expect(reassembled.plateLayouts).toEqual(state.plateLayouts);
+  });
 });

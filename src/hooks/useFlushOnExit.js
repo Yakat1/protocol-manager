@@ -12,7 +12,7 @@ import { saveStateLocal } from '../utils/storage';
  * el caso de cambiar de pestaña/app (con algo más de margen para el fetch de
  * nube, que el navegador puede suspender durante pagehide).
  */
-export function useFlushOnExit({ stateRef, activeLabId, user, isSuspended, saveTimerRef, onFlush }) {
+export function useFlushOnExit({ stateRef, activeLabId, user, saveTimerRef, onFlush }) {
   useEffect(() => {
     const flush = () => {
       const current = stateRef.current;
@@ -26,7 +26,7 @@ export function useFlushOnExit({ stateRef, activeLabId, user, isSuspended, saveT
       saveStateLocal(current, activeLabId).catch(() => {});
 
       // Guardado en nube best-effort.
-      if (activeLabId && !isSuspended && user && onFlush) {
+      if (activeLabId && user && onFlush) {
         onFlush(current);
       }
     };
@@ -41,5 +41,5 @@ export function useFlushOnExit({ stateRef, activeLabId, user, isSuspended, saveT
       window.removeEventListener('pagehide', flush);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [stateRef, activeLabId, user, isSuspended, saveTimerRef, onFlush]);
+  }, [stateRef, activeLabId, user, saveTimerRef, onFlush]);
 }

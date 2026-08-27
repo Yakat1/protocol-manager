@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { LabProvider, useLab } from './context/LabContext';
+import { LabProvider, useLab, TABS } from './context/LabContext';
 import { sendVerificationEmail, auth } from './utils/firebase';
 import AuthGate from './components/AuthGate';
 import LabSetup from './components/LabSetup';
@@ -47,8 +47,7 @@ function AppContent() {
     activeTab,
     activeSubjectId,
     setActiveSubjectId,
-    isSuspended,
-    takeControl,
+    lockedModule,
     toast,
     showToast,
     sidebarOpen,
@@ -175,25 +174,17 @@ function AppContent() {
       {showProfileModal && user && (
         <ProfileSettings />
       )}
-      {isSuspended && (
+      {lockedModule && (
         <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          color: 'white', textAlign: 'center', padding: '24px'
+          position: 'sticky', top: 0, zIndex: 50,
+          background: 'rgba(245,158,11,0.14)', borderBottom: '1px solid rgba(245,158,11,0.45)',
+          color: '#fbbf24', padding: '10px 16px', fontSize: '0.85rem',
+          display: 'flex', alignItems: 'center', gap: '8px'
         }}>
-          <div style={{ fontSize: '3rem', marginBottom: '16px' }}>⏸️</div>
-          <h2 style={{ marginBottom: '12px', color: '#f87171' }}>Sesión Suspendida</h2>
-          <p style={{ maxWidth: '400px', marginBottom: '24px', lineHeight: '1.5', color: '#9ca3af' }}>
-            Otra pestaña o dispositivo está modificando este protocolo actualmente.
-            Esta sesión ha sido pausada para evitar pérdida de datos por sobrescritura.
-          </p>
-          <button
-            style={{ padding: '10px 20px', fontSize: '1rem', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
-            onClick={takeControl}
-          >
-            Tomar el Control y Seguir Editando
-          </button>
+          <span>🔒</span>
+          <span>
+            <strong>{lockedModule.by}</strong> está editando este módulo ({TABS.find(t => t.id === activeTab)?.label || 'este módulo'}). Los cambios están desactivados aquí para evitar sobrescritura.
+          </span>
         </div>
       )}
       <ConflictBanner />
