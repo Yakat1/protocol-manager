@@ -50,7 +50,11 @@ export default function PersonalLog({ labId, user, can }) {
     if (!labId) return;
     unsubRef.current = subscribeToPersonalLogs(labId, setLogs);
     if (can?.viewAllLogs) {
-      getLabMembers(labId).then(setMembers);
+      // Carga defensiva: ante cualquier fallo, members se queda como [] y la
+      // app NO crashea con "Cannot read properties of undefined (reading 'map')".
+      getLabMembers(labId)
+        .then(list => setMembers(Array.isArray(list) ? list : []))
+        .catch(() => setMembers([]));
     }
     return () => { if (unsubRef.current) unsubRef.current(); };
   }, [labId]);
@@ -281,7 +285,7 @@ export default function PersonalLog({ labId, user, can }) {
           <select className="input-field" value={filterUser} onChange={e => setFilterUser(e.target.value)} style={{ width: '160px' }}>
             <option value="all">👥 Todos</option>
             <option value="mine">👤 Mis entradas</option>
-            {can?.viewAllLogs && members.map(m => (
+            {can?.viewAllLogs && (members || []).map(m => (
               <option key={m.id} value={m.id}>👤 {m.displayName || m.email}</option>
             ))}
           </select>
