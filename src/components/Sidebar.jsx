@@ -19,6 +19,7 @@ export default function Sidebar() {
     setShowProfileModal,
     deferredPrompt,
     handleInstallPWA,
+    activeEditors,
   } = useLab();
 
   const updateProtocolName = (e) => {
@@ -124,6 +125,32 @@ export default function Sidebar() {
 
 
       <div className="sidebar-footer">
+        {/* Presencia en vivo */}
+        {activeEditors.length > 0 && (
+          <div style={{
+            marginBottom: '8px', padding: '8px 10px', borderRadius: '8px',
+            background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)',
+            fontSize: '0.72rem', color: 'var(--text-secondary)',
+          }}>
+            <div style={{ fontWeight: 'bold', color: '#34d399', marginBottom: '4px', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              ● Editando ahora
+            </div>
+            {activeEditors.map((e) => (
+              <div key={e.uid} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                <span style={{
+                  width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0,
+                  background: '#3498db', color: 'white', fontSize: '0.6rem',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold',
+                }}>
+                  {(e.displayName || '?').trim().charAt(0).toUpperCase()}
+                </span>
+                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {e.displayName}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         {deferredPrompt && (
           <button className="btn btn-primary" style={{width: '100%', justifyContent: 'center', fontSize: '0.9rem', marginBottom: '8px'}} onClick={handleInstallPWA}>
              📱 Instalar App

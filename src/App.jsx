@@ -8,6 +8,7 @@ import Sidebar from './components/Sidebar';
 import ProfileSettings from './components/ProfileSettings';
 import GLPPrintLayout from './components/GLPPrintLayout';
 import ErrorBoundary from './components/ErrorBoundary';
+import ConflictBanner from './components/ConflictBanner';
 import './index.css';
 
 // ── Lazy-loaded modules ──
@@ -194,6 +195,7 @@ function AppContent() {
           </button>
         </div>
       )}
+      <ConflictBanner />
       <div className="mobile-topbar">
         <div className="mobile-topbar-title">🔬 {state?.protocolName || 'LIMS'}</div>
         <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} aria-label="Abrir menú">☰</button>

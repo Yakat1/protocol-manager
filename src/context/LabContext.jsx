@@ -2,15 +2,18 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { saveStateLocal } from '../utils/storage';
+import { saveStateLocal, mergeCloudWithLocalImages } from '../utils/storage';
 import { exportCSV, exportBackup } from '../utils/export';
 import { saveLabState, setUserProfile, getLabMemberRole } from '../utils/firebase';
+import { splitState, describeDeltas } from '../utils/firestoreSync';
 import usePermissions from '../hooks/usePermissions';
 import { useAuth } from '../hooks/useAuth';
 import { useLabSync } from '../hooks/useLabSync';
 import { useAutoSave } from '../hooks/useAutoSave';
 import { useFlushOnExit } from '../hooks/useFlushOnExit';
+import { usePresence } from '../hooks/usePresence';
 import { useInactivityLogout } from '../hooks/useInactivityLogout';
+import { audit } from '../utils/audit';
 
 export const TABS = [
   { id: 'home', label: 'Inicio', icon: '🏠' },
@@ -40,14 +43,19 @@ export function LabProvider({ children }) {
   const [state, dispatch] = useReducer(labStateReducer, null);
 
   // Espejo del último estado aplicado. Se sincroniza en cada render para que
-  // los updaters puedan calcular el "next" estado de forma síncrona (los
-  // writes con objectos actualizan el ref de inmediato; los writes con
-  // funciones quedan resueltos por el reducer en el siguiente render).
+  // los updaters puedan calcular el "next" estado de forma síncrona.
   const stateRef = useRef(null);
   stateRef.current = state;
 
-  // Acepta tanto objetos como updaters funcionales (estos últimos solo se
-  // usan en la suscripción de Firebase para fusionar el snapshot remoto).
+  // ── Concurrencia multi-usuario ─────────────────────────────────────────────
+  const versionRef = useRef({});            // slice -> última versión remota conocida
+  const remoteStateRef = useRef(null);      // estado remoto completo (para "cargar remoto")
+  const baselineRef = useRef(null);         // último estado remoto ACEPTADO (para diff del banner)
+  const pendingSlicesRef = useRef(new Set()); // slices con edición local pendiente de subir
+  const conflictRef = useRef(null);         // { slices } del conflicto activo
+  const [conflict, setConflict] = useState(null);
+
+  // Acepta tanto objetos como updaters funcionales.
   const setState = useCallback((updater) => {
     if (typeof updater === 'function') {
       dispatch({ type: 'FUNC', updater });
@@ -75,7 +83,6 @@ export function LabProvider({ children }) {
   const firestoreUnsubRef = useRef(null);
 
   // ── Navigation (HashRouter) ───────────────────────────────────────────────
-  // activeTab is derived from the URL so refresh/back-forward restore the tab.
   const location = useLocation();
   const navigate = useNavigate();
   const activeTab = location.pathname.slice(1) || 'home';
@@ -103,23 +110,52 @@ export function LabProvider({ children }) {
 
   const { can } = usePermissions(userRole);
 
-  // Determine active tabs based on role
   const visibleTabs = userRole === 'admin' ? [...TABS, ADMIN_TAB] : TABS;
 
+  // Presencia en vivo (quién más está editando este lab)
+  const { activeEditors } = usePresence({ labId: activeLabId, user });
+
+  // ── Guardado en nube centralizado (versiones + conflictos) ────────────────
+  const runCloudSave = useCallback((next) => {
+    if (!activeLabId || !user) return Promise.resolve({ status: 'ok', conflicts: [], versions: {} });
+    pendingSlicesRef.current = new Set(Object.keys(splitState(next)));
+    return saveLabState(activeLabId, next, {
+      sessionId: sessionIdRef.current,
+      userId: user.uid,
+      baseVersions: versionRef.current,
+    })
+      .then((res) => {
+        if (res.status === 'conflict') {
+          conflictRef.current = res;
+          setConflict({
+            slices: res.conflicts,
+            // El resto de slices SÍ se guardó; actualizar sus versiones.
+            savedVersions: res.versions,
+          });
+          versionRef.current = { ...versionRef.current, ...res.versions };
+        } else {
+          versionRef.current = { ...versionRef.current, ...res.versions };
+          pendingSlicesRef.current = new Set();
+        }
+        return res;
+      })
+      .catch((err) => {
+        console.error('Cloud save failed:', err);
+        return { status: 'ok', conflicts: [], versions: {} };
+      });
+  }, [activeLabId, user]);
+
   // ── Immediate-save helper ──────────────────────────────────────────────────
-  // Persiste una actualización al servidor (y en caché local) sin esperar el
-  // debounce de autosave. Usado para eliminaciones y ediciones instantáneas.
   const saveNow = useCallback((next) => {
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = null;
     if (activeLabId && !isSuspended && user) {
       saveStateLocal(next, activeLabId);
-      saveLabState(activeLabId, next, sessionIdRef.current, user.uid).catch(console.error);
+      runCloudSave(next);
     }
-  }, [activeLabId, isSuspended, user]);
+  }, [activeLabId, isSuspended, user, runCloudSave]);
 
   // ── Slice updaters (estables vía useCallback) ──────────────────────────────
-  // Todos soportan { immediate: true } para guardado instantáneo (eliminaciones).
   // El guardado LOCAL es INMEDIATO en cada edición (durable); la nube se
   // debouncea en useAutoSave y se flushea en useFlushOnExit.
   const setInventory = useCallback((inventory, { immediate = false } = {}) => {
@@ -146,8 +182,6 @@ export function LabProvider({ children }) {
     if (immediate) saveNow(next);
   }, [setState, saveNow, activeLabId]);
 
-  // Updater genérico para componentes que modifican múltiples slices
-  // { immediate: true } guarda al servidor sin esperar debounce (usar para eliminaciones)
   const updateState = useCallback((partial, { immediate = false } = {}) => {
     isLocalUpdateRef.current = true;
     const next = { ...stateRef.current, ...partial };
@@ -156,10 +190,14 @@ export function LabProvider({ children }) {
     if (immediate) saveNow(next);
   }, [setState, saveNow, activeLabId]);
 
-  // ── Realtime sync + autosave + inactivity ─────────────────────────────────
-  useLabSync({ activeLabId, user, setState, setIsSuspended, sessionIdRef, saveTimerRef, firestoreUnsubRef });
-  useAutoSave({ state, activeLabId, isSuspended, user, saveTimerRef, isLocalUpdateRef, sessionIdRef });
-  useFlushOnExit({ stateRef, activeLabId, user, isSuspended, saveTimerRef, sessionIdRef });
+  // ── Realtime sync + autosave + flush + inactivity + presence ──────────────
+  useLabSync({
+    activeLabId, user, setState, setIsSuspended,
+    sessionIdRef, saveTimerRef, firestoreUnsubRef,
+    versionRef, remoteStateRef, baselineRef, pendingSlicesRef, stateRef,
+  });
+  useAutoSave({ state, activeLabId, isSuspended, saveTimerRef, isLocalUpdateRef, onSave: runCloudSave });
+  useFlushOnExit({ stateRef, activeLabId, user, isSuspended, saveTimerRef, onFlush: runCloudSave });
 
   // 0) PWA install prompt
   useEffect(() => {
@@ -186,21 +224,28 @@ export function LabProvider({ children }) {
 
   const switchLab = useCallback(async (labId) => {
     if (labId === activeLabId) return;
-    // Read authoritative role from members BEFORE switching so a failure
-    // never leaves the lab half-switched (old role, new lab).
+    // Flush del save pendiente del lab ACTUAL antes de cambiarlo
+    if (stateRef.current && activeLabId && !isSuspended && user) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      runCloudSave(stateRef.current);
+    }
+    // Read authoritative role from members BEFORE switching
     try {
       const role = await getLabMemberRole(labId, user.uid);
       setState(null); // triggers loading state
+      pendingSlicesRef.current = new Set();
+      setConflict(null);
+      conflictRef.current = null;
       setActiveLabId(labId);
       setUserRole(role || 'student');
-      // Update user profile with active lab
       if (user?.uid) {
         setUserProfile(user.uid, { activeLab: labId }).catch(console.error);
       }
     } catch {
       showToast('No se pudo verificar el rol; revisa tu conexión.');
     }
-  }, [activeLabId, user, setState, setUserRole, setActiveLabId, showToast]);
+  }, [activeLabId, user, isSuspended, runCloudSave, setState, setUserRole, setActiveLabId, showToast]);
 
   const handleLabReady = useCallback(async (profile) => {
     setLabProfile(profile);
@@ -210,7 +255,6 @@ export function LabProvider({ children }) {
       const role = await getLabMemberRole(labId, user.uid);
       setUserRole(role || 'student');
     } catch {
-      // Fall back to the role cached in the user profile
       setUserRole(profile.labs?.find(l => l.labId === labId)?.role || 'student');
     }
     setNeedsLabSetup(false);
@@ -251,9 +295,53 @@ export function LabProvider({ children }) {
     setIsSuspended(false);
     saveStateLocal(state, activeLabId);
     if (activeLabId) {
-      saveLabState(activeLabId, state, sessionIdRef.current, user.uid).catch(console.error);
+      runCloudSave(state);
     }
-  }, [activeLabId, user, state]);
+  }, [activeLabId, state, runCloudSave]);
+
+  // ── Resolución de conflicto (1.4) ─────────────────────────────────────────
+  // Vista para el banner: qué cambió TÚ (local vs baseline) y qué cambió el
+  // equipo (remoto vs baseline).
+  const conflictView = useCallback(() => {
+    const base = baselineRef.current;
+    const local = stateRef.current;
+    const remote = remoteStateRef.current;
+    if (!conflictRef.current) return null;
+    return {
+      slices: conflictRef.current.slices,
+      yours: base && local ? describeDeltas(base, local) : [],
+      theirs: base && remote ? describeDeltas(base, remote) : [],
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conflict]);
+
+  const resolveConflict = useCallback(async (mode) => {
+    if (!activeLabId || !user) return;
+    const was = conflictRef.current;
+    conflictRef.current = null;
+    setConflict(null);
+    pendingSlicesRef.current = new Set();
+
+    if (mode === 'remote') {
+      // Cargar versión del equipo: descarta mis ediciones locales pendientes.
+      const remote = remoteStateRef.current;
+      if (remote) {
+        const merged = mergeCloudWithLocalImages(remote, stateRef.current);
+        setState(merged);
+        saveStateLocal(merged, activeLabId).catch(() => {});
+        baselineRef.current = remote;
+      }
+      audit(activeLabId, user, 'conflict_resolved', 'load_remote', { slices: was?.slices || [] });
+      showToast('Se cargó la versión del equipo.');
+    } else {
+      // Mantener lo mío: sobrescribir usando la versión remota más reciente
+      // como base (ya no habrá conflicto, se pisa el estado del otro).
+      await runCloudSave(stateRef.current);
+      saveStateLocal(stateRef.current, activeLabId).catch(() => {});
+      audit(activeLabId, user, 'conflict_resolved', 'keep_local', { slices: was?.slices || [] });
+      showToast('Tus cambios se guardaron por encima de los del equipo.');
+    }
+  }, [activeLabId, user, setState, runCloudSave, showToast]);
 
   const value = {
     // lab data + updaters
@@ -291,6 +379,11 @@ export function LabProvider({ children }) {
     setShowProfileModal,
     deferredPrompt,
     handleInstallPWA,
+    // concurrencia
+    conflict,
+    conflictView,
+    resolveConflict,
+    activeEditors,
     // handlers
     handleLogout,
     switchLab,

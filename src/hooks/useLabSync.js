@@ -1,25 +1,41 @@
 import { useEffect } from 'react';
 import { subscribeToLabState, loadLabState } from '../utils/firebase';
 import { loadStateLocal, getDefaultState, mergeCloudWithLocalImages } from '../utils/storage';
+import { STATE_SLICES } from '../utils/firestoreSync';
 
 /**
- * Subscribes to the active lab's realtime state.
- * Loads the initial snapshot (merging images from the local cache), then keeps
- * the subscription in sync: session-id echo guard, pending-save guard and
- * cross-tab suspension detection.
+ * Subscribes to the active lab's realtime state (per-slice docs).
+ *
+ * - Carga inicial del snapshot (fusionando imágenes del caché local).
+ * - Mantiene versionRef con la última versión remota de CADA slice (incluidos
+ *   los ecos propios, para que la siguiente edición base correctamente).
+ * - remoteStateRef guarda el estado remoto completo (para "cargar versión
+ *   remota" al resolver un conflicto).
+ * - baselineRef guarda el último estado remoto ACEPTADO (para describir qué
+ *   cambió en el banner de conflicto).
+ * - Guardas: eco de sessionId, save pendiente y suspensión cross-tab.
+ * - Merge por slice: los slices con edición local pendiente conservan el
+ *   estado local; el resto toma la versión remota.
  */
-export function useLabSync({ activeLabId, user, setState, setIsSuspended, sessionIdRef, saveTimerRef, firestoreUnsubRef }) {
+export function useLabSync({
+  activeLabId, user, setState, setIsSuspended,
+  sessionIdRef, saveTimerRef, firestoreUnsubRef,
+  versionRef, remoteStateRef, baselineRef, pendingSlicesRef, stateRef,
+}) {
   useEffect(() => {
     if (!activeLabId || !user) return;
 
     // Load initial state from lab
     const loadLabData = async () => {
       try {
-        const labState = await loadLabState(activeLabId);
-        if (labState) {
+        const loaded = await loadLabState(activeLabId);
+        if (loaded.state) {
+          versionRef.current = loaded.versions || {};
+          remoteStateRef.current = loaded.state;
+          baselineRef.current = loaded.state;
           const localCache = await loadStateLocal(activeLabId);
           // Merge images from local cache
-          setState(mergeCloudWithLocalImages(labState, localCache));
+          setState(mergeCloudWithLocalImages(loaded.state, localCache));
         } else {
           setState(getDefaultState());
         }
@@ -34,6 +50,7 @@ export function useLabSync({ activeLabId, user, setState, setIsSuspended, sessio
     // Subscribe to real-time
     if (firestoreUnsubRef.current) firestoreUnsubRef.current();
     firestoreUnsubRef.current = subscribeToLabState(activeLabId, (remoteData) => {
+      // Cross-tab suspension (mismo uid, distinta sesión)
       if (
         remoteData.activeUserId === user.uid &&
         remoteData.sessionId &&
@@ -42,21 +59,41 @@ export function useLabSync({ activeLabId, user, setState, setIsSuspended, sessio
         setIsSuspended(true);
       }
 
+      // SIEMPRE trackear versiones remotas y estado remoto completo
+      // (incluido el eco de nuestra propia sesión).
+      versionRef.current = { ...versionRef.current, ...(remoteData.versions || {}) };
+      remoteStateRef.current = remoteData.state;
+
       // Ignorar ecos de nuestra propia sesión
       if (remoteData.sessionId === sessionIdRef.current) {
         return;
       }
 
       // Si hay un guardado local pendiente, no sobrescribir el estado local.
-      // Cuando el save local se ejecute y su echo regrese, será ignorado por
-      // el filtro de sessionId, y el SIGUIENTE snapshot remoto sí se aplicará.
       if (saveTimerRef.current) {
         return;
       }
 
-      setState(prev => mergeCloudWithLocalImages(remoteData.state, prev));
+      // Merge por slice: los slices con edición local pendiente conservan el
+      // estado local; el resto toma la versión remota.
+      const pending = pendingSlicesRef.current;
+      if (pending && pending.size > 0) {
+        const merged = { ...remoteData.state };
+        for (const s of STATE_SLICES) {
+          if (pending.has(s) && stateRef.current?.[s] !== undefined) {
+            merged[s] = stateRef.current[s];
+          }
+        }
+        baselineRef.current = remoteData.state;
+        setState((prev) => mergeCloudWithLocalImages(merged, prev));
+        return;
+      }
+
+      baselineRef.current = remoteData.state;
+      setState((prev) => mergeCloudWithLocalImages(remoteData.state, prev));
     });
 
     return () => { if (firestoreUnsubRef.current) firestoreUnsubRef.current(); };
-  }, [activeLabId, user, setState, setIsSuspended, sessionIdRef, saveTimerRef, firestoreUnsubRef]);
+  }, [activeLabId, user, setState, setIsSuspended, sessionIdRef, saveTimerRef, firestoreUnsubRef,
+      versionRef, remoteStateRef, baselineRef, pendingSlicesRef, stateRef]);
 }

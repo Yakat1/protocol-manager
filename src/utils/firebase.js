@@ -14,6 +14,9 @@ import {
 } from 'firebase/auth';
 import { 
   getFirestore, 
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   doc, 
   setDoc, 
   getDoc,
@@ -27,8 +30,10 @@ import {
   orderBy,
   limit,
   where,
-  serverTimestamp
+  serverTimestamp,
+  runTransaction
 } from 'firebase/firestore';
+import { splitState, assembleState, STATE_SLICES } from './firestoreSync';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -42,7 +47,23 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// ─── Firestore con persistencia offline durable ──────────────────────────────
+// persistentLocalCache + persistentMultipleTabManager: la cola offline deja de
+// ser solo-memoria (sobrevive al cierre de pestaña) y el multi-tab funciona
+// (la app ya suspende sesiones cross-tab). Si la persistencia no está
+// disponible (incógnito restringido, etc.) se degrada a getFirestore.
+let db;
+try {
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  });
+} catch (err) {
+  console.warn('Persistent offline cache unavailable, falling back to default Firestore:', err);
+  db = getFirestore(app);
+}
+export { db };
+
 export const googleProvider = new GoogleAuthProvider();
 
 // ─── Auth Helpers ────────────────────────────────────────────────────────────
@@ -189,52 +210,192 @@ export async function removeMember(labId, userId) {
   }
 }
 
-// ─── Lab State (shared data) ─────────────────────────────────────────────────
+// ─── Lab State (shared data, per-slice documents) ────────────────────────────
+// El estado se guarda como UN documento por slice en labs/{labId}/meta/<slice>
+// con { data, version, updatedAt }. Esto permite detección de conflicto por
+// slice (dos usuarios editando slices distintos ya no chocan) y escrituras
+// transaccionales con versión monotónica.
+//
+// labs/{labId}/meta/state conserva SOLO metadatos de sesión (sessionId,
+// activeUserId) y, durante la migración, el blob legacy `state` (para poder
+// seguir leyendo laboratorios creados antes de este cambio).
 
-export async function saveLabState(labId, state, sessionId = null, userId = null) {
-  const stateWithoutImages = {
-    ...state,
-    subjects: state.subjects?.map(s => ({ ...s, images: [] })) || [],
-    cultureLogs: state.cultureLogs?.map(l => ({ ...l, images: [] })) || [],
-  };
-  const ref = doc(db, 'labs', labId, 'meta', 'state');
-  await setDoc(ref, { 
-    state: JSON.stringify(stateWithoutImages),
+const sessionRef = (labId) => doc(db, 'labs', labId, 'meta', 'state');
+const sliceRef = (labId, name) => doc(db, 'labs', labId, 'meta', name);
+
+const safeParse = (s) => {
+  try { return JSON.parse(s); } catch { return null; }
+};
+
+// Escribe UN slice dentro de una transacción con chequeo de versión.
+// Si la transacción no está disponible (offline/transitorio) cae a un setDoc
+// incondicional, que SÍ queda en la cola persistente offline.
+async function writeOneSlice(labId, name, data, base, conflicts, versions) {
+  const ref = sliceRef(labId, name);
+  try {
+    const res = await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const remoteVersion = snap.exists() ? (snap.data().version || 0) : 0;
+      if (base != null && remoteVersion !== base) {
+        return { conflict: true, remoteVersion };
+      }
+      tx.set(ref, { data, version: remoteVersion + 1, updatedAt: serverTimestamp() });
+      return { conflict: false, version: remoteVersion + 1 };
+    });
+    if (res.conflict) conflicts.push(name);
+    else versions[name] = res.version;
+    return !res.conflict;
+  } catch (err) {
+    // Offline o transitorio: escribir incondicionalmente (cola persistente).
+    console.warn('Transaction unavailable for slice "' + name + '", falling back to queued write:', err?.message);
+    const nextVersion = base != null ? base + 1 : 1;
+    await setDoc(ref, { data, version: nextVersion, updatedAt: serverTimestamp() });
+    versions[name] = nextVersion;
+    return true;
+  }
+}
+
+/**
+ * Guarda el estado completo como documentos por slice.
+ *
+ * @param {string} labId
+ * @param {object} state Estado completo (las imágenes se despojan aquí).
+ * @param {object} [opts]
+ * @param {string|null} [opts.sessionId]
+ * @param {string|null} [opts.userId]
+ * @param {object|null} [opts.baseVersions] Mapa slice → versión sobre la que
+ *   se basó la edición local. null ⇒ escritura incondicional (sin detección).
+ * @returns {Promise<{status:'ok'|'conflict', conflicts:string[], versions:object}>}
+ */
+export async function saveLabState(labId, state, opts = {}) {
+  const { sessionId = null, userId = null, baseVersions = null } = opts;
+  const slices = splitState(state);
+  const conflicts = [];
+  const versions = {};
+
+  await Promise.all(
+    Object.entries(slices).map(([name, data]) =>
+      writeOneSlice(labId, name, data, baseVersions?.[name] ?? null, conflicts, versions)
+    )
+  );
+
+  // Metadatos de sesión (ligeros) + limpieza del blob legacy ya migrado.
+  await setDoc(sessionRef(labId), {
     sessionId,
     activeUserId: userId,
-    updatedAt: new Date().toISOString()
-  }, { merge: true });
+    updatedAt: serverTimestamp(),
+  }, { merge: false });
+
+  return {
+    status: conflicts.length ? 'conflict' : 'ok',
+    conflicts,
+    versions,
+  };
 }
 
 export async function loadLabState(labId) {
-  const ref = doc(db, 'labs', labId, 'meta', 'state');
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    try {
-      return JSON.parse(snap.data().state);
-    } catch (err) {
-      console.warn('Error parsing lab state for', labId, err);
-      return null;
-    }
+  const sessionSnap = await getDoc(sessionRef(labId));
+  const session = sessionSnap.exists() ? sessionSnap.data() : {};
+  const versions = {};
+  const slices = {};
+
+  // Blob legacy (estado completo en el doc de sesión, pre-slices).
+  const legacy = session.state ? safeParse(session.state) : null;
+  if (legacy) {
+    Object.assign(slices, splitState(legacy));
+  } else {
+    await Promise.all(STATE_SLICES.map(async (name) => {
+      const snap = await getDoc(sliceRef(labId, name));
+      if (snap.exists()) {
+        slices[name] = snap.data().data;
+        versions[name] = snap.data().version || 0;
+      }
+    }));
   }
-  return null;
+
+  return {
+    state: assembleState(slices),
+    versions,
+    sessionId: session.sessionId || null,
+    activeUserId: session.activeUserId || null,
+  };
 }
 
 export function subscribeToLabState(labId, callback) {
-  const ref = doc(db, 'labs', labId, 'meta', 'state');
-  return onSnapshot(ref, (snap) => {
-    if (snap.exists()) {
-      const data = snap.data();
-      try {
-        callback({ 
-          state: JSON.parse(data.state), 
-          sessionId: data.sessionId,
-          activeUserId: data.activeUserId
-        });
-      } catch (e) {
-        console.error('Error parsing lab state:', e);
+  const unsubs = [];
+  const assembled = {};      // slice -> snapshot data
+  const base = {};           // slice -> legacy blob value (solo migración)
+  let session = {};
+  let firstSnapshots = 0;
+  const TOTAL = STATE_SLICES.length + 1; // slices + doc de sesión
+  let ready = false;
+
+  const maybeEmit = () => {
+    if (!ready) return;
+    const dataMap = {};
+    const versions = {};
+    for (const name of STATE_SLICES) {
+      if (assembled[name] != null) {
+        dataMap[name] = assembled[name].data;
+        versions[name] = assembled[name].version || 0;
+      } else if (base[name] !== undefined) {
+        dataMap[name] = base[name];
       }
     }
+    callback({
+      state: assembleState(dataMap),
+      versions,
+      sessionId: session.sessionId || null,
+      activeUserId: session.activeUserId || null,
+    });
+  };
+
+  const first = () => {
+    firstSnapshots += 1;
+    if (firstSnapshots >= TOTAL) {
+      ready = true;
+      maybeEmit();
+    }
+  };
+
+  // Doc de sesión (sessionId/activeUserId + blob legacy en migración)
+  unsubs.push(onSnapshot(sessionRef(labId), (snap) => {
+    session = snap.exists() ? snap.data() : {};
+    if (session.state) {
+      const parsed = safeParse(session.state) || {};
+      for (const name of STATE_SLICES) base[name] = parsed[name];
+    } else {
+      for (const name of STATE_SLICES) delete base[name];
+    }
+    first();
+    maybeEmit();
+  }));
+
+  // Un snapshot por slice
+  for (const name of STATE_SLICES) {
+    unsubs.push(onSnapshot(sliceRef(labId, name), (snap) => {
+      if (snap.exists()) assembled[name] = snap.data();
+      else delete assembled[name];
+      first();
+      maybeEmit();
+    }));
+  }
+
+  return () => unsubs.forEach((u) => u());
+}
+
+// ─── Presence (quién está editando el lab) ───────────────────────────────────
+
+export async function touchPresence(labId, user) {
+  await setDoc(doc(db, 'labs', labId, 'editors', user.uid), {
+    displayName: user.displayName || user.email,
+    lastSeen: serverTimestamp(),
+  });
+}
+
+export function subscribeToPresence(labId, callback) {
+  return onSnapshot(collection(db, 'labs', labId, 'editors'), (snap) => {
+    callback(snap.docs.map((d) => ({ uid: d.id, ...d.data() })));
   });
 }
 
@@ -266,6 +427,7 @@ export async function inviteMember(labId, labName, email, role, invitedByName) {
     labName,
     role,
     invitedBy: invitedByName,
+    invitedByUid: auth.currentUser?.uid || null,
     createdAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   });

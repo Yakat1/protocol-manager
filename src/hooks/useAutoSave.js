@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { saveLabState } from '../utils/firebase';
 
 /**
  * Auto-save debounce (5s). Only schedules a save when the change originated
@@ -7,10 +6,11 @@ import { saveLabState } from '../utils/firebase';
  * are ignored so they never schedule redundant writes.
  *
  * El guardado LOCAL (IndexedDB) ya es inmediato en los updaters de LabContext;
- * aquí solo se persiste a la nube con debounce. El flush final ante cierre lo
+ * aquí solo se persiste a la nube con debounce, delegando en `onSave` (que
+ * maneja versiones/conflictos en el contexto). El flush final ante cierre lo
  * maneja useFlushOnExit.
  */
-export function useAutoSave({ state, activeLabId, isSuspended, user, saveTimerRef, isLocalUpdateRef, sessionIdRef }) {
+export function useAutoSave({ state, activeLabId, isSuspended, saveTimerRef, isLocalUpdateRef, onSave }) {
   useEffect(() => {
     if (!state) return;
 
@@ -26,10 +26,10 @@ export function useAutoSave({ state, activeLabId, isSuspended, user, saveTimerRe
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null; // Limpiar ref para que snapshots remotos puedan fluir
-      if (!isSuspended && activeLabId) {
-        saveLabState(activeLabId, state, sessionIdRef.current, user.uid).catch(console.error);
+      if (!isSuspended && activeLabId && onSave) {
+        onSave(state);
       }
     }, 5000);
     return () => clearTimeout(saveTimerRef.current);
-  }, [state, activeLabId, isSuspended, user, saveTimerRef, isLocalUpdateRef, sessionIdRef]);
+  }, [state, activeLabId, isSuspended, saveTimerRef, isLocalUpdateRef, onSave]);
 }
