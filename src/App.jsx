@@ -48,6 +48,8 @@ function AppContent() {
     activeSubjectId,
     setActiveSubjectId,
     lockedModule,
+    lockedCultures,
+    isCultureLocked,
     toast,
     showToast,
     sidebarOpen,
@@ -160,7 +162,7 @@ function AppContent() {
       <Route path="/wbreport" element={<WBReport />} />
       <Route path="/inventory" element={<Inventory inventory={state.inventory} setInventory={setInventory} can={can} user={user} labId={activeLabId} />} />
       <Route path="/protocols" element={<ProtocolsManager protocols={state.cultureProtocols} inventory={state.inventory} bufferRecipes={state.bufferRecipes} setCultureProtocols={setCultureProtocols} can={can} user={user} labId={activeLabId} />} />
-      <Route path="/culture" element={<CellCulture state={state} updateState={updateState} can={can} user={user} labId={activeLabId} />} />
+      <Route path="/culture" element={<CellCulture state={state} updateState={updateState} can={can} user={user} labId={activeLabId} lockedCultures={lockedCultures} isCultureLocked={isCultureLocked} />} />
       <Route path="/scheduler" element={<Scheduler state={state} updateState={updateState} can={can} />} />
       <Route path="/journal" element={<PersonalLog labId={activeLabId} user={user} can={can} />} />
       <Route path="/spectro" element={<Spectrophotometry />} />

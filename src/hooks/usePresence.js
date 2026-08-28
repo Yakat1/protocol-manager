@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { touchPresence, subscribeToPresence } from '../utils/firebase';
 
 const TTL_MS = 60_000;          // un editor se considera "activo" 60s tras su último heartbeat
@@ -16,39 +16,69 @@ function lastSeenTs(e) {
 /**
  * Presencia en vivo: escribe un heartbeat en labs/{labId}/editors/{uid} al
  * detectar actividad (y periódicamente) y expone los editores activos de otros
- * usuarios (con TTL). Es la base del indicador "X está editando" y del bloqueo
- * por módulo: cada usuario reporta en su doc de presencia los slices que está
- * editando (los de su módulo activo), y los demás usan esa info para bloquear
- * SOLO esos módulos (no toda la sesión).
+ * usuarios (con TTL). Es la base del indicador "X está editando", del bloqueo
+ * por módulo (activeSlices) y del bloqueo POR CULTIVO (editCultures).
  *
- * `presenceInfo` = { slices: string[], tab: string }. Se fuerza un heartbeat
- * inmediato cuando cambian los slices (p. ej. al cambiar de módulo) para que el
- * bloqueo se libere/active sin esperar el debounce de 30s.
+ * `editCulturesRef` es un ref a un mapa { cultureId: timestamp } de los cultivos
+ * que ESTE usuario ha editado recientemente. Se incluye en el heartbeat, y los
+ * demás usuarios lo usan para bloquear SOLO esos cultivos (no el módulo entero).
+ *
+ * `forceTouch()` fuerza una escritura inmediata de presencia (p. ej. cuando el
+ * usuario acaba de editar un cultivo, para que el candado se propague ya).
  */
-export function usePresence({ labId, user, presenceInfo }) {
+export function usePresence({ labId, user, presenceInfo, editCulturesRef }) {
   const [activeEditors, setActiveEditors] = useState([]);
   const lastTouchRef = useRef(0);
   const lastSlicesKeyRef = useRef('');
   const lastListKeyRef = useRef('');
 
+  // Refs estables para que `touch`/`forceTouch` no dependan de valores en render.
+  // Se actualizan en un effect (no durante el render) para cumplir la regla
+  // react-hooks/refs.
+  const labIdRef = useRef(labId);
+  const userRef = useRef(user);
+  const infoRef = useRef(presenceInfo);
+  const editRef = useRef(editCulturesRef);
+  useEffect(() => {
+    labIdRef.current = labId;
+    userRef.current = user;
+    infoRef.current = presenceInfo;
+    editRef.current = editCulturesRef;
+  });
+
+  const recentCultures = () => {
+    const map = editRef.current?.current;
+    if (!map) return [];
+    const now = Date.now();
+    return Object.entries(map)
+      .filter(([, ts]) => now - ts < TTL_MS)
+      .map(([id]) => id);
+  };
+
+  const touch = useCallback((force = false) => {
+    const labId = labIdRef.current;
+    const user = userRef.current;
+    if (!labId || !user) return;
+    const info = infoRef.current || {};
+    const slices = info.slices || [];
+    const slicesKey = [...slices].sort().join(',');
+    const slicesChanged = slicesKey !== lastSlicesKeyRef.current;
+    const debounced = Date.now() - lastTouchRef.current < HEARTBEAT_DEBOUNCE_MS;
+    if (!force && debounced && !slicesChanged) return;
+    lastTouchRef.current = Date.now();
+    lastSlicesKeyRef.current = slicesKey;
+    touchPresence(labId, user, {
+      activeSlices: slices,
+      tab: info.tab || null,
+      sessionId: info.sessionId || null,
+      editCultures: recentCultures(),
+    }).catch(() => {});
+  }, []);
+
+  const forceTouch = useCallback(() => touch(true), [touch]);
+
   useEffect(() => {
     if (!labId || !user) return;
-
-    const slices = presenceInfo?.slices || [];
-    const slicesKey = [...slices].sort().join(',');
-
-    const touch = (force = false) => {
-      const slicesChanged = slicesKey !== lastSlicesKeyRef.current;
-      const debounced = Date.now() - lastTouchRef.current < HEARTBEAT_DEBOUNCE_MS;
-      if (!force && debounced && !slicesChanged) return;
-      lastTouchRef.current = Date.now();
-      lastSlicesKeyRef.current = slicesKey;
-      touchPresence(labId, user, {
-        activeSlices: slices,
-        tab: presenceInfo?.tab || null,
-        sessionId: presenceInfo?.sessionId || null,
-      }).catch(() => {});
-    };
 
     // Filtro TTL dentro del callback de suscripción (no en render).
     const unsub = subscribeToPresence(labId, (list) => {
@@ -56,13 +86,10 @@ export function usePresence({ labId, user, presenceInfo }) {
       const active = list.filter(
         (e) => e.uid !== user.uid && now - lastSeenTs(e) < TTL_MS
       );
-      // GUARDA DE RENDER: no disparar setState si la lista visible no cambió.
-      // Cada snapshot (incluido el eco de NUESTRO propio heartbeat) llegaba con
-      // un array nuevo y re-renderizaba TODA la app cada 30s → presión de render
-      // que, en móvil, podía chocar con el montaje de un módulo lazy (Suspense)
-      // y producir "removeChild is not a child" en la fase de commit de React.
+      // GUARDA DE RENDER: no disparar setState si la lista visible no cambió
+      // (incluye editCultures para que el candado por cultivo reaccione).
       const key = active
-        .map((e) => `${e.uid}|${(e.activeSlices || []).join(',')}|${e.displayName || ''}`)
+        .map((e) => `${e.uid}|${(e.activeSlices || []).join(',')}|${(e.editCultures || []).join(',')}|${e.displayName || ''}`)
         .join(';;');
       if (key !== lastListKeyRef.current) {
         lastListKeyRef.current = key;
@@ -80,7 +107,7 @@ export function usePresence({ labId, user, presenceInfo }) {
       clearInterval(interval);
       unsub();
     };
-  }, [labId, user, presenceInfo]);
+  }, [labId, user, touch]);
 
-  return { activeEditors };
+  return { activeEditors, forceTouch };
 }

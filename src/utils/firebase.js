@@ -394,6 +394,8 @@ export async function touchPresence(labId, user, extra = {}) {
     activeSlices: Array.isArray(extra.activeSlices) ? extra.activeSlices : [],
     tab: extra.tab || null,
     sessionId: extra.sessionId || null,
+    // Qué cultivos ha editado recientemente (para bloqueo POR CULTIVO)
+    editCultures: Array.isArray(extra.editCultures) ? extra.editCultures : [],
   });
 }
 

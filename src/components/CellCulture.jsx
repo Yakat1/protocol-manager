@@ -9,10 +9,15 @@ import './CellCulture.css';
 
 const DEFAULT_ACTIONS = ['Descongelar', 'Pasaje / Split', 'Congelar', 'Cambio de Medio', 'Adición de Tratamiento', 'Observación'];
 
-export default function CellCulture({ state, updateState, can, user, labId }) {
+export default function CellCulture({ state, updateState, can, user, labId, lockedCultures, isCultureLocked }) {
   const [activeCultureId, setActiveCultureId] = useState(null);
   const [printMode, setPrintMode] = useState(null);
   const [customPrompt, setCustomPrompt] = useState(null);
+
+  // Bloqueo POR CULTIVO: solo el cultivo que otro usuario está editando queda
+  // bloqueado; el resto de cultivos del módulo siguen editables.
+  const isLocked = (id) => !!(isCultureLocked && isCultureLocked(id));
+  const lockOwner = (id) => (lockedCultures && lockedCultures[id]?.by) || 'Otro usuario';
 
   const askUser = (message, defaultValue, onConfirm) => {
     setCustomPrompt({ message, defaultValue, onConfirm });
@@ -64,23 +69,25 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
     askUser('Nombre de la Placa o Línea (Ej. HUVEC P3)', '', (name) => {
       if (name) {
         const newC = { id: uuidv4(), cellLine: name, dateStarted: new Date().toISOString().split('T')[0], status: 'Activo' };
-        updateState({ cultures: [newC, ...cultures] }, { immediate: true });
+        updateState({ cultures: [newC, ...cultures] }, { immediate: true, editCulture: newC.id });
         setActiveCultureId(newC.id);
         audit(labId, user, 'culture_add', name, { note: 'Cultivo creado' });
       }
     });
   };
   const toggleCultureStatus = (id) => {
-    updateState({ cultures: cultures.map(c => c.id === id ? { ...c, status: c.status === 'Activo' ? 'Archivado' : 'Activo' } : c) });
+    if (isLocked(id)) return alert(`🔒 ${lockOwner(id)} está editando este cultivo. Solo este cultivo está bloqueado; los demás siguen editables.`);
+    updateState({ cultures: cultures.map(c => c.id === id ? { ...c, status: c.status === 'Activo' ? 'Archivado' : 'Activo' } : c) }, { editCulture: id });
   };
   const removeCulture = (id) => {
     if (can && !can.deleteCulture) return;
+    if (isLocked(id)) return alert(`🔒 ${lockOwner(id)} está editando este cultivo. Solo este cultivo está bloqueado; los demás siguen editables.`);
     const culture = cultures.find(c => c.id === id);
     if (confirm('¿Eliminar cultivo y toda su cronología? Esta acción es irreversible.')) {
       updateState({
         cultures: softDelete(state?.cultures || [], id, user),
         cultureLogs: (state?.cultureLogs || []).map(l => l.cultureId === id ? { ...l, deletedAt: new Date().toISOString(), deletedBy: user?.email || 'system' } : l)
-      }, { immediate: true });
+      }, { immediate: true, editCulture: id });
       if (activeCultureId === id) setActiveCultureId(null);
       audit(labId, user, 'culture_delete', culture?.cellLine || id, { note: 'Soft delete' });
     }
@@ -100,18 +107,23 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
   // == Lógica de Timeline (Logs) ==
   const addLogToActive = () => {
     if (!activeCultureId) return alert('Selecciona o crea un cultivo activo.');
+    if (isLocked(activeCultureId)) return alert(`🔒 ${lockOwner(activeCultureId)} está editando este cultivo. Solo este cultivo está bloqueado; los demás siguen editables.`);
     const culture = cultures.find(c => c.id === activeCultureId);
     const newLog = {
       id: uuidv4(), cultureId: activeCultureId, date: new Date().toISOString().split('T')[0],
       passage: 1, action: 'Observación', protocolUsed: '', confluence: 50, observations: '', checkedMaterials: [], images: []
     };
-    updateState({ cultureLogs: [newLog, ...(state?.cultureLogs || [])] }, { immediate: true });
+    updateState({ cultureLogs: [newLog, ...(state?.cultureLogs || [])] }, { immediate: true, editCulture: activeCultureId });
     audit(labId, user, 'culture_log_add', culture?.cellLine || activeCultureId, { note: 'Evento de cultivo añadido' });
   };
   const updateLog = (id, field, value) => {
-    updateState({ cultureLogs: (state?.cultureLogs || []).map(l => l.id === id ? { ...l, [field]: value } : l) });
+    const cid = logs.find(l => l.id === id)?.cultureId;
+    if (!cid || isLocked(cid)) return;
+    updateState({ cultureLogs: (state?.cultureLogs || []).map(l => l.id === id ? { ...l, [field]: value } : l) }, { editCulture: cid });
   };
   const toggleLogMaterial = (logId, materialId) => {
+    const cid = logs.find(l => l.id === logId)?.cultureId;
+    if (!cid || isLocked(cid)) return;
     updateState({
       cultureLogs: (state?.cultureLogs || []).map(l => {
         if (l.id === logId) {
@@ -120,7 +132,7 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
         }
         return l;
       })
-    });
+    }, { editCulture: cid });
   };
   const handleActionChange = (logId, value) => {
     if (value === 'ADD_NEW') {
@@ -138,10 +150,11 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
     if (can && !can.deleteCultureLog) return;
     const log = logs.find(l => l.id === id);
     const culture = cultures.find(c => c.id === log?.cultureId);
+    if (log?.cultureId && isLocked(log.cultureId)) return alert(`🔒 ${lockOwner(log.cultureId)} está editando este cultivo. Solo este cultivo está bloqueado; los demás siguen editables.`);
     if (confirm('¿Eliminar este evento de la línea de tiempo?')) {
       updateState({
         cultureLogs: softDelete(state?.cultureLogs || [], id, user)
-      }, { immediate: true });
+      }, { immediate: true, editCulture: log?.cultureId });
       audit(labId, user, 'culture_log_delete', culture?.cellLine || 'Evento', { note: 'Soft delete' });
     }
   };
@@ -169,6 +182,8 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
   const handleImageUpload = async (e, logId) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
+    const cid = logs.find(l => l.id === logId)?.cultureId;
+    if (!cid || isLocked(cid)) return;
     
     try {
       const compressedImages = await Promise.all(
@@ -179,7 +194,7 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
         cultureLogs: (state?.cultureLogs || []).map(l => 
           l.id === logId ? { ...l, images: [...(l.images || []), ...compressedImages] } : l
         )
-      });
+      }, { editCulture: cid });
     } catch (err) {
       console.error("Error comprimiendo imagen:", err);
       alert("Ocurrió un error al intentar optimizar la foto. Revisa que sea el formato correcto.");
@@ -188,13 +203,15 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
     e.target.value = '';
   };
   const removeImage = (logId, imgIndex) => {
+    const cid = logs.find(l => l.id === logId)?.cultureId;
+    if (cid && isLocked(cid)) return alert(`🔒 ${lockOwner(cid)} está editando este cultivo. Solo este cultivo está bloqueado; los demás siguen editables.`);
     updateState({ cultureLogs: logs.map(l => {
       if (l.id === logId) {
         const newImgs = [...l.images]; newImgs.splice(imgIndex, 1);
         return { ...l, images: newImgs };
       }
       return l;
-    })}, { immediate: true });
+    })}, { immediate: true, editCulture: cid });
   };
 
   return (
@@ -225,19 +242,33 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
           </div>
           
           <div className="culture-list">
-            {cultures.map(c => (
-              <div 
-                key={c.id} 
-                className={`culture-list-item ${activeCultureId === c.id ? 'active' : ''} ${c.status === 'Archivado' ? 'archived' : ''}`}
-                onClick={() => setActiveCultureId(c.id)}
-              >
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '6px'}}>
-                  <span className="culture-list-name" onDoubleClick={() => askUser("Renombrar cultivo:", c.cellLine, (nn) => { if(nn) updateState({ cultures: cultures.map(cc=>cc.id===c.id?{...cc, cellLine:nn}:cc)}) })}>{c.cellLine}</span>
-                  <span className={`culture-status-badge ${c.status.toLowerCase()}`}>{c.status}</span>
+            {cultures.map(c => {
+              const locked = isLocked(c.id);
+              return (
+                <div 
+                  key={c.id} 
+                  className={`culture-list-item ${activeCultureId === c.id ? 'active' : ''} ${c.status === 'Archivado' ? 'archived' : ''} ${locked ? 'locked' : ''}`}
+                  onClick={() => setActiveCultureId(c.id)}
+                  title={locked ? `🔒 ${lockOwner(c.id)} está editando este cultivo` : c.cellLine}
+                >
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '6px'}}>
+                    <span className="culture-list-name" onDoubleClick={() => {
+                      if (locked) return alert(`🔒 ${lockOwner(c.id)} está editando este cultivo. Solo este cultivo está bloqueado; los demás siguen editables.`);
+                      askUser("Renombrar cultivo:", c.cellLine, (nn) => { if(nn) updateState({ cultures: cultures.map(cc=>cc.id===c.id?{...cc, cellLine:nn}:cc)}, { editCulture: c.id }) });
+                    }}>
+                      {locked ? '🔒 ' : ''}{c.cellLine}
+                    </span>
+                    <span className={`culture-status-badge ${c.status.toLowerCase()}`}>{c.status}</span>
+                  </div>
+                  <div style={{fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px'}}>Inicio: {c.dateStarted}</div>
+                  {locked && (
+                    <div style={{fontSize: '0.72rem', color: '#fbbf24', marginTop: '4px'}}>
+                      🔒 Bloqueado por {lockOwner(c.id)}
+                    </div>
+                  )}
                 </div>
-                <div style={{fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px'}}>Inicio: {c.dateStarted}</div>
-              </div>
-            ))}
+              );
+            })}
             {cultures.length === 0 && <div className="empty-mini">No hay cultivos. Añade uno con el botón +.</div>}
           </div>
         </div>
@@ -246,25 +277,28 @@ export default function CellCulture({ state, updateState, can, user, labId }) {
         <div className="culture-timeline-view">
           {(printMode === 'all' ? cultures : cultures.filter(c => c.id === activeCultureId)).map(activeCulture => {
             const currentActiveLogs = logs.filter(l => l.cultureId === activeCulture.id).sort((a,b) => new Date(b.date) - new Date(a.date));
+            const locked = isLocked(activeCulture.id);
             return (
             <div key={activeCulture.id} className="culture-print-section">
               <div className="timeline-header">
                 <div>
-                  <h3>Línea de Tiempo: <span style={{color:'var(--accent)'}}>{activeCulture.cellLine}</span></h3>
+                  <h3>Línea de Tiempo: <span style={{color:'var(--accent)'}}>{activeCulture.cellLine}</span>
+                    {locked && <span style={{color:'#fbbf24', fontSize:'0.85rem', marginLeft:'8px'}}>🔒 {lockOwner(activeCulture.id)} está editando este cultivo</span>}
+                  </h3>
                   <div className="no-print" style={{display:'flex', gap:'12px', marginTop:'8px', fontSize: '0.85rem'}}>
-                    <button className="btn-text" onClick={() => toggleCultureStatus(activeCulture.id)}>
+                    <button className="btn-text" disabled={locked} style={locked ? {opacity: 0.5, cursor: 'not-allowed'} : undefined} onClick={() => toggleCultureStatus(activeCulture.id)}>
                       {activeCulture.status === 'Activo' ? <><Archive size={14}/> Archivar Cultivo</> : <><Clock size={14}/> Reactivar</>}
                     </button>
                     <button className="btn-text" style={{color: 'var(--accent)'}} onClick={() => convertToSubject(activeCulture)}>
                       <ExternalLink size={14}/> Exportar Muestra
                     </button>
-                    <button className="btn-text" style={{color: 'var(--danger)'}} onClick={() => removeCulture(activeCulture.id)}>
+                    <button className="btn-text" disabled={locked} style={locked ? {color: 'var(--danger)', opacity: 0.5, cursor: 'not-allowed'} : {color: 'var(--danger)'}} onClick={() => removeCulture(activeCulture.id)}>
                       <Trash2 size={14}/> Eliminar Todo
                     </button>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button className="btn btn-primary no-print" onClick={addLogToActive} style={{background: 'var(--success)', border: 'none', color: '#fff'}}>
+                  <button className="btn btn-primary no-print" disabled={locked} style={locked ? {background: 'var(--success)', border: 'none', color: '#fff', opacity: 0.5, cursor: 'not-allowed'} : {background: 'var(--success)', border: 'none', color: '#fff'}} onClick={addLogToActive}>
                     <Plus size={16} /> Registrar Pasado
                   </button>
                   <button className="btn no-print" onClick={scheduleFutureAction} style={{background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent)', border: '1px solid var(--accent)'}}>

@@ -62,6 +62,15 @@
   opacity: 0.5;
 }
 
+.culture-list-item.locked {
+  border-color: rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.culture-list-item.locked .culture-list-name {
+  color: #fbbf24;
+}
+
 .culture-list-header {
   display: flex;
   justify-content: space-between;

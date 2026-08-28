@@ -47,10 +47,15 @@ export const ADMIN_TAB = { id: 'admin', label: 'Admin', icon: '🛡️' };
 // choques reales de versión los resuelve ConflictBanner. Bloquear calendarEvents
 // por presencia hacía que tener Cultivos abierto "congelara" el calendario de
 // los demás (calendarEvents estaba en ambos tabs).
+//
+// NOTA 2: el módulo de Cultivos tampoco se bloquea como pestaña. El candado es
+// POR CULTIVO: cada usuario reporta (vía editCultures en presencia) el/los
+// cultivos que ha editado en los últimos 60s, y SOLO esos quedan bloqueados
+// para los demás. El resto de cultivos del mismo módulo siguen editables.
 export const TAB_SLICES = {
   subjects: ['subjects', 'variables', 'modelTypes'],
   plate: ['plateLayouts'],
-  culture: ['cultures', 'cultureLogs', 'cultureActions'],
+  culture: [], // bloqueo por cultivo vía editCultures, no por pestaña
   inventory: ['inventory'],
   protocols: ['cultureProtocols', 'bufferRecipes'],
   calculator: ['inventory', 'bufferRecipes'],
@@ -79,6 +84,54 @@ const SLICE_LABELS = {
 
 export function sliceLabel(slice) {
   return SLICE_LABELS[slice] || slice;
+}
+
+// ── Bloqueo POR CULTIVO: helpers puros ───────────────────────────────────────
+// Detectan qué ids de cultivo cambiaron entre el estado previo y el nuevo
+// (para rechazar ediciones SOLO sobre cultivos bloqueados por otro usuario).
+
+function keyedMap(arr) {
+  const m = new Map();
+  for (const item of Array.isArray(arr) ? arr : []) {
+    if (item && item.id !== undefined) m.set(item.id, JSON.stringify(item));
+  }
+  return m;
+}
+
+/** Ids de cultivo añadidos, eliminados o modificados entre dos arrays. */
+export function changedCultureIds(prev, next) {
+  const pm = keyedMap(prev);
+  const nm = keyedMap(next);
+  const ids = new Set();
+  for (const [id, s] of nm) {
+    if (!pm.has(id) || pm.get(id) !== s) ids.add(id);
+  }
+  for (const id of pm.keys()) {
+    if (!nm.has(id)) ids.add(id);
+  }
+  return [...ids];
+}
+
+/** Ids de cultivo cuyos logs cambiaron (añadidos/eliminados/modificados). */
+export function changedCulturesFromLogs(prevLogs, nextLogs) {
+  const pm = keyedMap(prevLogs);
+  const nm = keyedMap(nextLogs);
+  const ids = new Set();
+  const prevArr = Array.isArray(prevLogs) ? prevLogs : [];
+  const nextArr = Array.isArray(nextLogs) ? nextLogs : [];
+  for (const [id, s] of nm) {
+    if (!pm.has(id) || pm.get(id) !== s) {
+      const cid = nextArr.find((l) => l && l.id === id)?.cultureId;
+      if (cid) ids.add(cid);
+    }
+  }
+  for (const id of pm.keys()) {
+    if (!nm.has(id)) {
+      const cid = prevArr.find((l) => l && l.id === id)?.cultureId;
+      if (cid) ids.add(cid);
+    }
+  }
+  return [...ids];
 }
 
 import { labStateReducer } from '../utils/labStateReducer';
@@ -172,7 +225,11 @@ export function LabProvider({ children }) {
     }),
     [activeTab]
   );
-  const { activeEditors } = usePresence({ labId: activeLabId, user, presenceInfo });
+  // Cultivos que ESTE usuario ha editado en los últimos 60s (bloqueo por cultivo).
+  const editCulturesRef = useRef({}); // cultureId -> timestamp
+  const { activeEditors, forceTouch } = usePresence({
+    labId: activeLabId, user, presenceInfo, editCulturesRef,
+  });
 
   // Slices bloqueados por OTROS usuarios: los slices que reportan en su doc de
   // presencia (los del módulo que tienen abierto). El resto de la app sigue
@@ -208,7 +265,28 @@ export function LabProvider({ children }) {
 
   // Rechaza una edición si el slice está bloqueado por otro usuario.
   const assertSlicesEditable = useCallback((partial) => {
+    // 1) Bloqueo POR CULTIVO: si cambian cultures/cultureLogs, detectar qué
+    //    cultivos se tocan y rechazar SOLO si alguno está bloqueado por otro.
+    if ('cultures' in partial || 'cultureLogs' in partial) {
+      const st = stateRef.current || {};
+      const changed = new Set();
+      if ('cultures' in partial) {
+        for (const id of changedCultureIds(st.cultures, partial.cultures)) changed.add(id);
+      }
+      if ('cultureLogs' in partial) {
+        for (const id of changedCulturesFromLogs(st.cultureLogs, partial.cultureLogs)) changed.add(id);
+      }
+      for (const id of changed) {
+        const lock = lockedCulturesRef.current[id];
+        if (lock) {
+          showToast(`🔒 ${lock.by} está editando este cultivo. Solo este cultivo está bloqueado; los demás siguen editables.`);
+          return false;
+        }
+      }
+    }
+    // 2) Bloqueo por slice (para el resto de claves).
     for (const key of Object.keys(partial)) {
+      if (key === 'cultures' || key === 'cultureLogs') continue;
       const lock = lockedSlicesRef.current[key];
       if (lock) {
         showToast(`🔒 ${lock.by} está editando ${sliceLabel(key)}. Este módulo está bloqueado para ti en este momento.`);
@@ -217,6 +295,30 @@ export function LabProvider({ children }) {
     }
     return true;
   }, [showToast]);
+
+  // ── Bloqueo POR CULTIVO ───────────────────────────────────────────────────
+  // Cultivos que OTROS usuarios están editando ahora: id -> { by, uid }.
+  const lockedCultures = useMemo(() => {
+    const m = {};
+    for (const ed of activeEditors) {
+      for (const id of ed.editCultures || []) {
+        if (!m[id]) m[id] = { by: ed.displayName || 'Otro usuario', uid: ed.uid };
+      }
+    }
+    return m;
+  }, [activeEditors]);
+  const lockedCulturesRef = useRef(lockedCultures);
+  lockedCulturesRef.current = lockedCultures;
+
+  const isCultureLocked = useCallback((id) => !!lockedCulturesRef.current[id], []);
+
+  // Marca que ESTE usuario acaba de editar un cultivo (para que los demás lo
+  // vean bloqueado) y fuerza un heartbeat de presencia inmediato.
+  const reportCultureEdit = useCallback((cultureId) => {
+    if (!cultureId) return;
+    editCulturesRef.current[cultureId] = Date.now();
+    forceTouch();
+  }, [forceTouch]);
 
   // ── Guardado en nube centralizado (versiones + conflictos) ────────────────
   const runCloudSave = useCallback((next) => {
@@ -290,14 +392,16 @@ export function LabProvider({ children }) {
     if (immediate) saveNow(next);
   }, [setState, saveNow, activeLabId, assertSlicesEditable]);
 
-  const updateState = useCallback((partial, { immediate = false } = {}) => {
+  const updateState = useCallback((partial, { immediate = false, editCulture } = {}) => {
     if (!assertSlicesEditable(partial)) return;
     isLocalUpdateRef.current = true;
     const next = { ...stateRef.current, ...partial };
     setState(next);
     saveStateLocal(next, activeLabId).catch(() => {});
     if (immediate) saveNow(next);
-  }, [setState, saveNow, activeLabId, assertSlicesEditable]);
+    // Bloqueo por cultivo: reportar qué cultivo se acaba de tocar.
+    if (editCulture) reportCultureEdit(editCulture);
+  }, [setState, saveNow, activeLabId, assertSlicesEditable, reportCultureEdit]);
 
   // ── Realtime sync + autosave + flush + inactivity + presence ──────────────
   useLabSync({
@@ -482,6 +586,9 @@ export function LabProvider({ children }) {
     lockedModule,
     isSliceLocked,
     isModuleLocked,
+    lockedCultures,
+    isCultureLocked,
+    reportCultureEdit,
     conflict,
     conflictView,
     resolveConflict,
