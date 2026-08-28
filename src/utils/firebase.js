@@ -31,7 +31,6 @@ import {
   limit,
   where,
   serverTimestamp,
-  runTransaction
 } from 'firebase/firestore';
 import { splitState, assembleState, STATE_SLICES } from './firestoreSync';
 
@@ -227,30 +226,39 @@ const safeParse = (s) => {
   try { return JSON.parse(s); } catch { return null; }
 };
 
-// Escribe UN slice dentro de una transacción con chequeo de versión.
-// Si la transacción no está disponible (offline/transitorio) cae a un setDoc
-// incondicional, que SÍ queda en la cola persistente offline.
+// Escribe UN slice con chequeo de versión.
+//
+// IMPORTANTE: se usa getDoc + setDoc (NO runTransaction). Con
+// persistentLocalCache, runTransaction emite commits con precondition
+// `currentDocument.updateTime`; si la caché local queda desincronizada (por
+// escrituras offline acumuladas o por otra pestaña), esos commits fallan en
+// bucle con failed-precondition y el SDK se atasca reintentando sin devolver el
+// control — el resultado es que NINGÚN guardado llega a la nube. getDoc + setDoc
+// no lleva precondition, así que el write va directo (o a la cola persistente si
+// estamos offline) y la detección de conflicto por versión se mantiene.
 async function writeOneSlice(labId, name, data, base, conflicts, versions) {
   const ref = sliceRef(labId, name);
   try {
-    const res = await runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      const remoteVersion = snap.exists() ? (snap.data().version || 0) : 0;
-      if (base != null && remoteVersion !== base) {
-        return { conflict: true, remoteVersion };
-      }
-      tx.set(ref, { data, version: remoteVersion + 1, updatedAt: serverTimestamp() });
-      return { conflict: false, version: remoteVersion + 1 };
-    });
-    if (res.conflict) conflicts.push(name);
-    else versions[name] = res.version;
-    return !res.conflict;
-  } catch (err) {
-    // Offline o transitorio: escribir incondicionalmente (cola persistente).
-    console.warn('Transaction unavailable for slice "' + name + '", falling back to queued write:', err?.message);
-    const nextVersion = base != null ? base + 1 : 1;
+    const snap = await getDoc(ref);
+    const remoteVersion = snap.exists() ? (snap.data().version || 0) : 0;
+    if (base != null && remoteVersion !== base) {
+      conflicts.push(name);
+      return false;
+    }
+    const nextVersion = remoteVersion + 1;
     await setDoc(ref, { data, version: nextVersion, updatedAt: serverTimestamp() });
     versions[name] = nextVersion;
+    return true;
+  } catch (err) {
+    // Offline o transitorio: escribir incondicionalmente (cola persistente).
+    console.warn('Slice write failed (offline/transient), queued:', name, err?.message);
+    const nextVersion = base != null ? base + 1 : 1;
+    try {
+      await setDoc(ref, { data, version: nextVersion, updatedAt: serverTimestamp() });
+      versions[name] = nextVersion;
+    } catch (e2) {
+      console.warn('Queued fallback also failed for slice', name, e2?.message);
+    }
     return true;
   }
 }
@@ -266,6 +274,10 @@ async function writeOneSlice(labId, name, data, base, conflicts, versions) {
  * @param {object|null} [opts.baseVersions] Mapa slice → versión sobre la que
  *   se basó la edición local. null ⇒ escritura incondicional (sin detección).
  * @returns {Promise<{status:'ok'|'conflict', conflicts:string[], versions:object}>}
+ *
+ * Cada slice se escribe con getDoc + setDoc y chequeo de versión (ver
+ * writeOneSlice). Sin runTransaction: evita que persistentLocalCache se
+ * atragante con commits de precondition que fallan en bucle (failed-precondition).
  */
 export async function saveLabState(labId, state, opts = {}) {
   const { sessionId = null, userId = null, baseVersions = null } = opts;

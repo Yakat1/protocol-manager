@@ -178,7 +178,7 @@ export default function PlateMapper({ state, updateState }) {
       updateState({ variables: finalVars, subjects: [...state.subjects, newSubj] });
       alert(`Muestra "${newSubj.name}" creada.`);
     } else {
-      updateState({ variables: finalVars, subjects: state.subjects.map(s => s.id === targetSubjId ? { ...s, measurements: { ...s.measurements, var_plate_signal: statItem.mean.toFixed(4) } } : s) });
+      updateState({ variables: finalVars, subjects: (state.subjects || []).map(s => s.id === targetSubjId ? { ...s, measurements: { ...s.measurements, var_plate_signal: statItem.mean.toFixed(4) } } : s) });
       alert('Señal asignada.');
     }
   };
@@ -206,7 +206,7 @@ export default function PlateMapper({ state, updateState }) {
               e.target.value = '';
             }}>
             <option value="">+ Desde Sujeto LIMS</option>
-            {state.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {(state.subjects || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         )}
       </div>
@@ -478,7 +478,7 @@ export default function PlateMapper({ state, updateState }) {
                     <td style={{display:'flex',gap:'8px'}}>
                       <select className="input-field" style={{padding:'2px',fontSize:'0.8rem',width:'150px'}} value={selectedExports[s.group.id]||'NEW'} onChange={e => setSelectedExports({...selectedExports,[s.group.id]:e.target.value})}>
                         <option value="NEW">Crear Nueva Muestra</option>
-                        {state.subjects.map(subj => <option key={subj.id} value={subj.id}>Vincular: {subj.name}</option>)}
+                        {(state.subjects || []).map(subj => <option key={subj.id} value={subj.id}>Vincular: {subj.name}</option>)}
                       </select>
                       <button className="btn" style={{padding:'2px 8px',fontSize:'0.8rem'}} onClick={() => handleExportGroup(s)} disabled={isNaN(s.mean)}>Exportar</button>
                     </td>
