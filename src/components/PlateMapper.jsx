@@ -22,7 +22,7 @@ export default function PlateMapper({ state, updateState }) {
   const [showImport, setShowImport] = useState(false);
   const [selectedExports, setSelectedExports] = useState({});
   const [isBWPrint, setIsBWPrint] = useState(false);
-  const [tooltip, setTooltip] = useState(null);
+  const tooltipRef = useRef(null);
   const [lastClicked, setLastClicked] = useState(null);
   const [showDilution, setShowDilution] = useState(false);
   const [dilution, setDilution] = useState({ startWell:'A1', startConc:100, unit:'µM', factor:2, steps:8, direction:'horizontal' });
@@ -186,6 +186,64 @@ export default function PlateMapper({ state, updateState }) {
   const getGroupForWell = (r, c) => { const w = wells[wellKey(r, c)]; return w ? groups.find(g => g.id === w.groupId) : null; };
   const stats = getGroupStats(groups, wells);
 
+  // ── Tooltip por ref (sin setState) ──────────────────────────────────────────
+  // El tooltip SIEMPRE está montado; al hacer hover se actualizan posicion y
+  // contenido vía DOM directo (ref). Evita que cada onMouseEnter re-renderice
+  // toda la placa (96 wells) — que era la presión de render que, combinada con
+  // los snapshots de presencia/sync bajo Suspense, provocaba el crash
+  // 'insertBefore: node is not a child' / 'removeChild' en la fase de commit.
+  const showTooltip = (e, key) => {
+    const el = tooltipRef.current;
+    if (!el) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const w = wells[key];
+    const g = w ? groups.find(gr => gr.id === w.groupId) : null;
+    const ti = g ? WELL_TYPES[g.wellType] : null;
+    // Contenido
+    el.querySelector('.tt-header-key').textContent = key;
+    const swatch = el.querySelector('.tt-swatch');
+    const nameRow = el.querySelector('.tt-row-name');
+    const typeRow = el.querySelector('.tt-row-type');
+    const concRow = el.querySelector('.tt-row-conc');
+    const repRow = el.querySelector('.tt-row-rep');
+    const valRow = el.querySelector('.tt-row-val');
+    const emptyRow = el.querySelector('.tt-row-empty');
+    if (g) {
+      swatch.style.display = 'inline-block';
+      swatch.style.background = g.color;
+      nameRow.style.display = 'flex';
+      nameRow.querySelector('span:last-child').textContent = g.name;
+    } else {
+      swatch.style.display = 'none';
+      nameRow.style.display = 'none';
+    }
+    if (ti) {
+      typeRow.style.display = 'flex';
+      typeRow.querySelector('span:last-child').textContent = ti.label;
+    } else typeRow.style.display = 'none';
+    if (w && w.concentration != null) {
+      concRow.style.display = 'flex';
+      concRow.querySelector('span:last-child').textContent = `${w.concentration} ${w.concUnit || ''}`;
+    } else concRow.style.display = 'none';
+    if (w && w.replicateNum) {
+      repRow.style.display = 'flex';
+      repRow.querySelector('span:last-child').textContent = `#${w.replicateNum}`;
+    } else repRow.style.display = 'none';
+    if (w && w.value != null) {
+      valRow.style.display = 'flex';
+      valRow.querySelector('span:last-child').textContent = String(w.value);
+    } else valRow.style.display = 'none';
+    emptyRow.style.display = g ? 'none' : 'flex';
+    // Posicion
+    el.style.left = `${rect.left + rect.width / 2}px`;
+    el.style.top = `${rect.top - 8}px`;
+    el.style.display = 'block';
+  };
+  const hideTooltip = () => {
+    const el = tooltipRef.current;
+    if (el) el.style.display = 'none';
+  };
+
   return (
     <div className={`plate-mapper-container ${isBWPrint ? 'print-bw' : ''}`}>
       {/* Well Type Buttons */}
@@ -260,11 +318,8 @@ export default function PlateMapper({ state, updateState }) {
                     className={`plate-well ${w?.value != null ? 'has-value' : ''} ${group?.locked ? 'locked' : ''}`}
                     style={group ? {background:group.color, borderColor:group.color} : {}}
                     onClick={(e) => handleWellClick(e, r, c)}
-                    onMouseEnter={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      setTooltip({key:wellKey(r,c), x:rect.left+rect.width/2, y:rect.top-8, r, c});
-                    }}
-                    onMouseLeave={() => setTooltip(null)}
+                    onMouseEnter={(e) => showTooltip(e, wellKey(r, c))}
+                    onMouseLeave={hideTooltip}
                   >
                     <span className="print-only-text">{group ? group.name.substring(0,4).toUpperCase() : ''}</span>
                     <span className="well-value">{w?.value != null ? (typeof w.value === 'number' ? w.value.toFixed(1) : '') : ''}</span>
@@ -276,22 +331,19 @@ export default function PlateMapper({ state, updateState }) {
         </div>
       </div>
 
-      {/* Tooltip */}
-      {tooltip && (() => {
-        const w = wells[tooltip.key]; const g = w ? groups.find(gr => gr.id === w.groupId) : null;
-        const ti = g ? WELL_TYPES[g.wellType] : null;
-        return (
-          <div className="well-tooltip" style={{left:tooltip.x, top:tooltip.y}}>
-            <div className="tt-header">{g && <span className="tt-swatch" style={{background:g.color}}></span>}{tooltip.key}</div>
-            {g && <div className="tt-row"><span>Grupo</span><span>{g.name}</span></div>}
-            {ti && <div className="tt-row"><span>Tipo</span><span>{ti.label}</span></div>}
-            {w?.concentration != null && <div className="tt-row"><span>Conc.</span><span>{w.concentration} {w.concUnit||''}</span></div>}
-            {w?.replicateNum && <div className="tt-row"><span>Réplica</span><span>#{w.replicateNum}</span></div>}
-            {w?.value != null && <div className="tt-row"><span>Valor</span><span>{w.value}</span></div>}
-            {!g && <div className="tt-row"><span style={{color:'var(--text-secondary)'}}>Vacío</span><span></span></div>}
-          </div>
-        );
-      })()}
+      {/* Tooltip (siempre montado; contenido/posición se actualizan por ref) */}
+      <div ref={tooltipRef} className="well-tooltip" style={{ display: 'none', position: 'fixed' }}>
+        <div className="tt-header">
+          <span className="tt-swatch" style={{ display: 'none' }}></span>
+          <span className="tt-header-key"></span>
+        </div>
+        <div className="tt-row tt-row-name" style={{ display: 'none' }}><span>Grupo</span><span></span></div>
+        <div className="tt-row tt-row-type" style={{ display: 'none' }}><span>Tipo</span><span></span></div>
+        <div className="tt-row tt-row-conc" style={{ display: 'none' }}><span>Conc.</span><span></span></div>
+        <div className="tt-row tt-row-rep" style={{ display: 'none' }}><span>Réplica</span><span></span></div>
+        <div className="tt-row tt-row-val" style={{ display: 'none' }}><span>Valor</span><span></span></div>
+        <div className="tt-row tt-row-empty" style={{ display: 'none' }}><span style={{color:'var(--text-secondary)'}}>Vacío</span><span></span></div>
+      </div>
 
       {/* Action Toolbar */}
       <div className="no-print" style={{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}}>
